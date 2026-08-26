@@ -162,6 +162,16 @@ function getEnhanceStats(enhanceLevel) {
   };
 }
 
+// ✨ 강화 상세 스탯 텍스트 정렬 함수 (| 기준 줄맞춤)
+function formatEnhanceStatDiff(oldStats, newStats) {
+  return [
+    `배율      | ${oldStats.mult} -> ${newStats.mult}`,
+    `머리 확률 | ${oldStats.head} -> ${newStats.head}`,
+    `몸 확률   | ${oldStats.body} -> ${newStats.body}`,
+    `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
+  ].join('\n');
+}
+
 function getCombatPower(profile) {
   if (!profile) return 0;
   const combatLv = profile.combatLevel || 0;
@@ -170,7 +180,7 @@ function getCombatPower(profile) {
   return (lvl * 100) + (combatLv * 500) + (enhance * 300);
 }
 
-// ✨ 수정: 강화 부위 확률 및 전투력 비례 헤드 피해량 계산 함수
+// 강화 부위 확률 및 전투력 비례 헤드 피해량 계산 함수
 function calculatePartDamage(profile) {
   const enhanceLevel = profile ? (profile.enhance || 0) : 0;
   const stats = getEnhanceStats(enhanceLevel);
@@ -182,7 +192,7 @@ function calculatePartDamage(profile) {
 
   if (roll < stats.numHead) {
     hitPart = 'head';
-    hitPartName = '헤드';
+    hitPartName = '머리';
     
     // 전투력 기반 계산 (전투력 100당 10 데미지 = 전투력 * 0.1)
     const combatPower = getCombatPower(profile);
@@ -475,7 +485,7 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
       
-      let reduceMsg = totalReduce > 0 ? `(방어 -${totalReduce})` : '';
+      let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       mainText = `${targetName}의 사격을 받아 기습당했습니다!\nHP -${finalDamage}${reduceMsg}${notes}`;
       break;
@@ -483,7 +493,6 @@ function resolveFarmFight(profile, battle) {
     case 'kill_single': {
       isDamageEvent = true;
       
-      // ✨ profile 객체 전달
       const { hitPart, hitPartName, damageVal } = calculatePartDamage(profile);
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(8, 20));
 
@@ -502,13 +511,17 @@ function resolveFarmFight(profile, battle) {
       earnedCash = finalReward;
       battle.accumulatedCash += earnedCash;
 
-      let reduceMsg = totalReduce > 0 ? `(방어 -${totalReduce})` : '';
+      let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       
-      const killMsg = `당신이 ${hitPartName} 부위를 적중시켜 ${targetName}이(가) 사망했습니다.`;
+      // ✨ 부위별 사망 텍스트 조건 분기
+      let killDetailText = hitPart === 'head'
+        ? `당신이 헤드샷으로 ${targetName}이(가) 사망했습니다.`
+        : `당신이 ${hitPartName} 부위를 적중시켜 ${targetName}이(가) 사망했습니다.`;
 
       mainText = `[${killCount} Kill](+${won(killAssistReward)})\n` +
-                 `${killMsg} [데미지 ${damageVal} (${hitPartName})](+${won(damageReward)})\n` +
+                 `${killDetailText}\n` +
+                 `[데미지 ${damageVal}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
@@ -520,10 +533,10 @@ function resolveFarmFight(profile, battle) {
       let totalDamageVal = 0;
       let hitSummary = [];
       for (let i = 0; i < killCount; i++) {
-        // ✨ profile 객체 전달
-        const { hitPartName, damageVal } = calculatePartDamage(profile);
+        const { hitPart, hitPartName, damageVal } = calculatePartDamage(profile);
         totalDamageVal += damageVal;
-        hitSummary.push(hitPartName);
+        // 헤드샷 시 텍스트 직관화
+        hitSummary.push(hitPart === 'head' ? '머리(헤드샷)' : hitPartName);
       }
 
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(15, 30));
@@ -541,17 +554,16 @@ function resolveFarmFight(profile, battle) {
       earnedCash = finalReward;
       battle.accumulatedCash += earnedCash;
 
-      let reduceMsg = totalReduce > 0 ? `(방어 -${totalReduce})` : '';
+      let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
-
-      const killMsg = `당신이 적 부위(${hitSummary.join(', ')})에 명중시켜 서바이버가 사망했습니다.`;
 
       let killTextHeader = assistCount > 0 
         ? `[${killCount} Kill / ${assistCount} Assist](+${won(killAssistReward)})`
         : `[${killCount} Kill](+${won(killAssistReward)})`;
 
       mainText = `${killTextHeader}\n` +
-                 `${killMsg} [총 데미지 ${totalDamageVal}](+${won(damageReward)})\n` +
+                 `당신이 적 부위(${hitSummary.join(', ')})에 명중시켜 서바이버가 사망했습니다.\n` +
+                 `[데미지 ${totalDamageVal}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
@@ -628,12 +640,7 @@ function processEnhance(profile) {
   if (profile.enhance >= ENHANCE_TABLE.length) {
     const [wName] = getWeaponInfo(profile.enhance);
     const stats = getEnhanceStats(profile.enhance);
-    const detailMsg = [
-      `배율 | ${stats.mult} -> ${stats.mult}`,
-      `머리 확률 | ${stats.head} -> ${stats.head}`,
-      `    몸 확률 | ${stats.body} -> ${stats.body}`,
-      `다리 확률 | ${stats.leg} -> ${stats.leg}`
-    ].join('\n');
+    const detailMsg = formatEnhanceStatDiff(stats, stats);
     return { text: `최고 강화 단계 도달! (+20 싱귤래리티)\n+${profile.enhance} ${wName}\n${detailMsg}\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', 20), status: 'max' };
   }
 
@@ -657,24 +664,14 @@ function processEnhance(profile) {
     resultStatus = 'success';
     const [currName] = getWeaponInfo(profile.enhance);
     const newStats = getEnhanceStats(profile.enhance);
-    const detailMsg = [
-      `배율 | ${oldStats.mult} -> ${newStats.mult}`,
-      `머리 확률 | ${oldStats.head} -> ${newStats.head}`,
-      `    몸 확률 | ${oldStats.body} -> ${newStats.body}`,
-      `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
-    ].join('\n');
+    const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile.enhance}\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
   } else if (roll < tableData.success + tableData.keep) {
     resultStatus = 'keep';
     const [currName] = getWeaponInfo(profile.enhance);
     const newStats = getEnhanceStats(profile.enhance);
-    const detailMsg = [
-      `배율 | ${oldStats.mult} -> ${newStats.mult}`,
-      `머리 확률 | ${oldStats.head} -> ${newStats.head}`,
-      `    몸 확률 | ${oldStats.body} -> ${newStats.body}`,
-      `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
-    ].join('\n');
+    const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
   } else {
@@ -682,12 +679,7 @@ function processEnhance(profile) {
     profile.enhance = 0;
     const [currName] = getWeaponInfo(profile.enhance);
     const newStats = getEnhanceStats(profile.enhance);
-    const detailMsg = [
-      `배율 | ${oldStats.mult} -> ${newStats.mult}`,
-      `머리 확률 | ${oldStats.head} -> ${newStats.head}`,
-      `    몸 확률 | ${oldStats.body} -> ${newStats.body}`,
-      `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
-    ].join('\n');
+    const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
   }
