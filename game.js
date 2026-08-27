@@ -825,7 +825,7 @@ function startGame(existingProfile) {
 
   return {
     text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`,
-    imageUrl: null, // 전투 시작 시 이미지 비활성화
+    imageUrl: null, 
     choices: BATTLE_CHOICES,
     category: 'start',
     state: { profile, battle }
