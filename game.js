@@ -170,7 +170,7 @@ function getEnhanceStats(enhanceLevel) {
 
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
-    ` 　　 배율 | ${oldStats.mult} -> ${newStats.mult}`,
+    `　　 배율 | ${oldStats.mult} -> ${newStats.mult}`,
     `헤드 확률 | ${oldStats.head} -> ${newStats.head}`,
     `　몸 확률 | ${oldStats.body} -> ${newStats.body}`,
     `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
