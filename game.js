@@ -62,7 +62,6 @@ const FARM_TABLE = [
   ['kill_multi', 15.0]   // 다중 교전: 15%
 ];
 
-// 도망 테이블: 50% 즉시 HP 회복(20~30), 30% 드링크, 20% 진통제
 const ESCAPE_TABLE = [
   ['instant_heal', 50.0], // 50%: 20~30 HP 즉시 회복
   ['drink', 30.0],        // 30%: 에너지 드링크 (2턴 동안 5씩 회복)
@@ -107,7 +106,6 @@ function getRandomSurvivorName() {
   return `Survivor ${String(rand(1, 9999)).padStart(4, '0')}`;
 }
 
-// ✨ 랜덤 닉네임 조합 생성 함수
 function generateRandomNickname() {
   const adjectives = ['조용한', '별속의', '용감한', '빛나는', '차가운', '뜨거운', '화려한', '어두운', '신비로운', '재빠른'];
   const nouns = ['사업자', '미인', '모험가', '사냥꾼', '지배자', '방랑자', '지장보살', '지킴이', '전사', '마법사'];
@@ -177,10 +175,10 @@ function getEnhanceStats(enhanceLevel) {
 // ✨ 강화 상세 스탯 텍스트 전각 공백 적용 정렬 함수
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
-    `  배율 | ${oldStats.mult} -> ${newStats.mult}`,
-    `머리 확률 | ${oldStats.head} -> ${newStats.head}`,
-    ` 몸 확률 | ${oldStats.body} -> ${newStats.body}`,
-    `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
+    `   배율 | ${oldStats.mult} ➔ ${newStats.mult}`,
+    `머리 확률 | ${oldStats.head} ➔ ${newStats.head}`,
+    ` 몸 확률 | ${oldStats.body} ➔ ${newStats.body}`,
+    `다리 확률 | ${oldStats.leg} ➔ ${newStats.leg}`
   ].join('\n');
 }
 
@@ -268,7 +266,7 @@ function createProfile(existing = {}) {
   };
 }
 
-// 기본 프로필 대시보드 텍스트
+// 넓어진 프로필 대시보드 텍스트
 function profileText(profile) {
   const p = createProfile(profile);
   const reqExp = getRequiredExp(p.level);
@@ -276,19 +274,22 @@ function profileText(profile) {
   const [wName] = getWeaponInfo(p.enhance);
   
   return [
-    `📊 프로필 대시보드`,
-    `닉네임 : ${p.nickname}`,
-    ` 칭호 : ${p.title}`,
-    `🎮 플레이 판수 : ${p.gamesPlayed}판`,
-    `🎯 강화 : +${p.enhance} ${wName}`,
-    `🔨 제련 : ${p.refine}`,
-    `⭐ Lv.${p.level} (${p.exp}/${reqExp})`,
+    `----------------------------------------`,
+    `📊  프로필 대시보드`,
+    `----------------------------------------`,
+    `👤 닉네임 : ${p.nickname}`,
+    `🏅 칭   호 : ${p.title || '없음'}`,
+    `🎮 플레이 : ${p.gamesPlayed}판`,
+    `🎯 강   화 : +${p.enhance} ${wName}`,
+    `🔨 제   련 : ${p.refine || '없음'}`,
+    `⭐ 레   벨 : Lv.${p.level} (${p.exp} / ${reqExp} EXP)`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
-    ``,
-    `💵 현금 : ${won(p.cash)}`,
-    `🧈 금괴 : ${p.gold}개`,
-    `🔑 비밀열쇠 : ${p.keys}개`,
-    `📦 보급 : ${p.monthItems || 0}개`
+    `----------------------------------------`,
+    `💵 현   금 : ${won(p.cash)}`,
+    `🧈 금   괴 : ${p.gold}개`,
+    `🔑 열   쇠 : ${p.keys}개`,
+    `📦 보급품 : ${p.monthItems || 0}개`,
+    `----------------------------------------`
   ].join('\n');
 }
 
@@ -344,7 +345,7 @@ function processBuffs(battle) {
   return buffMessages;
 }
 
-// 전투 상태판 출력 텍스트
+// 넓어진 전투 상태판 출력 텍스트
 function battleStatusBoard(profile, battle) {
   const p = createProfile(profile);
   const b = battle || { turn: 1, maxTurn: MAX_TURN, survivors: 100, hp: 100, mode: '솔로', helmetLevel: 0, helmetDurability: 0, vestLevel: 0, vestDurability: 0, buffs: [] };
@@ -355,29 +356,30 @@ function battleStatusBoard(profile, battle) {
   const expMultiplier = getExpMultiplier(p);
   
   let boardLines = [
-    `[배틀로얄 중] 매칭: ${b.mode}`,
-    `| 턴 ${b.turn}/${b.maxTurn} | 생존: ${b.survivors}명`,
-    `HP:${makeHpBar(b.hp)}`,
-    `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
-    `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
-    `배율 (x${expMultiplier.toFixed(2)})`
+    `----------------------------------------`,
+    `⚔️  배틀로얄 진행 중  [ 매칭: ${b.mode} ]`,
+    `----------------------------------------`,
+    `⏱️ 턴    : ${b.turn} / ${b.maxTurn} 턴`,
+    `👥 생존자 : ${b.survivors}명`,
+    `❤️  HP    : ${makeHpBar(b.hp)}`,
+    `🛡️ 헬멧  : Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
+    `🦺 조끼  : Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
+    `⚡ 배율  : x${expMultiplier.toFixed(2)}`
   ];
 
   if (b.buffs.length > 0) {
-    const buffDesc = b.buffs.map(buff => `${buff.name}(${buff.turnsLeft}턴 남음)`).join(', ');
-    boardLines.push(`✨ 버프: ${buffDesc}`);
+    const buffDesc = b.buffs.map(buff => `${buff.name}(${buff.turnsLeft}턴)`).join(', ');
+    boardLines.push(`✨ 버프  : ${buffDesc}`);
   }
 
   boardLines.push(
-    ``,
-    `🎮 플레이 판수 : ${p.gamesPlayed}판`,
-    `🎯 강화 : +${p.enhance} ${wName}`,
-    `🔨 제련 : ${p.refine}`,
-    `⭐ Lv.${p.level} (${p.exp}/${reqExp})`,
-    `💵 현금 : ${won(p.cash)}`,
-    `🧈 금괴 : ${p.gold}개`,
-    `🔑 비밀열쇠 : ${p.keys}개`,
-    `📦 보급 : ${p.monthItems || 0}개`
+    `----------------------------------------`,
+    `🎯 강   화 : +${p.enhance} ${wName}`,
+    `⭐ 레   벨 : Lv.${p.level} (${p.exp} / ${reqExp} EXP)`,
+    `💵 현   금 : ${won(p.cash)}`,
+    `🧈 금   괴 : ${p.gold}개`,
+    `🔑 열   쇠 : ${p.keys}개`,
+    `----------------------------------------`
   );
 
   return boardLines.join('\n');
@@ -427,7 +429,7 @@ function resolveFarmFight(profile, battle) {
   let earnedCash = 0;
   const targetName = getRandomSurvivorName(); 
   const combatLv = profile.combatLevel || 0;
-  const mult = getProfileGoldMultiplier(profile); // 프로필의 강화 골드 배율
+  const mult = getProfileGoldMultiplier(profile);
 
   let outcome = pickWeighted(FARM_TABLE);
 
@@ -443,7 +445,7 @@ function resolveFarmFight(profile, battle) {
     battle.helmetDurability = 100;
     battle.vestLevel = 3;
     battle.vestDurability = 100;
-    resultMessages.push(`[황금 보급품 획득!]🎁 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus}개, 열쇠 1개)`);
+    resultMessages.push(`🎁 [황금 보급품 획득!]\n최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus}개, 열쇠 1개)`);
   } else {
     if (battle.turn >= 2 && Math.random() < 0.20) {
       if (battle.helmetLevel === 0) {
@@ -479,12 +481,12 @@ function resolveFarmFight(profile, battle) {
     case 'gold': {
       const goldBonus = 1 + combatLv;
       profile.gold += goldBonus;
-      mainText = `금괴 ${goldBonus}개 획득!`;
+      mainText = `🧈 금괴 ${goldBonus}개 획득!`;
       break;
     }
     case 'key': {
       profile.keys += 1;
-      mainText = `비밀열쇠 1개 획득!`;
+      mainText = `🔑 비밀열쇠 1개 획득!`;
       break;
     }
     case 'jackpot': {
@@ -492,7 +494,7 @@ function resolveFarmFight(profile, battle) {
       profile.cash += jackpotAmt;
       earnedCash = jackpotAmt;
       battle.accumulatedCash += earnedCash;
-      mainText = `[소소한 잭팟!] 현금 ${won(jackpotAmt)} 획득!`;
+      mainText = `🎉 [소소한 잭팟!] 현금 ${won(jackpotAmt)} 획득!`;
       break;
     }
     case 'damage': {
@@ -505,7 +507,7 @@ function resolveFarmFight(profile, battle) {
       
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
-      mainText = `${targetName}의 사격을 받아 기습당했습니다!\nHP -${finalDamage}${reduceMsg}${notes}`;
+      mainText = `⚠️ ${targetName}의 사격을 받아 기습당했습니다!\n💔 HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
     case 'kill_single': {
@@ -520,7 +522,6 @@ function resolveFarmFight(profile, battle) {
       const killCount = 1;
       const assistCount = 0;
       
-      // 배율(mult) 곱 반영 및 데미지당 100원 수정
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
       const damageReward = Math.round((damageVal * 100) * mult);
       
@@ -534,13 +535,13 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       
       let killDetailText = hitPart === 'head'
-        ? `당신이 헤드샷으로 ${targetName}이(가) 사망했습니다.`
-        : `당신이 ${hitPartName} 부위를 적중시켜 ${targetName}이(가) 사망했습니다.`;
+        ? `💥 당신이 헤드샷으로 ${targetName}이(가) 사망했습니다.`
+        : `🔫 당신이 ${hitPartName} 부위를 적중시켜 ${targetName}이(가) 사망했습니다.`;
 
-      mainText = `[${killCount} Kill](+${won(killAssistReward)})\n` +
+      mainText = `🎯 [${killCount} Kill] (+${won(killAssistReward)})\n` +
                  `${killDetailText}\n` +
-                 `[데미지 ${damageVal}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg}${notes}`;
+                 `💥 [데미지 ${damageVal}] (+${won(damageReward)})\n` +
+                 `💔 HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
     case 'kill_multi': {
@@ -557,9 +558,9 @@ function resolveFarmFight(profile, battle) {
         
         const victimName = getRandomSurvivorName();
         if (hitPart === 'head') {
-          killDetailLines.push(`당신이 헤드샷으로 ${victimName}이(가) 사망했습니다.`);
+          killDetailLines.push(`💥 당신이 헤드샷으로 ${victimName}이(가) 사망했습니다.`);
         } else {
-          killDetailLines.push(`당신이 ${hitPartName} 부위를 적중시켜 ${victimName}이(가) 사망했습니다.`);
+          killDetailLines.push(`🔫 당신이 ${hitPartName} 부위를 적중시켜 ${victimName}이(가) 사망했습니다.`);
         }
       }
 
@@ -568,7 +569,6 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      // 배율(mult) 곱 반영 및 데미지당 100원 수정
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
       const damageReward = Math.round((totalDamageVal * 100) * mult);
       
@@ -582,13 +582,13 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
 
       let killTextHeader = assistCount > 0 
-        ? `[${killCount} Kill / ${assistCount} Assist](+${won(killAssistReward)})`
-        : `[${killCount} Kill](+${won(killAssistReward)})`;
+        ? `🔥 [${killCount} Kill / ${assistCount} Assist] (+${won(killAssistReward)})`
+        : `🔥 [${killCount} Kill] (+${won(killAssistReward)})`;
 
       mainText = `${killTextHeader}\n` +
                  `${killDetailLines.join('\n')}\n` +
-                 `[데미지 ${totalDamageVal}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg}${notes}`;
+                 `💥 [데미지 ${totalDamageVal}] (+${won(damageReward)})\n` +
+                 `💔 HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
     default: {
@@ -596,7 +596,7 @@ function resolveFarmFight(profile, battle) {
       profile.cash += lootCash;
       earnedCash = lootCash;
       battle.accumulatedCash += earnedCash;
-      mainText = `현금 ${won(lootCash)} 획득!`;
+      mainText = `💵 현금 ${won(lootCash)} 획득!`;
       break;
     }
   }
@@ -626,7 +626,7 @@ function resolveEscapeEvent(profile, battle) {
         textResult = ``;
       } else {
         battle.buffs.push({ name: '에너지 드링크', turnsLeft: 2, healAmount: 5 });
-        textResult = `🧪 [에너지 드링크] 효과 발동 (2턴 동안 매턴 HP +5 회복)`;
+        textResult = `🧪 [에너지 드링크] 발동 (2턴간 매턴 HP +5 회복)`;
       }
       break;
     }
@@ -635,7 +635,7 @@ function resolveEscapeEvent(profile, battle) {
         textResult = ``;
       } else {
         battle.buffs.push({ name: '진통제', turnsLeft: 3, healAmount: 5 });
-        textResult = `💊 [진통제] 효과 발동 (3턴 동안 매턴 HP +5 회복)`;
+        textResult = `💊 [진통제] 발동 (3턴간 매턴 HP +5 회복)`;
       }
       break;
     }
@@ -665,14 +665,14 @@ function processEnhance(profile) {
     const [wName] = getWeaponInfo(profile.enhance);
     const stats = getEnhanceStats(profile.enhance);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
-    return { text: `최고 강화 단계 도달! (+20 싱귤래리티)\n+${profile.enhance} ${wName}\n${detailMsg}`, imageUrl: getEnhanceImage('success', 20), status: 'max' };
+    return { text: `🌟 최고 강화 단계 도달! (+20 싱귤래리티)\n\n+${profile.enhance} ${wName}\n\n${detailMsg}`, imageUrl: getEnhanceImage('success', 20), status: 'max' };
   }
 
   const tableData = ENHANCE_TABLE[profile.enhance];
   const cost = tableData.cost;
 
   if (profile.cash < cost) {
-    return { text: `현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: getEnhanceImage('success', profile.enhance), status: 'nomoney' };
+    return { text: `❌ 현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: getEnhanceImage('success', profile.enhance), status: 'nomoney' };
   }
 
   profile.cash -= cost;
@@ -690,14 +690,14 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile.enhance);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile.enhance}\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `🎉 [강화 성공] +${initialEnhance} ➔ +${profile.enhance}\n💸 소모 비용: ${won(cost)}\n\n✨ 무기: +${profile.enhance} ${currName}\n${detailMsg}`;
   } else if (roll < tableData.success + tableData.keep) {
     resultStatus = 'keep';
     const [currName] = getWeaponInfo(profile.enhance);
     const newStats = getEnhanceStats(profile.enhance);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `🛡️ [강화 유지] +${initialEnhance} (변동 없음)\n💸 소모 비용: ${won(cost)}\n\n✨ 무기: +${profile.enhance} ${currName}\n${detailMsg}`;
   } else {
     resultStatus = 'fail';
     profile.enhance = 0;
@@ -705,7 +705,7 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile.enhance);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `💀 [강화 실패] +${initialEnhance} ➔ +0 (초기화)\n💸 소모 비용: ${won(cost)}\n\n✨ 무기: +${profile.enhance} ${currName}\n${detailMsg}`;
   }
 
   return { 
@@ -721,16 +721,16 @@ function processGoldEnhance(profile, count = 1) {
   const totalCost = costPerLevel * count;
 
   if (profile.gold < totalCost) {
-    return { text: `금괴가 부족합니다! (필요: ${totalCost}개)`, imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { text: `❌ 금괴가 부족합니다! (필요: ${totalCost}개)`, imageUrl: getEnhanceImage('success', profile.enhance) };
   }
 
   profile.gold -= totalCost;
   profile.combatLevel += count;
-  return { text: `⚡ 전투력 레벨 +${count} 업그레이드 완료!`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  return { text: `⚡ 전투력 레벨 +${count} 업그레이드 완료! (현재 Lv.${profile.combatLevel})`, imageUrl: getEnhanceImage('success', profile.enhance) };
 }
 
 function processUseKey(profile) {
-  if (profile.keys <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  if (profile.keys <= 0) return { text: `❌ 비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
 
   profile.keys -= 1;
   const earnedExp = Math.round(50000 * 0.007);
@@ -741,18 +741,18 @@ function processUseKey(profile) {
   if (randRoll < 50) {
     const goldAmt = rand(100, 5000);
     profile.cash += goldAmt;
-    rewardMsg = `현금 ${won(goldAmt)} 획득!`;
+    rewardMsg = `💵 현금 ${won(goldAmt)} 획득!`;
   } else if (randRoll < 99) {
     const goldBar = rand(1, 20);
     profile.gold += goldBar;
-    rewardMsg = `금괴 ${goldBar}개 획득!`;
+    rewardMsg = `🧈 금괴 ${goldBar}개 획득!`;
   } else {
     if (!profile.monthItems) profile.monthItems = 0;
     profile.monthItems += 1;
     rewardMsg = `✨ [1% 대박] 이달의 아이템 뽑기권 획득!`;
   }
 
-  return { text: `🔑 열쇠 사용:\n${rewardMsg}\n(EXP +${expRes.gained})\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  return { text: `🔑 비밀열쇠 사용 결과:\n${rewardMsg}\n(EXP +${expRes.gained})\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
 }
 
 function startGame(existingProfile) {
@@ -761,7 +761,7 @@ function startGame(existingProfile) {
 
   return {
     state: { profile, battle },
-    text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`,
+    text: `🚀 배틀로얄이 시작되었습니다!\n\n${battleStatusBoard(profile, battle)}`,
     choices: BATTLE_CHOICES,
     category: 'start',
     imageUrl: getEnhanceImage('success', profile.enhance) 
@@ -792,7 +792,7 @@ function processTurn(state, utterance) {
   if (utterance === '/4655') {
     profile.cash += 10000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
-    return { text: `🎁 [시크릿 코드]\n현금 10,000,000원 지급!${board}`, choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, category: 'secret', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { text: `🎁 [시크릿 코드 적용]\n현금 10,000,000원이 지급되었습니다!${board}`, choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, category: 'secret', imageUrl: getEnhanceImage('success', profile.enhance) };
   }
 
   if (isPlayingBattle && (utterance.includes('강화') || utterance.includes('/강화') || utterance.startsWith('금괴강화'))) {
@@ -829,20 +829,20 @@ function processTurn(state, utterance) {
 
     battle = createBattle(profile);
     state.battle = battle;
-    return { text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { text: `🚀 배틀로얄이 시작되었습니다!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
   }
 
   if (!battle || battle.finished || !battle.alive) {
     battle = createBattle(profile);
     state.battle = battle;
-    return { text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { text: `🚀 배틀로얄이 시작되었습니다!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
   }
 
   let buffMsgs = processBuffs(battle);
   checkDeath(battle);
   if (!battle.alive) {
     return {
-      text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile)}`,
+      text: `${buffMsgs.join('\n')}\n\n☠️ == [사망] 탈락 (${battle.turn}턴) == ☠️\n\n${profileText(profile)}`,
       choices: LOBBY_CHOICES,
       category: 'dead',
       imageUrl: getEnhanceImage('success', profile.enhance)
@@ -875,7 +875,7 @@ function processTurn(state, utterance) {
       if (deltaCash > 0) profile.cash = snap.cash + Math.round(deltaCash * 0.7);
 
       return {
-        text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile)}`,
+        text: `${combinedTextParts.join('\n')}\n\n☠️ == [사망] 탈락 (${battle.turn}턴) == ☠️\n\n${profileText(profile)}`,
         choices: LOBBY_CHOICES,
         category: 'dead',
         imageUrl: getEnhanceImage('success', profile.enhance)
@@ -892,7 +892,7 @@ function processTurn(state, utterance) {
       const finalWinExp = addExp(profile, winExp);
 
       return {
-        text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
+        text: `${combinedTextParts.join('\n')}\n\n🏆 == [우승] 치킨 획득! (${battle.turn}턴) == 🏆\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
         choices: LOBBY_CHOICES,
         category: 'win',
         imageUrl: getEnhanceImage('success', profile.enhance)
@@ -929,7 +929,7 @@ function processTurn(state, utterance) {
       const finalWinExp = addExp(profile, winExp);
 
       return {
-        text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
+        text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}🏆 == [우승] 최종 생존! (${battle.turn}턴) == 🏆\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
         choices: LOBBY_CHOICES,
         category: 'win',
         imageUrl: getEnhanceImage('success', profile.enhance) 
