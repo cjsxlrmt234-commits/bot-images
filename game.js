@@ -196,7 +196,7 @@ function calculatePartDamage(profile) {
 
   if (roll < stats.numHead) {
     hitPart = 'head';
-    hitPartName = '머리';
+    hitPartName = '헤드';
     
     const combatPower = getCombatPower(profile);
     const powerDamage = Math.floor(combatPower * 0.1);
@@ -518,9 +518,7 @@ function resolveFarmFight(profile, battle) {
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       
-      let killDetailText = hitPart === 'head'
-        ? `당신이 헤드샷으로 ${targetName}이(가) 사망했습니다.`
-        : `당신이 ${hitPartName} 부위를 적중시켜 ${targetName}이(가) 사망했습니다.`;
+      let killDetailText = `당신이 적 부위(${hitPartName})에 명중시켜 서바이버가 사망했습니다.`;
 
       mainText = `[${killCount} Kill](+${won(killAssistReward)})\n` +
                  `${killDetailText}\n` +
@@ -534,19 +532,17 @@ function resolveFarmFight(profile, battle) {
       const assistCount = rand(0, 2);
 
       let totalDamageVal = 0;
-      let killDetailLines = [];
+      let hitPartsList = [];
 
       for (let i = 0; i < killCount; i++) {
-        const { hitPart, hitPartName, damageVal } = calculatePartDamage(profile);
+        const { hitPartName, damageVal } = calculatePartDamage(profile);
         totalDamageVal += damageVal;
-        
-        const victimName = getRandomSurvivorName();
-        if (hitPart === 'head') {
-          killDetailLines.push(`당신이 헤드샷으로 ${victimName}이(가) 사망했습니다.`);
-        } else {
-          killDetailLines.push(`당신이 ${hitPartName} 부위를 적중시켜 ${victimName}이(가) 사망했습니다.`);
-        }
+        hitPartsList.push(hitPartName);
       }
+
+      // 중복 부위 제거 (예: ['다리', '다리'] -> ['다리'])
+      const uniqueParts = [...new Set(hitPartsList)];
+      const partsText = uniqueParts.join(', ');
 
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(15, 30));
 
@@ -569,8 +565,10 @@ function resolveFarmFight(profile, battle) {
         ? `[${killCount} Kill / ${assistCount} Assist](+${won(killAssistReward)})`
         : `[${killCount} Kill](+${won(killAssistReward)})`;
 
+      let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
+
       mainText = `${killTextHeader}\n` +
-                 `${killDetailLines.join('\n')}\n` +
+                 `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
       break;
