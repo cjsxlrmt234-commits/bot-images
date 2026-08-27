@@ -540,7 +540,6 @@ function resolveFarmFight(profile, battle) {
         hitPartsList.push(hitPartName);
       }
 
-      // 중복 부위 제거 (예: ['다리', '다리'] -> ['다리'])
       const uniqueParts = [...new Set(hitPartsList)];
       const partsText = uniqueParts.join(', ');
 
@@ -654,7 +653,7 @@ function processEnhance(profile) {
   const cost = tableData.cost;
 
   if (profile.cash < cost) {
-    return { text: `현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: getEnhanceImage('success', profile.enhance), status: 'nomoney' };
+    return { text: `현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: null, status: 'nomoney' };
   }
 
   profile.cash -= cost;
@@ -754,7 +753,7 @@ function processMultiEnhance(profile, count) {
     const costNeeded = ENHANCE_TABLE[profile.enhance].cost;
     return { 
       text: `현금이 부족합니다! (필요: ${won(costNeeded)})`, 
-      imageUrl: getEnhanceImage('success', profile.enhance), 
+      imageUrl: null, 
       status: 'nomoney' 
     };
   }
@@ -786,16 +785,16 @@ function processGoldEnhance(profile, count = 1) {
   const totalCost = costPerLevel * count;
 
   if (profile.gold < totalCost) {
-    return { text: `금괴가 부족합니다! (필요: ${totalCost}개)`, imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { text: `금괴가 부족합니다! (필요: ${totalCost}개)`, imageUrl: null };
   }
 
   profile.gold -= totalCost;
   profile.combatLevel += count;
-  return { text: `⚡ 전투력 레벨 +${count} 업그레이드 완료!`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  return { text: `⚡ 전투력 레벨 +${count} 업그레이드 완료!`, imageUrl: null };
 }
 
 function processUseKey(profile) {
-  if (profile.keys <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  if (profile.keys <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
 
   profile.keys -= 1;
   const earnedExp = Math.round(50000 * 0.007);
@@ -817,7 +816,7 @@ function processUseKey(profile) {
     rewardMsg = `✨ [1% 대박] 이달의 아이템 뽑기권 획득!`;
   }
 
-  return { text: `🔑 열쇠 사용:\n${rewardMsg}\n(EXP +${expRes.gained})\n\n${profileText(profile)}`, imageUrl: getEnhanceImage('success', profile.enhance) };
+  return { text: `🔑 열쇠 사용:\n${rewardMsg}\n(EXP +${expRes.gained})\n\n${profileText(profile)}`, imageUrl: null };
 }
 
 function startGame(existingProfile) {
@@ -825,11 +824,11 @@ function startGame(existingProfile) {
   let battle = createBattle(profile);
 
   return {
-    state: { profile, battle },
     text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`,
+    imageUrl: null, // 전투 시작 시 이미지 비활성화
     choices: BATTLE_CHOICES,
     category: 'start',
-    imageUrl: getEnhanceImage('success', profile.enhance) 
+    state: { profile, battle }
   };
 }
 
@@ -848,20 +847,30 @@ function processTurn(state, utterance) {
     const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
     return {
       text: currentBoard,
+      imageUrl: null,
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
-      category: 'profile',
-      imageUrl: getEnhanceImage('success', profile.enhance)
+      category: 'profile'
     };
   }
 
   if (utterance === '/4655') {
     profile.cash += 10000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
-    return { text: `🎁 [시크릿 코드]\n현금 10,000,000원 지급!${board}`, choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, category: 'secret', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { 
+      text: `🎁 [시크릿 코드]\n현금 10,000,000원 지급!${board}`, 
+      imageUrl: null, 
+      choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
+      category: 'secret' 
+    };
   }
 
   if (isPlayingBattle && (utterance.includes('강화') || utterance.includes('/강화') || utterance.startsWith('금괴강화') || utterance.includes('연속강화') || utterance.includes('/연속강화'))) {
-    return { text: `⚠️ 전투 중에는 강화를 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'battle_block', imageUrl: null };
+    return { 
+      text: `⚠️ 전투 중에는 강화를 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
+      imageUrl: null, 
+      choices: BATTLE_CHOICES, 
+      category: 'battle_block' 
+    };
   }
 
   if (utterance.startsWith('/금괴강화') || utterance.startsWith('금괴강화')) {
@@ -869,7 +878,12 @@ function processTurn(state, utterance) {
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const goldResult = processGoldEnhance(profile, count);
-    return { text: goldResult.text, choices: ENHANCE_CHOICES, category: 'gold_enhance', imageUrl: goldResult.imageUrl };
+    return { 
+      text: goldResult.text, 
+      imageUrl: goldResult.imageUrl, 
+      choices: ENHANCE_CHOICES, 
+      category: 'gold_enhance' 
+    };
   }
 
   if (utterance.startsWith('/연속강화') || utterance.startsWith('연속강화')) {
@@ -877,38 +891,63 @@ function processTurn(state, utterance) {
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const multiResult = processMultiEnhance(profile, count);
-    return { text: multiResult.text, choices: ENHANCE_CHOICES, category: 'enhance', imageUrl: multiResult.imageUrl };
+    return { 
+      text: multiResult.text, 
+      imageUrl: multiResult.imageUrl, 
+      choices: ENHANCE_CHOICES, 
+      category: 'enhance' 
+    };
   }
 
   if (utterance.startsWith('/강화') || utterance.startsWith('강화')) {
     const enhanceResult = processEnhance(profile);
-    return { text: enhanceResult.text, choices: ENHANCE_CHOICES, category: 'enhance', imageUrl: enhanceResult.imageUrl };
+    return { 
+      text: enhanceResult.text, 
+      imageUrl: enhanceResult.imageUrl, 
+      choices: ENHANCE_CHOICES, 
+      category: 'enhance' 
+    };
   }
 
   if (utterance === '열쇠' || utterance === 'usekey' || utterance === '/열쇠') {
     const keyResult = processUseKey(profile);
-    return { text: keyResult.text, choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, category: 'usekey', imageUrl: keyResult.imageUrl };
+    return { 
+      text: keyResult.text, 
+      imageUrl: keyResult.imageUrl, 
+      choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
+      category: 'usekey' 
+    };
   }
 
   if (utterance === '전투' || utterance === 'startbattle' || utterance === '/전투') {
     if (isPlayingBattle) {
       return { 
         text: `⚠️ 이미 배틀로얄이 진행 중입니다!\n현재 턴을 진행(파밍 또는 도망)해주세요.\n\n${battleStatusBoard(profile, battle)}`, 
+        imageUrl: null, 
         choices: BATTLE_CHOICES, 
-        category: 'battle_block', 
-        imageUrl: null 
+        category: 'battle_block' 
       };
     }
 
     battle = createBattle(profile);
     state.battle = battle;
-    return { text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { 
+      text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, 
+      imageUrl: null, 
+      choices: BATTLE_CHOICES, 
+      category: 'start' 
+    };
   }
 
   if (!battle || battle.finished || !battle.alive) {
     battle = createBattle(profile);
     state.battle = battle;
-    return { text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, choices: BATTLE_CHOICES, category: 'start', imageUrl: getEnhanceImage('success', profile.enhance) };
+    return { 
+      text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, 
+      imageUrl: null, 
+      choices: BATTLE_CHOICES, 
+      category: 'start' 
+    };
   }
 
   let buffMsgs = processBuffs(battle);
@@ -916,9 +955,9 @@ function processTurn(state, utterance) {
   if (!battle.alive) {
     return {
       text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile)}`,
+      imageUrl: null,
       choices: LOBBY_CHOICES,
-      category: 'dead',
-      imageUrl: getEnhanceImage('success', profile.enhance)
+      category: 'dead'
     };
   }
 
@@ -949,9 +988,9 @@ function processTurn(state, utterance) {
 
       return {
         text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile)}`,
+        imageUrl: null,
         choices: LOBBY_CHOICES,
-        category: 'dead',
-        imageUrl: getEnhanceImage('success', profile.enhance)
+        category: 'dead'
       };
     }
 
@@ -966,9 +1005,9 @@ function processTurn(state, utterance) {
 
       return {
         text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
+        imageUrl: null,
         choices: LOBBY_CHOICES,
-        category: 'win',
-        imageUrl: getEnhanceImage('success', profile.enhance)
+        category: 'win'
       };
     }
 
@@ -977,9 +1016,9 @@ function processTurn(state, utterance) {
 
     return { 
       text: `${combinedTextParts.join('\n')}\n\n${battleStatusBoard(profile, battle)}`, 
+      imageUrl: null, 
       choices: BATTLE_CHOICES,
-      category: outcome.category,
-      imageUrl: null 
+      category: outcome.category
     };
   }
 
@@ -1003,9 +1042,9 @@ function processTurn(state, utterance) {
 
       return {
         text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile)}`,
+        imageUrl: null,
         choices: LOBBY_CHOICES,
-        category: 'win',
-        imageUrl: getEnhanceImage('success', profile.enhance) 
+        category: 'win'
       };
     }
 
@@ -1016,17 +1055,17 @@ function processTurn(state, utterance) {
 
     return { 
       text: `${bodyText}${battleStatusBoard(profile, battle)}`, 
+      imageUrl: null, 
       choices: BATTLE_CHOICES,
-      category: outcome.category,
-      imageUrl: null 
+      category: outcome.category
     };
   }
 
   const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
   return {
     text: `올바른 메뉴를 선택해주세요.\n\n${currentBoard}`,
-    choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
-    imageUrl: getEnhanceImage('success', profile.enhance)
+    imageUrl: null,
+    choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
   };
 }
 
