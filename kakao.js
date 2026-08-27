@@ -4,14 +4,15 @@
 function buildResponse(text, choices = [], imageUrl = null) {
   const outputs = [];
 
+  // 1. [멘트] 본문 텍스트를 가장 먼저 출력
+  outputs.push({ simpleText: { text } });
+
+  // 2. [사진] 이미지가 존재할 경우 두 번째로 출력
   if (imageUrl) {
     outputs.push({ simpleImage: { imageUrl, altText: text.slice(0, 60) } });
   }
 
-  // 본문 텍스트 출력
-  outputs.push({ simpleText: { text } });
-
-  // choices(선택지)가 존재할 경우 세로로 나열되는 리스트 카드를 추가합니다.
+  // 3. [메뉴 선택창] choices(선택지)가 존재할 경우 세로로 나열되는 리스트 카드를 추가합니다.
   if (choices && choices.length > 0) {
     outputs.push({
       listCard: {
