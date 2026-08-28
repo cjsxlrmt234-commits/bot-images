@@ -28,7 +28,6 @@ const WEAPON_TIERS = [
   ['싱귤래리티', '블랙홀 특이점의 정점']
 ];
 
-// ✨ 개편된 강화 테이블 (비용 및 확률 수정)
 const ENHANCE_TABLE = [
   { cost: 10000, success: 1.00, keep: 0.00, fail: 0.00 },
   { cost: 15000, success: 0.95, keep: 0.05, fail: 0.00 },
@@ -52,7 +51,6 @@ const ENHANCE_TABLE = [
   { cost: 1400000, success: 0.05, keep: 0.85, fail: 0.10 },
 ];
 
-// ✨ 증폭 시스템 테이블 (Lv.0 ~ Lv.10)
 const AMPLIFY_TABLE = [
   { level: 0, costNext: 1000, minGold: 1, maxGold: 1, multBonus: 0.00, headWeight: 0.00 },
   { level: 1, costNext: 2000, minGold: 1, maxGold: 2, multBonus: 0.20, headWeight: 0.05 },
@@ -86,17 +84,21 @@ const ESCAPE_TABLE = [
 const BATTLE_CHOICES = [
   { label: '파밍', action: '/파밍' },
   { label: '도망', action: '/도망' },
+  { label: '프로필', action: '/프로필' }
 ];
 
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
   { label: '열쇠', action: '/열쇠' },
+  { label: '프로필', action: '/프로필' }
 ];
 
 const ENHANCE_CHOICES = [
+  { label: '강화하기', action: '/강화' },
   { label: '전투', action: '/전투' },
-  { label: '강화', action: '/강화' },
+  { label: '열쇠', action: '/열쇠' },
+  { label: '프로필', action: '/프로필' }
 ];
 
 function rand(min, max) {
@@ -185,7 +187,6 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0) {
   const baseBody = 50.00 - (lvl * 0.50);
   const baseLeg = 50.00 - (lvl * 0.50);
 
-  // 헤드샷 가중치 적용 (예: 10% + 10%*가중치)
   const numHead = baseHead * (1 + ampInfo.headWeight);
   const numBody = Math.max(0, baseBody);
   const numLeg = Math.max(0, baseLeg);
@@ -203,9 +204,9 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0) {
 
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
-    `　　 배율 | ${oldStats.mult} -> ${newStats.mult}`,
+    `   배율 | ${oldStats.mult} -> ${newStats.mult}`,
     `헤드 확률 | ${oldStats.head} -> ${newStats.head}`,
-    `　몸 확률 | ${oldStats.body} -> ${newStats.body}`,
+    ` 몸 확률 | ${oldStats.body} -> ${newStats.body}`,
     `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
   ].join('\n');
 }
@@ -224,29 +225,23 @@ function calculatePartDamage(profile) {
   const stats = getEnhanceStats(enhanceLevel, combatLevel);
   const roll = Math.random() * 100;
 
-  let hitPart = 'leg';
   let hitPartName = '다리';
   let damageVal = 0;
 
   if (roll < stats.numHead) {
-    hitPart = 'head';
     hitPartName = '헤드';
-    
     const combatPower = getCombatPower(profile);
     const powerDamage = Math.floor(combatPower * 0.1);
-    
     damageVal = Math.max(100, powerDamage) + (enhanceLevel * 15);
   } else if (roll < stats.numHead + stats.numBody) {
-    hitPart = 'body';
     hitPartName = '몸';
     damageVal = rand(31, 99);
   } else {
-    hitPart = 'leg';
     hitPartName = '다리';
     damageVal = rand(1, 30);
   }
 
-  return { hitPart, hitPartName, damageVal };
+  return { hitPartName, damageVal };
 }
 
 function getWeaponInfo(enhanceLevel) {
@@ -295,14 +290,12 @@ function createProfile(existing = {}) {
   };
 }
 
-// ✨ 이번 판 최종 획득 재화 수치를 표시하도록 개선된 profileText
 function profileText(profile, earnedStats = null) {
   const p = createProfile(profile);
   const reqExp = getRequiredExp(p.level);
   const combatPower = getCombatPower(p);
   const [wName] = getWeaponInfo(p.enhance);
   
-  // 획득량이 1 이상일 때만 표시하기 위한 헬퍼 함수
   const getGainStr = (val, isMoney = false) => {
     if (!val || val <= 0) return '';
     return isMoney ? ` (+${won(val)})` : ` (+${val}개)`;
@@ -358,9 +351,9 @@ function createBattle(profile) {
     vestLevel: 0,    
     vestDurability: 0,    
     accumulatedCash: 0,
-    accumulatedGold: 0,  // ✨ 이번 판 획득 누적 금괴
-    accumulatedKeys: 0,  // ✨ 이번 판 획득 누적 열쇠
-    accumulatedExp: 0,   // ✨ 이번 판 획득 누적 경험치
+    accumulatedGold: 0,  
+    accumulatedKeys: 0,  
+    accumulatedExp: 0,   
     startSnapshot: { cash: profile?.cash || 0, gold: profile?.gold || 0, keys: profile?.keys || 0, monthItems: profile?.monthItems || 0 },
   };
 }
@@ -473,17 +466,14 @@ function resolveFarmFight(profile, battle) {
   let outcome = pickWeighted(FARM_TABLE);
 
   if (outcome === 'supply') {
-    // ✨ 현금 수치를 열쇠 수치 공식(전투력 * 10)과 동일하게 반영
     const combatPower = getCombatPower(profile);
     earnedCash = combatPower * 10;
     profile.cash += earnedCash;
     
-    // ✨ 증폭 Lv에 따른 금괴 범위 적용
     const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
     profile.gold += goldBonus;
     profile.keys += 1;
     
-    // 누적치 적재
     battle.accumulatedCash += earnedCash;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldBonus;
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
@@ -520,13 +510,11 @@ function resolveFarmFight(profile, battle) {
   }
 
   let mainText = '';
-  let isDamageEvent = false;
 
   switch (outcome) {
     case 'supply':
       break;
     case 'gold': {
-      // 증폭 Lv 수량 적용
       const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
       profile.gold += goldBonus;
       battle.accumulatedGold = (battle.accumulatedGold || 0) + goldBonus;
@@ -548,7 +536,6 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'damage': {
-      isDamageEvent = true;
       const rawDmg = rand(12, 25);
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rawDmg);
 
@@ -561,9 +548,7 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'kill_single': {
-      isDamageEvent = true;
-      
-      const { hitPart, hitPartName, damageVal } = calculatePartDamage(profile);
+      const { hitPartName, damageVal } = calculatePartDamage(profile);
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(8, 20));
 
       battle.hp = Math.max(0, battle.hp - finalDamage);
@@ -574,7 +559,6 @@ function resolveFarmFight(profile, battle) {
       
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
       const damageReward = Math.round((damageVal * 100) * mult);
-      
       const finalReward = damageReward + killAssistReward;
       
       profile.cash += finalReward;
@@ -583,7 +567,6 @@ function resolveFarmFight(profile, battle) {
 
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
-      
       let killDetailText = `당신이 적 부위(${hitPartName})에 명중시켜 서바이버가 사망했습니다.`;
 
       mainText = `[${killCount} Kill](+${won(killAssistReward)})\n` +
@@ -593,7 +576,6 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'kill_multi': {
-      isDamageEvent = true;
       const killCount = rand(2, 3);
       const assistCount = rand(0, 2);
 
@@ -616,7 +598,6 @@ function resolveFarmFight(profile, battle) {
 
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
       const damageReward = Math.round((totalDamageVal * 100) * mult);
-      
       const finalReward = damageReward + killAssistReward;
       
       profile.cash += finalReward;
@@ -650,14 +631,13 @@ function resolveFarmFight(profile, battle) {
 
   if (mainText) resultMessages.push(mainText);
 
-  return { text: resultMessages.join('\n'), category: outcome, isDamageEvent, earnedCash };
+  return { text: resultMessages.join('\n'), category: outcome, earnedCash };
 }
 
 function resolveEscapeEvent(profile, battle) {
   if (!battle.buffs) battle.buffs = [];
   const outcome = pickWeighted(ESCAPE_TABLE);
   let textResult = '';
-  let category = outcome;
   const activeBuffCount = battle.buffs.length;
 
   switch (outcome) {
@@ -669,30 +649,22 @@ function resolveEscapeEvent(profile, battle) {
       break;
     }
     case 'drink': {
-      if (activeBuffCount > 0) {
-        textResult = ``;
-      } else {
+      if (activeBuffCount === 0) {
         battle.buffs.push({ name: '에너지 드링크', turnsLeft: 2, healAmount: 5 });
         textResult = `🧪 [에너지 드링크] 효과 발동 (2턴 동안 매턴 HP +5 회복)`;
       }
       break;
     }
     case 'painkiller': {
-      if (activeBuffCount > 0) {
-        textResult = ``;
-      } else {
+      if (activeBuffCount === 0) {
         battle.buffs.push({ name: '진통제', turnsLeft: 3, healAmount: 5 });
         textResult = `💊 [진통제] 효과 발동 (3턴 동안 매턴 HP +5 회복)`;
       }
       break;
     }
-    default: {
-      textResult = ``;
-      break;
-    }
   }
 
-  return { text: textResult, category };
+  return { text: textResult, category: outcome };
 }
 
 function applyZoneAttrition(battle) {
@@ -777,14 +749,10 @@ function processMultiEnhance(profile, count) {
   let lastStatus = 'success';
 
   for (let i = 0; i < targetCount; i++) {
-    if (profile.enhance >= ENHANCE_TABLE.length) {
-      break; 
-    }
+    if (profile.enhance >= ENHANCE_TABLE.length) break; 
 
     const tableData = ENHANCE_TABLE[profile.enhance];
-    if (profile.cash < tableData.cost) {
-      break; 
-    }
+    if (profile.cash < tableData.cost) break; 
 
     profile.cash -= tableData.cost;
     totalCost += tableData.cost;
@@ -845,7 +813,6 @@ function processMultiEnhance(profile, count) {
   };
 }
 
-// ✨ /금괴강화 (증폭 시스템 적용)
 function processGoldEnhance(profile, targetLevels = 1) {
   if (profile.combatLevel === undefined) profile.combatLevel = 0;
   
@@ -886,7 +853,6 @@ function processGoldEnhance(profile, targetLevels = 1) {
   };
 }
 
-// ✨ /열쇠 (개편된 보상 방식)
 function processUseKey(profile) {
   if (profile.keys <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
 
@@ -894,17 +860,17 @@ function processUseKey(profile) {
   const randRoll = Math.random() * 100;
   let rewardMsg = '';
 
-  if (randRoll < 50) { // 50% 현금: 전투력 수치 * 10
+  if (randRoll < 50) { 
     const combatPower = getCombatPower(profile);
     const cashAmt = combatPower * 10;
     profile.cash += cashAmt;
     rewardMsg = `현금 ${won(cashAmt)} 획득! (전투력 ${combatPower.toLocaleString()} × 10)`;
-  } else if (randRoll < 99) { // 49% 금괴: 현재 증폭 레벨 범위
+  } else if (randRoll < 99) { 
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const goldBar = rand(ampInfo.minGold, ampInfo.maxGold);
     profile.gold += goldBar;
     rewardMsg = `금괴 ${goldBar}개 획득! (증폭 Lv.${profile.combatLevel || 0} 범위 적용)`;
-  } else { // 1% 이달의 아이템 뽑기권
+  } else { 
     if (!profile.monthItems) profile.monthItems = 0;
     profile.monthItems += 1;
     rewardMsg = `✨ [1% 대박] 이달의 아이템 뽑기권 획득!`;
@@ -937,18 +903,19 @@ function processTurn(state, utterance) {
   if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
   const isPlayingBattle = battle && battle.alive && !battle.finished;
 
-  // ✨ 입력값 검증: '/'로 시작하지 않는 메시지는 무시
   const input = typeof utterance === 'string' ? utterance.trim() : '';
+
+  // 1. 슬래시('/')로 시작하지 않는 일반 대화 처리
   if (!input.startsWith('/')) {
     const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
     return {
-      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필)\n\n${currentBoard}`,
+      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화)\n\n${currentBoard}`,
       imageUrl: null,
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
     };
   }
 
-  // ✨ '/' 단독 입력 시 커맨드 리스트 출력
+  // 2. 단독 '/' 입력 시 도움말 출력
   if (input === '/') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
@@ -970,7 +937,7 @@ function processTurn(state, utterance) {
     };
   }
 
-  // ✨ /프로필 정상 처리
+  // 3. /프로필 명령어
   if (input === '/프로필') {
     const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
     return {
@@ -981,6 +948,7 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 4. 시크릿 코드
   if (input === '/4655') {
     profile.cash += 10000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
@@ -992,6 +960,7 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 5. 전투 중 강화 차단 처리
   if (isPlayingBattle && (input.startsWith('/강화') || input.startsWith('/금괴강화') || input.startsWith('/연속강화'))) {
     return { 
       text: `⚠️ 전투 중에는 강화를 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
@@ -1001,42 +970,46 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 6. 금괴 강화 (증폭)
   if (input.startsWith('/금괴강화')) {
     const parts = input.replace('/금괴강화', '').trim();
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const goldResult = processGoldEnhance(profile, count);
     return { 
-      text: goldResult.text, 
+      text: goldResult.text + `\n\n` + profileText(profile), 
       imageUrl: goldResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'gold_enhance' 
     };
   }
 
+  // 7. 연속 강화
   if (input.startsWith('/연속강화')) {
     const parts = input.replace('/연속강화', '').trim();
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const multiResult = processMultiEnhance(profile, count);
     return { 
-      text: multiResult.text, 
+      text: multiResult.text + `\n\n` + profileText(profile), 
       imageUrl: multiResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
     };
   }
 
+  // 8. 단건 강화 (/강화)
   if (input === '/강화') {
     const enhanceResult = processEnhance(profile);
     return { 
-      text: enhanceResult.text, 
+      text: enhanceResult.text + `\n\n` + profileText(profile), 
       imageUrl: enhanceResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
     };
   }
 
+  // 9. 열쇠 사용
   if (input === '/열쇠') {
     const keyResult = processUseKey(profile);
     return { 
@@ -1047,6 +1020,7 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 10. 전투 시작
   if (input === '/전투') {
     if (isPlayingBattle) {
       return { 
@@ -1096,10 +1070,10 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 11. 전투 중 파밍
   if (input === '/파밍') {
     const outcome = resolveFarmFight(profile, battle);
 
-    // ✨ 획득한 현금의 0.05% (0.0005) 경험치 산정
     let baseExp = Math.round((outcome.earnedCash || 0) * 0.0005);
     let expRes = { gained: 0, leveledUp: false, msg: '' };
     let expMsg = '';
@@ -1107,7 +1081,7 @@ function processTurn(state, utterance) {
 
     if (baseExp > 0) {
       expRes = addExp(profile, baseExp);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained; // 누적 경험치 기록
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained; 
       levelUpMsg = expRes.leveledUp ? `\n${expRes.msg}` : '';
       expMsg = ` (EXP +${expRes.gained})`;
     }
@@ -1123,7 +1097,7 @@ function processTurn(state, utterance) {
       const deltaCash = profile.cash - snap.cash;
       if (deltaCash > 0) {
         profile.cash = snap.cash + Math.round(deltaCash * 0.7);
-        battle.accumulatedCash = Math.round(deltaCash * 0.7); // 사망 시 보존된 70% 현금만 반영
+        battle.accumulatedCash = Math.round(deltaCash * 0.7); 
       }
 
       const earnedStats = {
@@ -1179,6 +1153,7 @@ function processTurn(state, utterance) {
     };
   }
 
+  // 12. 전투 중 도망
   if (input === '/도망') {
     const outcome = resolveEscapeEvent(profile, battle);
 
