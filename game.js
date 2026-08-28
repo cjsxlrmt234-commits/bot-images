@@ -1,6 +1,4 @@
-// ==========================================
 // game.js
-// ==========================================
 
 const MAX_TURN = 15;
 
@@ -97,7 +95,7 @@ const LOBBY_CHOICES = [
 ];
 
 const ENHANCE_CHOICES = [
-  { label: '강화하기', action: '/강화' },
+  { label: '강화', action: '/강화' },
   { label: '전투', action: '/전투' },
   { label: '열쇠', action: '/열쇠' },
   { label: '프로필', action: '/프로필' }
@@ -905,25 +903,16 @@ function processTurn(state, utterance) {
   if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
   const isPlayingBattle = battle && battle.alive && !battle.finished;
 
-  let input = typeof utterance === 'string' ? utterance.trim() : '';
+  const input = typeof utterance === 'string' ? utterance.trim() : '';
 
-  // [수정] 슬래시('/')로 시작하지 않더라도 메뉴 버튼 텍스트("전투", "파밍" 등)인 경우 자동으로 슬래시 명령어 형태로 전환
+  // 1. 슬래시('/')로 시작하지 않는 일반 대화 처리
   if (!input.startsWith('/')) {
-    const rawClean = input.replace(/^\//, '').trim();
-    const validCommands = ['전투', '파밍', '도망', '강화', '열쇠', '프로필'];
-    
-    // 명령어 매칭이 되는 단어라면 슬래시를 붙여서 내부 처리로 넘김
-    if (validCommands.includes(rawClean)) {
-      input = '/' + rawClean;
-    } else {
-      // 그 외 진짜 일반 대화일 경우 기존처럼 안내 메시지 출력
-      const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
-      return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화)\n\n${currentBoard}`,
-        imageUrl: null,
-        choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
-      };
-    }
+    const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
+    return {
+      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화)\n\n${currentBoard}`,
+      imageUrl: null,
+      choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
+    };
   }
 
   // 2. 단독 '/' 입력 시 도움말 출력
