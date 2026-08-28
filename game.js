@@ -961,10 +961,10 @@ function processTurn(state, utterance) {
 
   // 4. 시크릿 코드
   if (input === '/4655') {
-    profile.cash += 10000000;
+    profile.cash += 1000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
-      text: `🎁 [시크릿 코드]\n현금 10,000,000원 지급!${board}`, 
+      text: `🎁 [시크릿 코드]\n현금 1,000,000원 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
