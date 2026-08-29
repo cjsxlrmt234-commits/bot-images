@@ -115,16 +115,15 @@ const BATTLE_CHOICES = [
   { label: '도망', action: '/도망' }
 ];
 
+// 버튼 메뉴에서 '제련' 항목 제거
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
-  { label: '제련', action: '/제련' },
   { label: '열쇠', action: '/열쇠' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
-  { label: '제련', action: '/제련' },
   { label: '전투', action: '/전투' },
   { label: '열쇠', action: '/열쇠' }
 ];
@@ -384,6 +383,17 @@ function profileText(profile) {
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
     `🔘 배율 : x${totalMult}`,
     ``,
+    `💵 현금 : ${won(p.cash)}`,
+    `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
+    `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
+    `📦 보급 : ${(p.monthItems || 0).toLocaleString()}개`
+  ].join('\n');
+}
+
+// 제련 후 출력용 간단한 재화 현황 정보
+function resourceText(profile) {
+  const p = createProfile(profile);
+  return [
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
     `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
@@ -965,14 +975,14 @@ function processRefine(profile) {
   if (roll < pSuccess) {
     profile.refine += 1;
     resultStatus = 'success';
-    const oldStar = REFINE_STARS[currentRefine] || '';
-    const newStar = REFINE_STARS[profile.refine] || '';
+    const oldStar = REFINE_STARS[currentRefine] || '0성';
+    const newStar = REFINE_STARS[profile.refine] || '0성';
     const statDiff = formatRefineStatDiff(currentRefine, profile.refine);
 
     resultMsg = `🔨 [제련 성공!] ${currentRefine}성(${oldStar}) ➔ ${profile.refine}성(${newStar})\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)\n${statDiff}`;
   } else if (roll < pKeep) {
     resultStatus = 'keep';
-    const currStar = REFINE_STARS[currentRefine] || '';
+    const currStar = REFINE_STARS[currentRefine] || '0성';
     const statDiff = formatRefineStatDiff(currentRefine, currentRefine);
 
     resultMsg = `🔨 [제련 유지] ${currentRefine}성(${currStar}) (변동 없음)\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)\n${statDiff}`;
@@ -985,7 +995,7 @@ function processRefine(profile) {
   } else {
     profile.refine = Math.max(0, profile.refine - 1);
     resultStatus = 'drop';
-    const newStar = REFINE_STARS[profile.refine] || '';
+    const newStar = REFINE_STARS[profile.refine] || '0성';
     const statDiff = formatRefineStatDiff(currentRefine, profile.refine);
 
     resultMsg = `📉 [제련 하락] 제련 단계가 하락하여 ${profile.refine}성(${newStar})이 되었습니다.\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)\n${statDiff}`;
@@ -1222,9 +1232,10 @@ function processTurn(state, utterance) {
     };
   }
 
+  // /제련 시 결과 텍스트 하단에 전체 대시보드 대신 간단한 재화 정보(resourceText)만 출력
   if (input === '/제련') {
     const refineResult = processRefine(profile);
-    const finalText = refineResult.text + `\n\n` + profileText(profile);
+    const finalText = refineResult.text + `\n\n` + resourceText(profile);
 
     return {
       text: finalText,
