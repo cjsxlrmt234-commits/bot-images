@@ -68,16 +68,16 @@ const REFINE_STARS = [
 ];
 
 const REFINE_TABLE = [
-  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, destroy: 0.000, drop: 0.00 }, // 0성 ➔ 1성
-  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 }, // 1성 ➔ 2성
-  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 }, // 2성 ➔ 3성
-  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 }, // 3성 ➔ 4성
-  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 }, // 4성 ➔ 5성
-  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },// 5성 ➔ 6성
-  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 }, // 6성 ➔ 7성
-  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },// 7성 ➔ 8성
-  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 }, // 8성 ➔ 9성
-  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 }, // 9성 ➔ 10성
+  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, destroy: 0.000, drop: 0.00 },
+  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 },
+  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 },
+  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 },
+  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 },
+  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },
+  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 },
+  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },
+  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 },
+  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 },
 ];
 
 const AMPLIFY_TABLE = [
@@ -115,7 +115,6 @@ const BATTLE_CHOICES = [
   { label: '도망', action: '/도망' }
 ];
 
-// 버튼 메뉴에서 '제련' 항목 제거
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
@@ -197,7 +196,7 @@ function getGoldMultiplier(enhanceLevel) {
 function getProfileGoldMultiplier(profile) {
   const baseMult = getGoldMultiplier(profile && profile.enhance);
   const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
-  const refineBonus = ((profile && profile.refine) || 0) * 0.10; // 제련 1성당 +0.10
+  const refineBonus = ((profile && profile.refine) || 0) * 0.10; 
   return Number((baseMult + ampInfo.multBonus + refineBonus).toFixed(2));
 }
 
@@ -205,13 +204,18 @@ function getExpMultiplier(profile) {
   return 1 + (((profile && profile.enhance) || 0) * 0.05);
 }
 
-function getEnhanceStats(enhanceLevel, combatLevel = 0) {
+function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
   const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
   const baseMult = (1 + (lvl * 0.05)).toFixed(2);
 
-  const baseHead = lvl * 1.00;
-  const baseBody = 50.00 - (lvl * 0.50);
-  const baseLeg = 50.00 - (lvl * 0.50);
+  let baseHead = lvl * 1.00;
+  
+  if (profile && profile.job === 'sentinel') {
+    baseHead += (profile.jobSkillLevel || 1) * 1.00;
+  }
+
+  const baseBody = Math.max(0, 50.00 - (lvl * 0.50));
+  const baseLeg = Math.max(0, 50.00 - (lvl * 0.50));
 
   const ampInfo = getAmplifyInfo(combatLevel);
   const numHead = baseHead * (1 + ampInfo.headWeight);
@@ -263,7 +267,7 @@ function getCombatPower(profile) {
   const refineLvl = profile.refine || 0;
 
   const basePower = (lvl * 100) + (combatLv * 500) + (enhance * 300);
-  const refineBonusMult = 1 + (refineLvl * 0.02); // 제련 1성당 전투력 2% 증가
+  const refineBonusMult = 1 + (refineLvl * 0.02);
 
   return Math.floor(basePower * refineBonusMult);
 }
@@ -273,7 +277,7 @@ function calculatePartDamage(profile) {
   const combatLevel = profile ? (profile.combatLevel || 0) : 0;
   const refineLevel = profile ? (profile.refine || 0) : 0;
   
-  const stats = getEnhanceStats(enhanceLevel, combatLevel);
+  const stats = getEnhanceStats(enhanceLevel, combatLevel, profile);
   const roll = Math.random() * 100;
 
   let hitPartName = '다리';
@@ -285,7 +289,6 @@ function calculatePartDamage(profile) {
     const powerDamage = Math.floor(combatPower * 0.1);
     const baseDamage = Math.max(100, powerDamage) + (enhanceLevel * 15);
     
-    // 제련 1성당 헤드샷 데미지 1% 증가
     const refineHeadMultiplier = 1 + (refineLevel * 0.01);
     damageVal = Math.floor(baseDamage * refineHeadMultiplier);
   } else if (roll < stats.numHead + stats.numBody) {
@@ -334,10 +337,12 @@ function createProfile(existing = {}) {
     gold: safeObj.gold ?? 0,
     keys: safeObj.keys ?? 0,
     enhance: safeObj.enhance ?? 0,
-    refine: safeObj.refine ?? 0, // 제련 단계 (0 ~ 10)
+    refine: safeObj.refine ?? 0,
     level: safeObj.level ?? 1,
     exp: safeObj.exp ?? 0,
     combatLevel: safeObj.combatLevel ?? 0,
+    job: safeObj.job ?? null,               
+    jobSkillLevel: safeObj.jobSkillLevel ?? 1, 
     nickname: nickname,
     title: safeObj.title ?? '',
     monthItems: safeObj.monthItems ?? 0,
@@ -372,10 +377,14 @@ function profileText(profile) {
   
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
+  const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
+  const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel})` : '없음';
+
   return [
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
     `칭호 : ${p.title}`,
+    `🎖️ 직업 : ${jobDisplay}`,
     `🎮 플레이 판수 : ${(p.gamesPlayed || 0).toLocaleString()}판`,
     `🎯 강화 : +${p.enhance} ${wName}`,
     `🔨 제련 : ${refineStar}`,
@@ -390,7 +399,6 @@ function profileText(profile) {
   ].join('\n');
 }
 
-// 제련 후 출력용 간단한 재화 현황 정보
 function resourceText(profile) {
   const p = createProfile(profile);
   return [
@@ -541,6 +549,27 @@ function calculateCombatDamage(battle, rawDamage) {
   return { finalDamage, totalReduce, armorNotes };
 }
 
+function triggerShadowLoot(profile, battle) {
+  const randVal = Math.random() * 100;
+  const mult = getProfileGoldMultiplier(profile);
+
+  if (randVal < 50) {
+    const lootCash = rand(1000, 5000) * mult;
+    profile.cash += lootCash;
+    battle.accumulatedCash += lootCash;
+    return `💵 현금 +${won(lootCash)}`;
+  } else if (randVal < 80) {
+    const goldAmt = rand(1, 3);
+    profile.gold += goldAmt;
+    battle.accumulatedGold = (battle.accumulatedGold || 0) + goldAmt;
+    return `🧈 금괴 +${goldAmt}개`;
+  } else {
+    profile.keys += 1;
+    battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
+    return `🔑 비밀열쇠 +1개`;
+  }
+}
+
 function resolveFarmFight(profile, battle) {
   let resultMessages = [];
   let earnedCash = 0;
@@ -634,15 +663,22 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'kill_single': {
+      let killCount = 1;
+      const assistCount = 0;
+      const triggerChance = (profile.jobSkillLevel || 1) * 0.01;
+
+      let skillNote = "";
+      if (profile.job === 'stinger' && Math.random() < triggerChance) {
+        killCount = rand(4, 5);
+        skillNote = `\n⚡ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
+      }
+
       const { hitPartName, damageVal } = calculatePartDamage(profile);
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(8, 20));
 
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      const killCount = 1;
-      const assistCount = 0;
-      
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
       const damageReward = Math.round((damageVal * 100) * mult);
       const finalReward = damageReward + killAssistReward;
@@ -651,19 +687,31 @@ function resolveFarmFight(profile, battle) {
       earnedCash = finalReward;
       battle.accumulatedCash += earnedCash;
 
+      if (profile.job === 'shadow' && Math.random() < triggerChance) {
+        const shadowLoot = triggerShadowLoot(profile, battle);
+        skillNote += `\n🗡️ [섀도우 스킬 발동!] 은밀하게 전리품을 획득했습니다: ${shadowLoot}`;
+      }
+
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${hitPartName})에 명중시켜 서바이버가 사망했습니다.`;
 
-      mainText = `[${killCount} KILL] (+${won(killAssistReward)})\n` +
+      mainText = `[${killCount} KILL] (+${won(killAssistReward)})${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${damageVal.toLocaleString()}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
       break;
     }
     case 'kill_multi': {
-      const killCount = rand(2, 3);
+      let killCount = rand(2, 3);
       const assistCount = rand(0, 2);
+      const triggerChance = (profile.jobSkillLevel || 1) * 0.01;
+
+      let skillNote = "";
+      if (profile.job === 'stinger' && Math.random() < triggerChance) {
+        killCount = rand(4, 5);
+        skillNote = `\n⚡ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
+      }
 
       let totalDamageVal = 0;
       let hitPartsList = [];
@@ -689,6 +737,11 @@ function resolveFarmFight(profile, battle) {
       earnedCash = finalReward;
       battle.accumulatedCash += earnedCash;
 
+      if (profile.job === 'shadow' && Math.random() < triggerChance) {
+        const shadowLoot = triggerShadowLoot(profile, battle);
+        skillNote += `\n🗡️ [섀도우 스킬 발동!] 은밀하게 전리품을 획득했습니다: ${shadowLoot}`;
+      }
+
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
 
@@ -698,7 +751,7 @@ function resolveFarmFight(profile, battle) {
 
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      mainText = `${killTextHeader}\n` +
+      mainText = `${killTextHeader}${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
@@ -774,7 +827,7 @@ function processEnhance(profile) {
   if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
   if (profile.enhance >= ENHANCE_TABLE.length) {
     const [wName] = getWeaponInfo(profile.enhance);
-    const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+    const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
     const refineStar = REFINE_STARS[profile.refine] || '';
 
@@ -806,7 +859,7 @@ function processEnhance(profile) {
 
   profile.cash -= cost;
   const initialEnhance = profile.enhance;
-  const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0);
+  const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0, profile);
 
   const roll = Math.random(); 
   let resultMsg = '';
@@ -816,14 +869,14 @@ function processEnhance(profile) {
     profile.enhance += 1;
     resultStatus = 'success';
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile.enhance}\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
   } else if (roll < tableData.success + tableData.keep) {
     resultStatus = 'keep';
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
@@ -831,7 +884,7 @@ function processEnhance(profile) {
     resultStatus = 'fail';
     profile.enhance = 0;
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
@@ -849,7 +902,7 @@ function processMultiEnhance(profile, count) {
 
   const targetCount = Math.max(1, count);
   const initialLevel = profile.enhance;
-  const initialStats = getEnhanceStats(initialLevel, profile.combatLevel || 0);
+  const initialStats = getEnhanceStats(initialLevel, profile.combatLevel || 0, profile);
 
   let totalCost = 0;
   let successCount = 0;
@@ -886,7 +939,7 @@ function processMultiEnhance(profile, count) {
   if (attempted === 0) {
     if (profile.enhance >= ENHANCE_TABLE.length) {
       const [wName] = getWeaponInfo(profile.enhance);
-      const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+      const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
       const refineStar = REFINE_STARS[profile.refine] || '';
 
@@ -921,7 +974,7 @@ function processMultiEnhance(profile, count) {
   }
 
   const [currName] = getWeaponInfo(profile.enhance);
-  const finalStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
+  const finalStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0, profile);
   const detailMsg = formatEnhanceStatDiff(initialStats, finalStats);
 
   let resultMsg = [
@@ -952,7 +1005,7 @@ function processRefine(profile) {
   const cashCost = tableData.cashCost;
   const goldCost = tableData.goldCost;
 
-  if (profile.cash < cashCost || profile.gold < goldCost) {
+  if (profile.cash < cashCost || (profile.gold || 0) < goldCost) {
     return { 
       text: `제련 재화가 부족합니다!\n(필요: ${won(cashCost)}, 금괴 ${goldCost}개)\n(보유: ${won(profile.cash)}, 금괴 ${(profile.gold || 0).toLocaleString()}개)`, 
       imageUrl: null, 
@@ -1083,6 +1136,53 @@ function processUseKey(profile) {
   return { text: `🔑 열쇠 사용:\n${rewardMsg}`, imageUrl: null };
 }
 
+function processJobChange(profile, targetJob) {
+  const jobMap = {
+    '스팅거': 'stinger',
+    '센티넬': 'sentinel',
+    '섀도우': 'shadow'
+  };
+
+  const jobCode = jobMap[targetJob];
+  if (!jobCode) {
+    return { text: `⚠️ 올바른 전직 직업명을 입력해 주세요. (스팅거, 센티넬, 섀도우)` };
+  }
+
+  if (profile.job === jobCode) {
+    return { text: `⚠️ 이미 해당 직업(${targetJob})으로 전직되어 있습니다.` };
+  }
+
+  profile.job = jobCode;
+  profile.jobSkillLevel = 1;
+
+  return { text: `🎉 [전직 완료] '${targetJob}'(으)로 전직했습니다! (스킬 레벨: Lv.1)` };
+}
+
+function processUpgradeJobSkill(profile) {
+  if (!profile.job) {
+    return { text: `⚠️ 전직하지 않은 상태에서는 전직 스킬을 업그레이드할 수 없습니다.` };
+  }
+
+  const currentLevel = profile.jobSkillLevel || 1;
+  if (currentLevel >= 100) {
+    return { text: `✨ 전직 스킬이 이미 최고 레벨(Lv.100)에 도달했습니다!` };
+  }
+
+  const goldCost = currentLevel * 10;
+  if ((profile.gold || 0) < goldCost) {
+    return { text: `금괴가 부족합니다!\n(필요: 금괴 ${goldCost}개 | 보유: 금괴 ${(profile.gold || 0).toLocaleString()}개)` };
+  }
+
+  profile.gold -= goldCost;
+  profile.jobSkillLevel = currentLevel + 1;
+
+  const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
+
+  return { 
+    text: `⚡ [전직 스킬 업그레이드 성공!]\n${jobNames[profile.job]} 스킬 레벨: Lv.${currentLevel} ➔ Lv.${profile.jobSkillLevel}\n(소모: 금괴 ${goldCost}개)` 
+  };
+}
+
 function startGame(existingProfile) {
   let profile = createProfile(existingProfile);
   let battle = createBattle(profile);
@@ -1111,14 +1211,14 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화', '전직', '전직스킬업'];
     
-    if (validCommands.includes(rawClean)) {
+    if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
     } else {
       const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
       return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화, /제련)\n\n${currentBoard}`,
+        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화, /제련, /전직 스팅거)\n\n${currentBoard}`,
         imageUrl: null,
         choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
       };
@@ -1135,6 +1235,8 @@ function processTurn(state, utterance) {
       `• /제련 - 현금과 금괴로 무기 제련`,
       `• /연속강화 [횟수] - 지정 횟수만큼 자동 강화`,
       `• /금괴강화 [수량] - 금괴로 전투력 증폭 강화`,
+      `• /전직 [스팅거/센티넬/섀도우] - 선택한 직업으로 전직`,
+      `• /전직스킬업 - 금괴를 소모하여 전직 스킬 레벨업`,
       `• /열쇠 - 비밀열쇠 사용`,
       `• /프로필 - 현재 정보 확인`
     ].join('\n');
@@ -1179,12 +1281,46 @@ function processTurn(state, utterance) {
     };
   }
 
-  if (isPlayingBattle && (input.startsWith('/강화') || input.startsWith('/제련') || input.startsWith('/금괴강화') || input.startsWith('/연속강화'))) {
+  if (isPlayingBattle && (
+    input.startsWith('/강화') || 
+    input.startsWith('/제련') || 
+    input.startsWith('/금괴강화') || 
+    input.startsWith('/연속강화') ||
+    input.startsWith('/전직')
+  )) {
     return { 
-      text: `⚠️ 전투 중에는 강화 및 제련을 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
+      text: `⚠️ 전투 중에는 해당 기능을 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
       imageUrl: null, 
       choices: BATTLE_CHOICES, 
       category: 'battle_block' 
+    };
+  }
+
+  if (input.startsWith('/전직스킬업')) {
+    const res = processUpgradeJobSkill(profile);
+    return {
+      text: `${res.text}\n\n${profileText(profile)}`,
+      imageUrl: null,
+      choices: LOBBY_CHOICES,
+      category: 'job_skill_up'
+    };
+  }
+
+  if (input.startsWith('/전직')) {
+    const targetJob = input.replace('/전직', '').trim();
+    if (!targetJob) {
+      return {
+        text: `⚠️ 전직할 직업을 명시해 주세요! (예: /전직 스팅거, /전직 센티넬, /전직 섀도우)`,
+        imageUrl: null,
+        choices: LOBBY_CHOICES
+      };
+    }
+    const res = processJobChange(profile, targetJob);
+    return {
+      text: `${res.text}\n\n${profileText(profile)}`,
+      imageUrl: null,
+      choices: LOBBY_CHOICES,
+      category: 'job_change'
     };
   }
 
@@ -1232,7 +1368,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // /제련 시 결과 텍스트 하단에 전체 대시보드 대신 간단한 재화 정보(resourceText)만 출력
   if (input === '/제련') {
     const refineResult = processRefine(profile);
     const finalText = refineResult.text + `\n\n` + resourceText(profile);
