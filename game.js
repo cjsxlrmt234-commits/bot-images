@@ -322,7 +322,9 @@ function createProfile(existing = {}) {
     gold: safeObj.gold ?? 0,
     keys: safeObj.keys ?? 0,
     enhance: safeObj.enhance ?? 0,
-    refine: safeObj.refine ?? 0,
+    refine: Number.isFinite(Number(safeObj.refine))
+  ? Math.max(0, Math.min(10, Math.floor(Number(safeObj.refine))))
+  : 0,
     level: safeObj.level ?? 1,
     exp: safeObj.exp ?? 0,
     combatLevel: safeObj.combatLevel ?? 0,
@@ -943,62 +945,183 @@ function processMultiEnhance(profile, count) {
 // ==========================================
 // [독립 연출] 제련 프로세스
 // ==========================================
+// ==========================================
+// [독립 연출] 제련 프로세스
+// ==========================================
 function processRefine(profile) {
-  if (profile.refine === undefined || profile.refine < 0) profile.refine = 0;
 
+  // ==========================================
+  // 제련 단계 데이터 안전 보정
+  // ==========================================
+  let refineValue = Number(profile.refine);
+
+  // 숫자가 아니거나 이상한 값이면 0성으로 초기화
+  if (!Number.isFinite(refineValue)) {
+    refineValue = 0;
+  }
+
+  // 소수점 제거
+  refineValue = Math.floor(refineValue);
+
+  // 범위 제한
+  refineValue = Math.max(0, Math.min(10, refineValue));
+
+  // 프로필에 정상 값 저장
+  profile.refine = refineValue;
+
+
+  // ==========================================
   // 1. 최고 제련 단계 체크
+  // ==========================================
   if (profile.refine >= 10) {
-    return { text: `🔨 이미 최고 제련 단계(10성 ★★★★★)에 도달했습니다!`, imageUrl: null, status: 'max' };
-  }
-
-  // 2. +20 싱귤래리티 무기 미만 체크
-  if ((profile.enhance || 0) < 20) {
-    const [wName] = getWeaponInfo(profile.enhance || 0);
-    return { 
-      text: `⚠️ 무기 제련은 [+20 싱귤래리티] 무기부터 가능합니다!\n현재 착용 중인 무기: +${profile.enhance || 0} ${wName}`, 
-      imageUrl: null, 
-      status: 'low_enhance' 
+    return {
+      text: `🔨 이미 최고 제련 단계(10성 ★★★★★)에 도달했습니다!`,
+      imageUrl: null,
+      status: 'max'
     };
   }
 
-  // 3. 테이블 검증
+
+  // ==========================================
+  // 2. +20 무기 필요
+  // ==========================================
+  const enhanceLevel = Number(profile.enhance);
+
+  // 강화 데이터도 안전하게 보정
+  if (!Number.isFinite(enhanceLevel)) {
+    profile.enhance = 0;
+  } else {
+    profile.enhance = Math.max(
+      0,
+      Math.min(20, Math.floor(enhanceLevel))
+    );
+  }
+
+  if (profile.enhance < 20) {
+    const [wName] = getWeaponInfo(profile.enhance);
+
+    return {
+      text:
+        `⚠️ 무기 제련은 [+20 싱귤래리티] 무기부터 가능합니다!\n` +
+        `현재 착용 중인 무기: +${profile.enhance} ${wName}`,
+      imageUrl: null,
+      status: 'low_enhance'
+    };
+  }
+
+
+  // ==========================================
+  // 3. 제련 테이블 확인
+  // ==========================================
   const tableData = REFINE_TABLE[profile.refine];
+
   if (!tableData) {
-    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다. (유효하지 않은 제련 단계)`, imageUrl: null, status: 'error' };
-  }
 
-  const cashCost = tableData.cashCost;
-  const goldCost = tableData.goldCost;
+    // 혹시 데이터가 잘못되었으면 안전하게 0성으로 복구
+    profile.refine = 0;
 
-  // 4. 재화 부족 체크
-  if (profile.cash < cashCost || (profile.gold || 0) < goldCost) {
-    return { 
-      text: `❌ 제련 재화가 부족합니다!\n\n💰 [필요 재화]\n• 현금: ${won(cashCost)}\n• 금괴: ${goldCost.toLocaleString()}개\n\n👛 [보유 재화]\n• 현금: ${won(profile.cash)}\n• 금괴: ${(profile.gold || 0).toLocaleString()}개`, 
-      imageUrl: null, 
-      status: 'noresource' 
+    return {
+      text:
+        `⚠️ 제련 단계 데이터가 비정상적이어서 0성으로 초기화되었습니다.\n` +
+        `다시 /제련 을 입력해주세요.`,
+      imageUrl: null,
+      status: 'error'
     };
   }
 
+
+  // ==========================================
+  // 4. 필요 재화
+  // ==========================================
+  const cashCost = Number(tableData.cashCost) || 0;
+  const goldCost = Number(tableData.goldCost) || 0;
+
+
+  // 현금 데이터 안전 보정
+  profile.cash = Number(profile.cash);
+  if (!Number.isFinite(profile.cash) || profile.cash < 0) {
+    profile.cash = 0;
+  }
+
+
+  // 금괴 데이터 안전 보정
+  profile.gold = Number(profile.gold);
+  if (!Number.isFinite(profile.gold) || profile.gold < 0) {
+    profile.gold = 0;
+  }
+
+
+  // ==========================================
+  // 5. 재화 부족 체크
+  // ==========================================
+  if (profile.cash < cashCost || profile.gold < goldCost) {
+
+    return {
+      text:
+        `❌ 제련 재화가 부족합니다!\n\n` +
+        `💰 [필요 재화]\n` +
+        `• 현금: ${won(cashCost)}\n` +
+        `• 금괴: ${goldCost.toLocaleString()}개\n\n` +
+        `👛 [보유 재화]\n` +
+        `• 현금: ${won(profile.cash)}\n` +
+        `• 금괴: ${profile.gold.toLocaleString()}개`,
+      imageUrl: null,
+      status: 'noresource'
+    };
+  }
+
+
+  // ==========================================
+  // 6. 재화 차감
+  // ==========================================
   profile.cash -= cashCost;
   profile.gold -= goldCost;
 
+
+  // ==========================================
+  // 7. 제련 확률 계산
+  // ==========================================
   const currentRefine = profile.refine;
   const roll = Math.random();
+
+  const successRate = Number(tableData.success) || 0;
+  const keepRate = Number(tableData.keep) || 0;
+  const destroyRate = Number(tableData.destroy) || 0;
+  const dropRate = Number(tableData.drop) || 0;
+
+  const pSuccess = successRate;
+  const pKeep = pSuccess + keepRate;
+  const pDestroy = pKeep + destroyRate;
+  const pDrop = pDestroy + dropRate;
+
   let resultMsg = '';
   let resultStatus = '';
 
-  const pSuccess = tableData.success;
-  const pKeep = pSuccess + tableData.keep;
-  const pDestroy = pKeep + tableData.destroy;
 
-  const costText = `💸 (소모: ${won(cashCost)}, 금괴 ${goldCost.toLocaleString()}개)`;
-  const remainText = `👛 남은 잔액: ${won(profile.cash)} | 🧈 금괴: ${(profile.gold || 0).toLocaleString()}개`;
+  const costText =
+    `💸 (소모: ${won(cashCost)}, 금괴 ${goldCost.toLocaleString()}개)`;
 
+  const remainText =
+    `👛 남은 잔액: ${won(profile.cash)} | ` +
+    `🧈 금괴: ${profile.gold.toLocaleString()}개`;
+
+
+  // ==========================================
+  // 8. 제련 결과
+  // ==========================================
+
+  // 성공
   if (roll < pSuccess) {
-    profile.refine += 1;
+
+    profile.refine = Math.min(10, profile.refine + 1);
     resultStatus = 'success';
-    const oldStar = REFINE_STARS[currentRefine] || '0성';
-    const newStar = REFINE_STARS[profile.refine] || '';
+
+    const oldStar =
+      REFINE_STARS[currentRefine] || `${currentRefine}성`;
+
+    const newStar =
+      REFINE_STARS[profile.refine] || `${profile.refine}성`;
+
     resultMsg = [
       `✨ [제련 성공!] 🔥`,
       `제련 단계 상승: ${currentRefine}성(${oldStar}) ➔ ${profile.refine}성(${newStar})`,
@@ -1007,9 +1130,15 @@ function processRefine(profile) {
       remainText
     ].join('\n');
 
+
+  // 유지
   } else if (roll < pKeep) {
+
     resultStatus = 'keep';
-    const currStar = REFINE_STARS[currentRefine] || '0성';
+
+    const currStar =
+      REFINE_STARS[currentRefine] || `${currentRefine}성`;
+
     resultMsg = [
       `🛡️ [제련 유지]`,
       `변동 없음: 현재 ${currentRefine}성(${currStar})`,
@@ -1018,9 +1147,13 @@ function processRefine(profile) {
       remainText
     ].join('\n');
 
+
+  // 파괴
   } else if (roll < pDestroy) {
+
     profile.refine = 0;
     resultStatus = 'destroy';
+
     resultMsg = [
       `💥 [제련 파괴!] ⚠️`,
       `충격으로 인해 제련 단계가 파괴되어 0성으로 초기화되었습니다!`,
@@ -1029,10 +1162,16 @@ function processRefine(profile) {
       remainText
     ].join('\n');
 
+
+  // 하락
   } else {
+
     profile.refine = Math.max(0, profile.refine - 1);
     resultStatus = 'drop';
-    const newStar = REFINE_STARS[profile.refine] || '0성';
+
+    const newStar =
+      REFINE_STARS[profile.refine] || `${profile.refine}성`;
+
     resultMsg = [
       `📉 [제련 하락]`,
       `제련 단계 하락: ${currentRefine}성 ➔ ${profile.refine}성(${newStar})`,
@@ -1042,6 +1181,10 @@ function processRefine(profile) {
     ].join('\n');
   }
 
+
+  // ==========================================
+  // 9. 최종 결과 반환
+  // ==========================================
   return {
     text: resultMsg,
     imageUrl: null,
