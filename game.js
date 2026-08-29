@@ -83,7 +83,6 @@ const ESCAPE_TABLE = [
   ['painkiller', 20.0]
 ];
 
-// 메뉴 선택에서 [프로필] 제거
 const BATTLE_CHOICES = [
   { label: '파밍', action: '/파밍' },
   { label: '도망', action: '/도망' }
@@ -296,6 +295,8 @@ function profileText(profile, earnedStats = null) {
   const combatPower = getCombatPower(p);
   const [wName] = getWeaponInfo(p.enhance);
   
+  const stats = getEnhanceStats(p.enhance, p.combatLevel);
+
   const getGainStr = (val, isMoney = false) => {
     if (!val || val <= 0) return '';
     return isMoney ? ` (+${won(val)})` : ` (+${val}개)`;
@@ -310,12 +311,13 @@ function profileText(profile, earnedStats = null) {
   return [
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
-    ` 칭호 : ${p.title}`,
+    `칭호 : ${p.title}`,
     `🎮 플레이 판수 : ${p.gamesPlayed}판`,
     `🎯 강화 : +${p.enhance} ${wName}`,
     `🔨 제련 : ${p.refine}`,
     `⭐ Lv.${p.level} (${p.exp}/${reqExp})${expGainStr}`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
+    `🔘 배율 : ${stats.mult}`,
     ``,
     `💵 현금 : ${won(p.cash)}${cashGainStr}`,
     `🧈 금괴 : ${p.gold}개${goldGainStr}`,
@@ -387,8 +389,7 @@ function battleStatusBoard(profile, battle) {
   const reqExp = getRequiredExp(p.level);
   const expMultiplier = getExpMultiplier(p);
 
-  // 생존자 수 10명 이하 시 은폐 처리
-  const survivorsText = b.survivors <= 10 ? '?' : `${b.survivors}명`;
+  const survivorsText = b.survivors <= 10 ? '?명' : `${b.survivors}명`;
   
   let boardLines = [
     `[배틀로얄 중] 매칭: ${b.mode}`,
@@ -572,7 +573,6 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${hitPartName})에 명중시켜 서바이버가 사망했습니다.`;
 
-      // 대문자 [1 KILL] 형식으로 수정
       mainText = `[${killCount} KILL] (+${won(killAssistReward)})\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${damageVal}] (+${won(damageReward)})\n` +
@@ -589,10 +589,9 @@ function resolveFarmFight(profile, battle) {
       for (let i = 0; i < killCount; i++) {
         const { hitPartName, damageVal } = calculatePartDamage(profile);
         totalDamageVal += damageVal;
-        hitPartsList.push(hitPartName); // 킬 수만큼 적중 부위 전부 기록
+        hitPartsList.push(hitPartName);
       }
 
-      // 중복 제거(Set) 없이 킬 수대로 부위 전체 나열 (예: 헤드, 다리, 몸)
       const partsText = hitPartsList.join(', ');
 
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(15, 30));
@@ -611,7 +610,6 @@ function resolveFarmFight(profile, battle) {
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
 
-      // 대문자 [N KILL] 형식으로 수정
       let killTextHeader = assistCount > 0 
         ? `[${killCount} KILL / ${assistCount} ASSIST] (+${won(killAssistReward)})`
         : `[${killCount} KILL] (+${won(killAssistReward)})`;
@@ -828,6 +826,7 @@ function processGoldEnhance(profile, targetLevels = 1) {
   let levelsUpgraded = 0;
   let totalGoldSpent = 0;
   const startLevel = profile.combatLevel;
+  const initialStats = getEnhanceStats(profile.enhance, startLevel);
 
   for (let i = 0; i < targetLevels; i++) {
     if (profile.combatLevel >= 10) break;
@@ -846,14 +845,21 @@ function processGoldEnhance(profile, targetLevels = 1) {
     return { text: `금괴가 부족합니다! (다음 증폭 필요량: 금괴 ${costNext}개)`, imageUrl: null };
   }
 
-  const currentInfo = getAmplifyInfo(profile.combatLevel);
+  const finalStats = getEnhanceStats(profile.enhance, profile.combatLevel);
+  const diffMsg = formatEnhanceStatDiff(initialStats, finalStats);
+  const [wName] = getWeaponInfo(profile.enhance);
+
+  const resultMsg = [
+    `⚡ 증폭 강화 성공!`,
+    `[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]`,
+    `• 소모 금괴: ${totalGoldSpent}개`,
+    ``,
+    `+${profile.enhance} ${wName}`,
+    diffMsg
+  ].join('\n');
 
   return { 
-    text: `⚡ 증폭 강화 성공!\n[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]\n` +
-          `• 소모 금괴: ${totalGoldSpent}개\n` +
-          `• 배율 가산: +x${currentInfo.multBonus.toFixed(2)}\n` +
-          `• 헤드샷 가중치: +${Math.round(currentInfo.headWeight * 100)}%\n` +
-          `• 금괴 획득 수량: ${currentInfo.minGold}~${currentInfo.maxGold}개`, 
+    text: resultMsg, 
     imageUrl: null 
   };
 }
@@ -910,7 +916,6 @@ function processTurn(state, utterance) {
 
   let input = typeof utterance === 'string' ? utterance.trim() : '';
 
-  // 1. 슬래시('/') 자동 보정 처리
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
     const validCommands = ['전투', '파밍', '도망', '강화', '열쇠', '프로필'];
@@ -927,7 +932,6 @@ function processTurn(state, utterance) {
     }
   }
 
-  // 2. 단독 '/' 입력 시 도움말 출력
   if (input === '/') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
@@ -949,7 +953,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 3. /프로필 명령어
   if (input === '/프로필') {
     const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
     return {
@@ -960,7 +963,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 4. 시크릿 코드 (/4655 - 현금 1,000,000원)
   if (input === '/4655') {
     profile.cash += 1000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
@@ -972,7 +974,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 4-1. 시크릿 코드 (/5292 - 금괴 1,000개)
   if (input === '/5292') {
     profile.gold += 1000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
@@ -984,7 +985,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 5. 전투 중 강화 차단 처리
   if (isPlayingBattle && (input.startsWith('/강화') || input.startsWith('/금괴강화') || input.startsWith('/연속강화'))) {
     return { 
       text: `⚠️ 전투 중에는 강화를 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
@@ -994,21 +994,19 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 6. 금괴 강화 (증폭)
   if (input.startsWith('/금괴강화')) {
     const parts = input.replace('/금괴강화', '').trim();
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const goldResult = processGoldEnhance(profile, count);
     return { 
-      text: goldResult.text + `\n\n` + profileText(profile), 
+      text: goldResult.text, 
       imageUrl: goldResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'gold_enhance' 
     };
   }
 
-  // 7. 연속 강화
   if (input.startsWith('/연속강화')) {
     const parts = input.replace('/연속강화', '').trim();
     let count = parseInt(parts, 10);
@@ -1022,7 +1020,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 8. 단건 강화 (/강화)
   if (input === '/강화') {
     const enhanceResult = processEnhance(profile);
     return { 
@@ -1033,7 +1030,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 9. 열쇠 사용
   if (input === '/열쇠') {
     const keyResult = processUseKey(profile);
     return { 
@@ -1044,7 +1040,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 10. 전투 시작
   if (input === '/전투') {
     if (isPlayingBattle) {
       return { 
@@ -1065,12 +1060,10 @@ function processTurn(state, utterance) {
     };
   }
 
-  // === 이하 전투 진행 로직 (/파밍, /도망) ===
   if (isPlayingBattle) {
     let buffMsgs = processBuffs(battle);
     checkDeath(battle);
 
-    // 버프 적용으로 인한 사망 체크
     if (!battle.alive) {
       const earnedStats = {
         cash: battle.accumulatedCash || 0,
@@ -1087,7 +1080,6 @@ function processTurn(state, utterance) {
       };
     }
 
-    // 11. 전투 중 파밍
     if (input === '/파밍') {
       const outcome = resolveFarmFight(profile, battle);
 
@@ -1170,7 +1162,6 @@ function processTurn(state, utterance) {
       };
     }
 
-    // 12. 전투 중 도망
     if (input === '/도망') {
       const outcome = resolveEscapeEvent(profile, battle);
 
@@ -1237,7 +1228,6 @@ function processTurn(state, utterance) {
     }
   }
 
-  // 13. 잘못된 입력 예외 처리
   const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
   return {
     text: `올바른 명령어(/)를 사용해주세요.\n\n${currentBoard}`,
