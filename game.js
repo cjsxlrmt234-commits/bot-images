@@ -960,7 +960,7 @@ function processRefine(profile) {
 
   const tableData = REFINE_TABLE[profile.refine];
   if (!tableData) {
-    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다.`, imageUrl: null, status: 'error' };
+    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다. (현재 제련 레벨: ${profile.refine})`, imageUrl: null, status: 'error' };
   }
 
   const cashCost = tableData.cashCost;
@@ -1016,7 +1016,7 @@ function processRefine(profile) {
 
 function processGoldEnhance(profile) {
   if (profile.combatLevel === undefined) profile.combatLevel = 0;
-  
+
   if (profile.combatLevel >= 10) {
     return { text: `✨ 증폭 레벨이 최고 단계(Lv.10)에 도달했습니다!`, imageUrl: null };
   }
@@ -1128,7 +1128,7 @@ function startGame(existingProfile) {
 
 function processTurn(state, utterance) {
   if (!state || typeof state !== 'object') state = {};
-  
+
   let profile = createProfile(state.profile);
   let battle = state.battle;
 
