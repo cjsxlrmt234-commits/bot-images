@@ -54,7 +54,7 @@ const ENHANCE_TABLE = [
 ];
 
 const REFINE_STARS = [
-  '',          // 0성
+  '0성',        // 0성
   '☆',        // 1성
   '★',        // 2성
   '★☆',      // 3성
@@ -115,7 +115,6 @@ const BATTLE_CHOICES = [
   { label: '도망', action: '/도망' }
 ];
 
-// 메뉴 선택지에서 증폭, 전직, 제련 제거
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
@@ -358,7 +357,7 @@ function profileText(profile) {
   const reqExp = getRequiredExp(p.level);
   const combatPower = getCombatPower(p);
   const [wName] = getWeaponInfo(p.enhance);
-  const refineStar = REFINE_STARS[p.refine] || '';
+  const refineStar = REFINE_STARS[p.refine] || '0성';
   
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
@@ -447,7 +446,7 @@ function battleStatusBoard(profile, battle) {
 
   const [wName] = getWeaponInfo(p.enhance);
   const reqExp = getRequiredExp(p.level);
-  const refineStar = REFINE_STARS[p.refine] || '';
+  const refineStar = REFINE_STARS[p.refine] || '0성';
   
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
@@ -787,7 +786,7 @@ function processEnhance(profile) {
     const [wName] = getWeaponInfo(profile.enhance);
     const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
-    const refineStar = REFINE_STARS[profile.refine] || '';
+    const refineStar = REFINE_STARS[profile.refine] || '0성';
 
     const maxText = [
       `최고 강화 단계 도달! (+20 ${wName})`,
@@ -899,7 +898,7 @@ function processMultiEnhance(profile, count) {
       const [wName] = getWeaponInfo(profile.enhance);
       const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
-      const refineStar = REFINE_STARS[profile.refine] || '';
+      const refineStar = REFINE_STARS[profile.refine] || '0성';
 
       const maxText = [
         `최고 강화 단계 도달! (+20 ${wName})`,
@@ -960,10 +959,14 @@ function processRefine(profile) {
   }
 
   const tableData = REFINE_TABLE[profile.refine];
+  if (!tableData) {
+    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다.`, imageUrl: null, status: 'error' };
+  }
+
   const cashCost = tableData.cashCost;
   const goldCost = tableData.goldCost;
 
-  if (profile.cash < cashCost || profile.gold < goldCost) {
+  if (profile.cash < cashCost || (profile.gold || 0) < goldCost) {
     return { 
       text: `제련 재화가 부족합니다!\n(필요: ${won(cashCost)}, 금괴 ${goldCost}개)\n(보유: ${won(profile.cash)}, 금괴 ${(profile.gold || 0).toLocaleString()}개)`, 
       imageUrl: null, 
@@ -987,7 +990,7 @@ function processRefine(profile) {
     profile.refine += 1;
     resultStatus = 'success';
     const oldStar = REFINE_STARS[currentRefine] || '0성';
-    const newStar = REFINE_STARS[profile.refine];
+    const newStar = REFINE_STARS[profile.refine] || '';
     resultMsg = `🔨 [제련 성공!] ${currentRefine}성(${oldStar}) ➔ ${profile.refine}성(${newStar})\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
   } else if (roll < pKeep) {
     resultStatus = 'keep';
@@ -1019,7 +1022,7 @@ function processGoldEnhance(profile) {
   }
 
   const costNext = AMPLIFY_TABLE[profile.combatLevel].costNext;
-  if (profile.gold < costNext) {
+  if ((profile.gold || 0) < costNext) {
     return { text: `금괴가 부족합니다! (다음 증폭 필요량: 금괴 ${costNext.toLocaleString()}개)`, imageUrl: null };
   }
 
@@ -1085,7 +1088,7 @@ function processJobChange(profile, jobName) {
 }
 
 function processUseKey(profile) {
-  if (profile.keys <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
+  if ((profile.keys || 0) <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
 
   profile.keys -= 1;
   const randRoll = Math.random() * 100;
@@ -1099,7 +1102,7 @@ function processUseKey(profile) {
   } else if (randRoll < 99) { 
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const goldBar = rand(ampInfo.minGold, ampInfo.maxGold);
-    profile.gold += goldBar;
+    profile.gold = (profile.gold || 0) + goldBar;
     rewardMsg = `금괴 ${goldBar.toLocaleString()}개 획득!`;
   } else { 
     if (!profile.monthItems) profile.monthItems = 0;
@@ -1197,7 +1200,7 @@ function processTurn(state, utterance) {
   }
 
   if (input === '/5292') {
-    profile.gold += 1000;
+    profile.gold = (profile.gold || 0) + 1000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
       text: `🎁 [시크릿 코드]\n금괴 1,000개 지급!${board}`, 
@@ -1216,7 +1219,6 @@ function processTurn(state, utterance) {
     };
   }
 
-  // /제련 명령어 수정을 위해 추가된 부분
   if (input.startsWith('/제련')) {
     const refineResult = processRefine(profile);
     return {
