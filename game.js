@@ -61,7 +61,7 @@ const AMPLIFY_TABLE = [
   { level: 4, costNext: 5000, minGold: 1, maxGold: 5, multBonus: 0.80, headWeight: 0.20 },
   { level: 5, costNext: 6000, minGold: 2, maxGold: 6, multBonus: 1.00, headWeight: 0.30 },
   { level: 6, costNext: 7000, minGold: 2, maxGold: 7, multBonus: 1.20, headWeight: 0.40 },
-  { level: 7, costNext: 8000, minGold: 2, maxGold: 8, multBonus: 1.40, headWeight: 0.50 },
+  { level: 7, costNext: 8000, minGold: 2, maxGold: 8, multBonus: 1.50, headWeight: 0.50 },
   { level: 8, costNext: 9000, minGold: 2, maxGold: 9, multBonus: 1.60, headWeight: 0.65 },
   { level: 9, costNext: 10000, minGold: 2, maxGold: 10, multBonus: 1.80, headWeight: 0.80 },
   { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, headWeight: 1.00 }
@@ -301,11 +301,10 @@ function profileText(profile, earnedStats = null) {
     return isMoney ? ` (+${won(val)})` : ` (+${val}개)`;
   };
 
-  const expGainStr = (earnedStats && earnedStats.exp > 0) ? `(EXP +${earnedStats.exp.toLocaleString()})` : '';
+  const expGainStr = (earnedStats && earnedStats.exp > 0) ? ` (EXP +${earnedStats.exp.toLocaleString()})` : '';
   const cashGainStr = getGainStr(earnedStats?.cash, true);
   const goldGainStr = getGainStr(earnedStats?.gold);
   const keyGainStr = getGainStr(earnedStats?.keys);
-  const monthGainStr = getGainStr(earnedStats?.monthItems);
 
   return [
     `📊 프로필 대시보드`,
@@ -314,14 +313,14 @@ function profileText(profile, earnedStats = null) {
     `🎮 플레이 판수 : ${p.gamesPlayed}판`,
     `🎯 강화 : +${p.enhance} ${wName}`,
     `🔨 제련 : ${p.refine}`,
-    `⭐ Lv.${p.level} (${p.exp}/${reqExp})${expGainStr}`,
+    `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})${expGainStr}`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
     `🔘 배율 : x${totalMult}`,
     ``,
     `💵 현금 : ${won(p.cash)}${cashGainStr}`,
     `🧈 금괴 : ${p.gold}개${goldGainStr}`,
     `🔑 비밀열쇠 : ${p.keys}개${keyGainStr}`,
-    `📦 보급 : ${p.monthItems || 0}개${monthGainStr}`
+    `📦 보급 : ${p.monthItems || 0}개`
   ].join('\n');
 }
 
@@ -386,7 +385,9 @@ function battleStatusBoard(profile, battle) {
 
   const [wName] = getWeaponInfo(p.enhance);
   const reqExp = getRequiredExp(p.level);
-  const expMultiplier = getExpMultiplier(p);
+  
+  // 강화 배율 + 증폭 배율 합산값 계산
+  const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
   const survivorsText = b.survivors <= 10 ? '?명' : `${b.survivors}명`;
   
@@ -396,7 +397,7 @@ function battleStatusBoard(profile, battle) {
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
-    `배율 (x${expMultiplier.toFixed(2)})`
+    `배율 (x${totalMult})`
   ];
 
   if (b.buffs.length > 0) {
@@ -409,7 +410,7 @@ function battleStatusBoard(profile, battle) {
     `🎮 플레이 판수 : ${p.gamesPlayed}판`,
     `🎯 강화 : +${p.enhance} ${wName}`,
     `🔨 제련 : ${p.refine}`,
-    `⭐ Lv.${p.level} (${p.exp}/${reqExp})`,
+    `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${p.gold}개`,
     `🔑 비밀열쇠 : ${p.keys}개`,
@@ -1091,7 +1092,7 @@ function processTurn(state, utterance) {
         expRes = addExp(profile, baseExp);
         battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained; 
         levelUpMsg = expRes.leveledUp ? `\n${expRes.msg}` : '';
-        expMsg = ` (EXP +${expRes.gained})`;
+        expMsg = ` (EXP +${expRes.gained.toLocaleString()})`;
       }
 
       checkDeath(battle);
@@ -1143,7 +1144,7 @@ function processTurn(state, utterance) {
         };
 
         return {
-          text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}\n\n${profileText(profile, earnedStats)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'win'
@@ -1206,7 +1207,7 @@ function processTurn(state, utterance) {
         };
 
         return {
-          text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}\n\n${profileText(profile, earnedStats)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'win'
