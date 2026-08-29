@@ -377,9 +377,10 @@ function processBuffs(battle) {
       battle.hp = Math.min(100, battle.hp + buff.healAmount);
       buff.turnsLeft -= 1;
       
-      // 0턴이 된 경우 메시지를 출력하지 않고 삭제 처리
+      const icon = buff.name === '진통제' ? '💊' : (buff.name === '에너지 드링크' ? '🧪' : '✨');
+      
       if (buff.turnsLeft > 0) {
-        buffMessages.push(`✨ ${buff.name} 효과! HP +${heal} 회복 (남은 효과: ${buff.turnsLeft}턴)`);
+        buffMessages.push(`${icon} ${buff.name} HP +${heal} 회복`);
       } else {
         battle.buffs.splice(i, 1);
       }
