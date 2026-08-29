@@ -118,11 +118,13 @@ const BATTLE_CHOICES = [
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
+  { label: '제련', action: '/제련' },
   { label: '열쇠', action: '/열쇠' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
+  { label: '제련 시도', action: '/제련 시도' },
   { label: '전투', action: '/전투' },
   { label: '열쇠', action: '/열쇠' }
 ];
@@ -951,6 +953,44 @@ function processMultiEnhance(profile, count) {
   };
 }
 
+function processRefineInfo(profile) {
+  if (profile.refine === undefined || profile.refine < 0) profile.refine = 0;
+  const currentRefine = profile.refine;
+  const currStar = REFINE_STARS[currentRefine] || '0성';
+
+  if (currentRefine >= 10) {
+    return { 
+      text: `🔨 [제련 정보]\n현재 제련 단계: ${currStar} (10성 ★★★★★)\n이미 최고 제련 단계에 도달했습니다!`, 
+      imageUrl: null, 
+      status: 'max' 
+    };
+  }
+
+  const tableData = REFINE_TABLE[currentRefine];
+  const nextStar = REFINE_STARS[currentRefine + 1] || `${currentRefine + 1}성`;
+
+  const pSuccess = Math.round(tableData.success * 100);
+  const pKeep = Math.round(tableData.keep * 100);
+  const pFail = Math.round(tableData.fail * 100);
+  const pDrop = Math.round(tableData.drop * 100);
+
+  const infoText = [
+    `🔨 [무기 제련 정보]`,
+    `• 현재 상태: ${currentRefine}성 (${currStar})`,
+    `• 목표 단계: ${currentRefine + 1}성 (${nextStar})`,
+    ``,
+    `💰 소모 재화: ${won(tableData.cashCost)} / 금괴 ${tableData.goldCost}개`,
+    `📊 성공 확률: ${pSuccess}%`,
+    `🛡️ 유지 확률: ${pKeep}%`,
+    `📉 하락 확률: ${pDrop}%`,
+    `💥 실패 확률: ${pFail}% (실패 시 0성 초기화)`,
+    ``,
+    `💡 실제 제련을 진행하려면 '/제련 시도' 명령어를 입력하세요!`
+  ].join('\n');
+
+  return { text: infoText, imageUrl: null, status: 'info' };
+}
+
 function processRefine(profile) {
   if (profile.refine === undefined || profile.refine < 0) profile.refine = 0;
 
@@ -1162,7 +1202,8 @@ function processTurn(state, utterance) {
       `• /파밍 - 전투 중 파밍 진행`,
       `• /도망 - 전투 중 도망 및 HP 회복`,
       `• /강화 - 현금으로 무기 강화`,
-      `• /제련 - 현금 및 금괴로 무기 제련`,
+      `• /제련 - 현금 및 금괴로 무기 제련 정보 확인`,
+      `• /제련 시도 - 실제 무기 제련 수행`,
       `• /증폭 - 금괴로 전투력 증폭 강화`,
       `• /전직 [직업명] - 스팅거 / 센티넬 / 섀도우 전직`,
       `• /연속강화 [횟수] - 지정 횟수만큼 자동 강화`,
@@ -1219,7 +1260,17 @@ function processTurn(state, utterance) {
     };
   }
 
-  if (input.startsWith('/제련')) {
+  if (input === '/제련') {
+    const infoResult = processRefineInfo(profile);
+    return {
+      text: infoResult.text + `\n\n` + profileText(profile),
+      imageUrl: infoResult.imageUrl,
+      choices: ENHANCE_CHOICES,
+      category: 'refine_info'
+    };
+  }
+
+  if (input === '/제련 시도' || input === '/제련시도') {
     const refineResult = processRefine(profile);
     return {
       text: refineResult.text + `\n\n` + profileText(profile),
