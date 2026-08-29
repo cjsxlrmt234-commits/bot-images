@@ -68,16 +68,16 @@ const REFINE_STARS = [
 ];
 
 const REFINE_TABLE = [
-  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, fail: 0.000, drop: 0.00 },
-  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, fail: 0.000, drop: 0.00 },
-  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, fail: 0.000, drop: 0.00 },
-  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, fail: 0.000, drop: 0.05 },
-  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, fail: 0.000, drop: 0.10 },
-  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, fail: 0.025, drop: 0.00 },
-  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, fail: 0.050, drop: 0.00 },
-  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, fail: 0.075, drop: 0.00 },
-  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, fail: 0.100, drop: 0.00 },
-  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, fail: 0.150, drop: 0.00 },
+  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, destroy: 0.000, drop: 0.00 },
+  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 },
+  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 },
+  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 },
+  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 },
+  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },
+  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 },
+  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },
+  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 },
+  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 },
 ];
 
 const AMPLIFY_TABLE = [
@@ -118,13 +118,11 @@ const BATTLE_CHOICES = [
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
-  { label: '제련', action: '/제련' },
   { label: '열쇠', action: '/열쇠' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
-  { label: '제련 시도', action: '/제련 시도' },
   { label: '전투', action: '/전투' },
   { label: '열쇠', action: '/열쇠' }
 ];
@@ -232,7 +230,7 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0) {
 
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
-    `    배율 | ${oldStats.mult} ➔ ${newStats.mult}`,
+    `   배율 | ${oldStats.mult} ➔ ${newStats.mult}`,
     `헤드 확률 | ${oldStats.head} ➔ ${newStats.head}`,
     ` 몸 확률 | ${oldStats.body} ➔ ${newStats.body}`,
     `다리 확률 | ${oldStats.leg} ➔ ${newStats.leg}`
@@ -782,28 +780,24 @@ function applyZoneAttrition(battle) {
   battle.survivors = Math.max(1, battle.survivors - dec);
 }
 
+// ==========================================
+// [독립 연출] 강화 프로세스
+// ==========================================
 function processEnhance(profile) {
   if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
+  
+  // 최고 강와 단계 체크
   if (profile.enhance >= ENHANCE_TABLE.length) {
     const [wName] = getWeaponInfo(profile.enhance);
     const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
-    const refineStar = REFINE_STARS[profile.refine] || '0성';
 
     const maxText = [
-      `최고 강화 단계 도달! (+20 ${wName})`,
+      `🎯 [최고 강화 단계 도달!]`,
       `+20 ${wName}`,
       detailMsg,
       ``,
-      `🎯 강화 : +${profile.enhance} ${wName}`,
-      `🔨 제련 : ${refineStar}`,
-      `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
-      `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
-      ``,
-      `💵 현금 : ${won(profile.cash)}`,
-      `🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`,
-      `🔑 비밀열쇠 : ${(profile.keys || 0).toLocaleString()}개`,
-      `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
+      `💵 현재 잔액: ${won(profile.cash)}`
     ].join('\n');
 
     return { text: maxText, imageUrl: getEnhanceImage('success', 20), status: 'max' };
@@ -813,7 +807,7 @@ function processEnhance(profile) {
   const cost = tableData.cost;
 
   if (profile.cash < cost) {
-    return { text: `현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: null, status: 'nomoney' };
+    return { text: `❌ 현금이 부족합니다! (필요 강화 비용: ${won(cost)})`, imageUrl: null, status: 'nomoney' };
   }
 
   profile.cash -= cost;
@@ -831,14 +825,14 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile.enhance}\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `✨ [강화 성공!] +${initialEnhance} ➔ +${profile.enhance}\n💸 (소모 비용: ${won(cost)})\n\n🔫 +${profile.enhance} ${currName}\n${detailMsg}`;
   } else if (roll < tableData.success + tableData.keep) {
     resultStatus = 'keep';
     const [currName] = getWeaponInfo(profile.enhance);
     const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `🛡️ [강화 유지] +${initialEnhance} (변동 없음)\n💸 (소모 비용: ${won(cost)})\n\n🔫 +${profile.enhance} ${currName}\n${detailMsg}`;
   } else {
     resultStatus = 'fail';
     profile.enhance = 0;
@@ -846,7 +840,7 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
+    resultMsg = `💥 [강화 실패!] +${initialEnhance} ➔ +0 (초기화)\n💸 (소모 비용: ${won(cost)})\n\n🔫 +${profile.enhance} ${currName}\n${detailMsg}`;
   }
 
   return { 
@@ -900,22 +894,13 @@ function processMultiEnhance(profile, count) {
       const [wName] = getWeaponInfo(profile.enhance);
       const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
-      const refineStar = REFINE_STARS[profile.refine] || '0성';
 
       const maxText = [
-        `최고 강화 단계 도달! (+20 ${wName})`,
+        `🎯 [최고 강화 단계 도달!] (+20 ${wName})`,
         `+20 ${wName}`,
         detailMsg,
         ``,
-        `🎯 강화 : +${profile.enhance} ${wName}`,
-        `🔨 제련 : ${refineStar}`,
-        `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
-        `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
-        ``,
-        `💵 현금 : ${won(profile.cash)}`,
-        `🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`,
-        `🔑 비밀열쇠 : ${(profile.keys || 0).toLocaleString()}개`,
-        `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
+        `💵 남은 현금: ${won(profile.cash)}`
       ].join('\n');
 
       return { 
@@ -926,7 +911,7 @@ function processMultiEnhance(profile, count) {
     }
     const costNeeded = ENHANCE_TABLE[profile.enhance].cost;
     return { 
-      text: `현금이 부족합니다! (필요: ${won(costNeeded)})`, 
+      text: `❌ 현금이 부족합니다! (필요: ${won(costNeeded)})`, 
       imageUrl: null, 
       status: 'nomoney' 
     };
@@ -940,10 +925,12 @@ function processMultiEnhance(profile, count) {
     `⚡ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
     `결과 : +${initialLevel} ➔ +${profile.enhance}`,
     `📊 성공: ${successCount.toLocaleString()}회 | 유지: ${keepCount.toLocaleString()}회 | 실패: ${failCount.toLocaleString()}회`,
-    `(총 소모 비용: ${won(totalCost)})`,
+    `💸 (총 소모 비용: ${won(totalCost)})`,
     ``,
-    `+${profile.enhance} ${currName}`,
-    detailMsg
+    `🔫 +${profile.enhance} ${currName}`,
+    detailMsg,
+    ``,
+    `💵 남은 현금: ${won(profile.cash)}`
   ].join('\n');
 
   return {
@@ -953,62 +940,40 @@ function processMultiEnhance(profile, count) {
   };
 }
 
-function processRefineInfo(profile) {
-  if (profile.refine === undefined || profile.refine < 0) profile.refine = 0;
-  const currentRefine = profile.refine;
-  const currStar = REFINE_STARS[currentRefine] || '0성';
-
-  if (currentRefine >= 10) {
-    return { 
-      text: `🔨 [제련 정보]\n현재 제련 단계: ${currStar} (10성 ★★★★★)\n이미 최고 제련 단계에 도달했습니다!`, 
-      imageUrl: null, 
-      status: 'max' 
-    };
-  }
-
-  const tableData = REFINE_TABLE[currentRefine];
-  const nextStar = REFINE_STARS[currentRefine + 1] || `${currentRefine + 1}성`;
-
-  const pSuccess = Math.round(tableData.success * 100);
-  const pKeep = Math.round(tableData.keep * 100);
-  const pFail = Math.round(tableData.fail * 100);
-  const pDrop = Math.round(tableData.drop * 100);
-
-  const infoText = [
-    `🔨 [무기 제련 정보]`,
-    `• 현재 상태: ${currentRefine}성 (${currStar})`,
-    `• 목표 단계: ${currentRefine + 1}성 (${nextStar})`,
-    ``,
-    `💰 소모 재화: ${won(tableData.cashCost)} / 금괴 ${tableData.goldCost}개`,
-    `📊 성공 확률: ${pSuccess}%`,
-    `🛡️ 유지 확률: ${pKeep}%`,
-    `📉 하락 확률: ${pDrop}%`,
-    `💥 실패 확률: ${pFail}% (실패 시 0성 초기화)`,
-    ``,
-    `💡 실제 제련을 진행하려면 '/제련 시도' 명령어를 입력하세요!`
-  ].join('\n');
-
-  return { text: infoText, imageUrl: null, status: 'info' };
-}
-
+// ==========================================
+// [독립 연출] 제련 프로세스
+// ==========================================
 function processRefine(profile) {
   if (profile.refine === undefined || profile.refine < 0) profile.refine = 0;
 
+  // 1. 최고 제련 단계 체크
   if (profile.refine >= 10) {
     return { text: `🔨 이미 최고 제련 단계(10성 ★★★★★)에 도달했습니다!`, imageUrl: null, status: 'max' };
   }
 
+  // 2. +20 싱귤래리티 무기 미만 체크
+  if ((profile.enhance || 0) < 20) {
+    const [wName] = getWeaponInfo(profile.enhance || 0);
+    return { 
+      text: `⚠️ 무기 제련은 [+20 싱귤래리티] 무기부터 가능합니다!\n현재 착용 중인 무기: +${profile.enhance || 0} ${wName}`, 
+      imageUrl: null, 
+      status: 'low_enhance' 
+    };
+  }
+
+  // 3. 테이블 검증
   const tableData = REFINE_TABLE[profile.refine];
   if (!tableData) {
-    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다.`, imageUrl: null, status: 'error' };
+    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다. (유효하지 않은 제련 단계)`, imageUrl: null, status: 'error' };
   }
 
   const cashCost = tableData.cashCost;
   const goldCost = tableData.goldCost;
 
+  // 4. 재화 부족 체크
   if (profile.cash < cashCost || (profile.gold || 0) < goldCost) {
     return { 
-      text: `제련 재화가 부족합니다!\n(필요: ${won(cashCost)}, 금괴 ${goldCost}개)\n(보유: ${won(profile.cash)}, 금괴 ${(profile.gold || 0).toLocaleString()}개)`, 
+      text: `❌ 제련 재화가 부족합니다!\n\n💰 [필요 재화]\n• 현금: ${won(cashCost)}\n• 금괴: ${goldCost.toLocaleString()}개\n\n👛 [보유 재화]\n• 현금: ${won(profile.cash)}\n• 금괴: ${(profile.gold || 0).toLocaleString()}개`, 
       imageUrl: null, 
       status: 'noresource' 
     };
@@ -1024,27 +989,57 @@ function processRefine(profile) {
 
   const pSuccess = tableData.success;
   const pKeep = pSuccess + tableData.keep;
-  const pFail = pKeep + tableData.fail;
+  const pDestroy = pKeep + tableData.destroy;
+
+  const costText = `💸 (소모: ${won(cashCost)}, 금괴 ${goldCost.toLocaleString()}개)`;
+  const remainText = `👛 남은 잔액: ${won(profile.cash)} | 🧈 금괴: ${(profile.gold || 0).toLocaleString()}개`;
 
   if (roll < pSuccess) {
     profile.refine += 1;
     resultStatus = 'success';
     const oldStar = REFINE_STARS[currentRefine] || '0성';
     const newStar = REFINE_STARS[profile.refine] || '';
-    resultMsg = `🔨 [제련 성공!] ${currentRefine}성(${oldStar}) ➔ ${profile.refine}성(${newStar})\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
+    resultMsg = [
+      `✨ [제련 성공!] 🔥`,
+      `제련 단계 상승: ${currentRefine}성(${oldStar}) ➔ ${profile.refine}성(${newStar})`,
+      costText,
+      ``,
+      remainText
+    ].join('\n');
+
   } else if (roll < pKeep) {
     resultStatus = 'keep';
     const currStar = REFINE_STARS[currentRefine] || '0성';
-    resultMsg = `🔨 [제련 유지] ${currentRefine}성(${currStar}) (변동 없음)\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
-  } else if (roll < pFail) {
+    resultMsg = [
+      `🛡️ [제련 유지]`,
+      `변동 없음: 현재 ${currentRefine}성(${currStar})`,
+      costText,
+      ``,
+      remainText
+    ].join('\n');
+
+  } else if (roll < pDestroy) {
     profile.refine = 0;
-    resultStatus = 'fail';
-    resultMsg = `💥 [제련 실패!] 무기 제련이 실패하여 0성으로 초기화되었습니다!\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
+    resultStatus = 'destroy';
+    resultMsg = [
+      `💥 [제련 파괴!] ⚠️`,
+      `충격으로 인해 제련 단계가 파괴되어 0성으로 초기화되었습니다!`,
+      costText,
+      ``,
+      remainText
+    ].join('\n');
+
   } else {
     profile.refine = Math.max(0, profile.refine - 1);
     resultStatus = 'drop';
     const newStar = REFINE_STARS[profile.refine] || '0성';
-    resultMsg = `📉 [제련 하락] 제련 단계가 하락하여 ${profile.refine}성(${newStar})이 되었습니다.\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
+    resultMsg = [
+      `📉 [제련 하락]`,
+      `제련 단계 하락: ${currentRefine}성 ➔ ${profile.refine}성(${newStar})`,
+      costText,
+      ``,
+      remainText
+    ].join('\n');
   }
 
   return {
@@ -1063,7 +1058,7 @@ function processGoldEnhance(profile) {
 
   const costNext = AMPLIFY_TABLE[profile.combatLevel].costNext;
   if ((profile.gold || 0) < costNext) {
-    return { text: `금괴가 부족합니다! (다음 증폭 필요량: 금괴 ${costNext.toLocaleString()}개)`, imageUrl: null };
+    return { text: `❌ 금괴가 부족합니다! (다음 증폭 필요량: 금괴 ${costNext.toLocaleString()}개)`, imageUrl: null };
   }
 
   const startLevel = profile.combatLevel;
@@ -1082,7 +1077,9 @@ function processGoldEnhance(profile) {
     `• 소모 금괴: ${costNext.toLocaleString()}개`,
     `• 배율 가산: x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
     `• 헤드샷 가중치: ${Math.round(prevAmp.headWeight * 100)}% ➔ ${Math.round(nextAmp.headWeight * 100)}%`,
-    `• 금괴 획득 수량: ${goldRangePrev} ➔ ${goldRangeNext}`
+    `• 금괴 획득 수량: ${goldRangePrev} ➔ ${goldRangeNext}`,
+    ``,
+    `🧈 남은 금괴: ${(profile.gold || 0).toLocaleString()}개`
   ].join('\n');
 
   return { 
@@ -1122,13 +1119,13 @@ function processJobChange(profile, jobName) {
 
   profile.job = jobName;
   return { 
-    text: `✨ [전직 성공!] 직업이 '${jobName}'(으)로 변경되었습니다!\n\n${profileText(profile)}`, 
+    text: `✨ [전직 성공!] 직업이 '${jobName}'(으)로 변경되었습니다!`, 
     imageUrl: null 
   };
 }
 
 function processUseKey(profile) {
-  if ((profile.keys || 0) <= 0) return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
+  if ((profile.keys || 0) <= 0) return { text: `🔑 비밀열쇠가 없습니다!`, imageUrl: null };
 
   profile.keys -= 1;
   const randRoll = Math.random() * 100;
@@ -1150,7 +1147,7 @@ function processUseKey(profile) {
     rewardMsg = `✨ [1% 대박] 이달의 아이템 뽑기권 획득!`;
   }
 
-  return { text: `🔑 열쇠 사용:\n${rewardMsg}`, imageUrl: null };
+  return { text: `🔑 비밀열쇠 사용 결과:\n${rewardMsg}\n(남은 열쇠: ${(profile.keys || 0).toLocaleString()}개)`, imageUrl: null };
 }
 
 function startGame(existingProfile) {
@@ -1166,6 +1163,9 @@ function startGame(existingProfile) {
   };
 }
 
+// ==========================================
+// Turn Processor (명령어 라우팅)
+// ==========================================
 function processTurn(state, utterance) {
   if (!state || typeof state !== 'object') state = {};
   
@@ -1202,8 +1202,7 @@ function processTurn(state, utterance) {
       `• /파밍 - 전투 중 파밍 진행`,
       `• /도망 - 전투 중 도망 및 HP 회복`,
       `• /강화 - 현금으로 무기 강화`,
-      `• /제련 - 현금 및 금괴로 무기 제련 정보 확인`,
-      `• /제련 시도 - 실제 무기 제련 수행`,
+      `• /제련 - 현금 및 금괴로 무기 제련 (+20강 무기 필요)`,
       `• /증폭 - 금괴로 전투력 증폭 강화`,
       `• /전직 [직업명] - 스팅거 / 센티넬 / 섀도우 전직`,
       `• /연속강화 [횟수] - 지정 횟수만큼 자동 강화`,
@@ -1260,23 +1259,35 @@ function processTurn(state, utterance) {
     };
   }
 
-  if (input === '/제련') {
-    const infoResult = processRefineInfo(profile);
-    return {
-      text: infoResult.text + `\n\n` + profileText(profile),
-      imageUrl: infoResult.imageUrl,
-      choices: ENHANCE_CHOICES,
-      category: 'refine_info'
-    };
-  }
-
-  if (input === '/제련 시도' || input === '/제련시도') {
+  // ----------------------------------------------------
+  // /제련 명령어 처리 (독립 연출 적용)
+  // ----------------------------------------------------
+  if (input.startsWith('/제련')) {
     const refineResult = processRefine(profile);
     return {
-      text: refineResult.text + `\n\n` + profileText(profile),
+      text: refineResult.text,
       imageUrl: refineResult.imageUrl,
       choices: ENHANCE_CHOICES,
       category: 'refine'
+    };
+  }
+
+  // ----------------------------------------------------
+  // /강화 명령어 처리 (독립 연출 적용)
+  // ----------------------------------------------------
+  if (input === '/강화') {
+    const enhanceResult = processEnhance(profile);
+
+    let finalText = enhanceResult.text;
+    if (enhanceResult.status !== 'max' && enhanceResult.status !== 'nomoney') {
+      finalText = `${enhanceResult.text}\n\n💵 남은 현금: ${won(profile.cash)}`;
+    }
+
+    return { 
+      text: finalText, 
+      imageUrl: enhanceResult.imageUrl, 
+      choices: ENHANCE_CHOICES, 
+      category: 'enhance' 
     };
   }
 
@@ -1307,26 +1318,9 @@ function processTurn(state, utterance) {
     if (isNaN(count) || count <= 1) count = 1;
     const multiResult = processMultiEnhance(profile, count);
 
-    const isMax = multiResult.status === 'max';
-    const finalText = isMax ? multiResult.text : multiResult.text + `\n\n` + profileText(profile);
-
     return { 
-      text: finalText, 
+      text: multiResult.text, 
       imageUrl: multiResult.imageUrl, 
-      choices: ENHANCE_CHOICES, 
-      category: 'enhance' 
-    };
-  }
-
-  if (input === '/강화') {
-    const enhanceResult = processEnhance(profile);
-
-    const isMax = enhanceResult.status === 'max';
-    const finalText = isMax ? enhanceResult.text : enhanceResult.text + `\n\n` + profileText(profile);
-
-    return { 
-      text: finalText, 
-      imageUrl: enhanceResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
     };
