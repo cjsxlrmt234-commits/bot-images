@@ -692,9 +692,26 @@ function processEnhance(profile) {
   if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
   if (profile.enhance >= ENHANCE_TABLE.length) {
     const [wName] = getWeaponInfo(profile.enhance);
-    const stats = getEnhanceStats(profile.enhance, 0);
+    const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
-    return { text: `최고 강화 단계 도달! (+20 싱귤래리티)\n+${profile.enhance} ${wName}\n${detailMsg}`, imageUrl: getEnhanceImage('success', 20), status: 'max' };
+
+    const maxText = [
+      `최고 강화 단계 도달! (+20 ${wName})`,
+      `+20 ${wName}`,
+      detailMsg,
+      ``,
+      `🎯 강화 : +${profile.enhance} ${wName}`,
+      `🔨 제련 : ${profile.refine || ''}`,
+      `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
+      `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
+      ``,
+      `💵 현금 : ${won(profile.cash)}`,
+      `🧈 금괴 : ${profile.gold}개`,
+      `🔑 비밀열쇠 : ${profile.keys}개`,
+      `📦 보급 : ${profile.monthItems || 0}개`
+    ].join('\n');
+
+    return { text: maxText, imageUrl: getEnhanceImage('success', 20), status: 'max' };
   }
 
   const tableData = ENHANCE_TABLE[profile.enhance];
@@ -706,7 +723,7 @@ function processEnhance(profile) {
 
   profile.cash -= cost;
   const initialEnhance = profile.enhance;
-  const oldStats = getEnhanceStats(initialEnhance, 0);
+  const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0);
 
   const roll = Math.random(); 
   let resultMsg = '';
@@ -716,14 +733,14 @@ function processEnhance(profile) {
     profile.enhance += 1;
     resultStatus = 'success';
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile.enhance}\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
   } else if (roll < tableData.success + tableData.keep) {
     resultStatus = 'keep';
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
@@ -731,7 +748,7 @@ function processEnhance(profile) {
     resultStatus = 'fail';
     profile.enhance = 0;
     const [currName] = getWeaponInfo(profile.enhance);
-    const newStats = getEnhanceStats(profile.enhance, 0);
+    const newStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile.enhance} ${currName}\n${detailMsg}`;
@@ -749,7 +766,7 @@ function processMultiEnhance(profile, count) {
 
   const targetCount = Math.max(1, count);
   const initialLevel = profile.enhance;
-  const initialStats = getEnhanceStats(initialLevel, 0);
+  const initialStats = getEnhanceStats(initialLevel, profile.combatLevel || 0);
 
   let totalCost = 0;
   let successCount = 0;
@@ -786,10 +803,26 @@ function processMultiEnhance(profile, count) {
   if (attempted === 0) {
     if (profile.enhance >= ENHANCE_TABLE.length) {
       const [wName] = getWeaponInfo(profile.enhance);
-      const stats = getEnhanceStats(profile.enhance, 0);
+      const stats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
+      const maxText = [
+        `최고 강화 단계 도달! (+20 ${wName})`,
+        `+20 ${wName}`,
+        detailMsg,
+        ``,
+        `🎯 강화 : +${profile.enhance} ${wName}`,
+        `🔨 제련 : ${profile.refine || ''}`,
+        `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
+        `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
+        ``,
+        `💵 현금 : ${won(profile.cash)}`,
+        `🧈 금괴 : ${profile.gold}개`,
+        `🔑 비밀열쇠 : ${profile.keys}개`,
+        `📦 보급 : ${profile.monthItems || 0}개`
+      ].join('\n');
+
       return { 
-        text: `최고 강화 단계 도달! (+20 싱귤래리티)\n+${profile.enhance} ${wName}\n${detailMsg}`, 
+        text: maxText, 
         imageUrl: getEnhanceImage('success', 20), 
         status: 'max' 
       };
@@ -803,7 +836,7 @@ function processMultiEnhance(profile, count) {
   }
 
   const [currName] = getWeaponInfo(profile.enhance);
-  const finalStats = getEnhanceStats(profile.enhance, 0);
+  const finalStats = getEnhanceStats(profile.enhance, profile.combatLevel || 0);
   const detailMsg = formatEnhanceStatDiff(initialStats, finalStats);
 
   let resultMsg = [
@@ -833,7 +866,6 @@ function processGoldEnhance(profile, targetLevels = 1) {
   let levelsUpgraded = 0;
   let totalGoldSpent = 0;
   const startLevel = profile.combatLevel;
-  const initialStats = getEnhanceStats(profile.enhance, 0);
 
   for (let i = 0; i < targetLevels; i++) {
     if (profile.combatLevel >= 10) break;
@@ -852,17 +884,19 @@ function processGoldEnhance(profile, targetLevels = 1) {
     return { text: `금괴가 부족합니다! (다음 증폭 필요량: 금괴 ${costNext}개)`, imageUrl: null };
   }
 
-  const finalStats = getEnhanceStats(profile.enhance, 0);
-  const diffMsg = formatEnhanceStatDiff(initialStats, finalStats);
-  const [wName] = getWeaponInfo(profile.enhance);
+  const prevAmp = AMPLIFY_TABLE[startLevel];
+  const nextAmp = AMPLIFY_TABLE[profile.combatLevel];
+
+  const goldRangePrev = prevAmp.minGold === prevAmp.maxGold ? `${prevAmp.minGold}개` : `${prevAmp.minGold}~${prevAmp.maxGold}개`;
+  const goldRangeNext = nextAmp.minGold === nextAmp.maxGold ? `${nextAmp.minGold}개` : `${nextAmp.minGold}~${nextAmp.maxGold}개`;
 
   const resultMsg = [
     `⚡ 증폭 강화 성공!`,
     `[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]`,
     `• 소모 금괴: ${totalGoldSpent}개`,
-    ``,
-    `+${profile.enhance} ${wName}`,
-    diffMsg
+    `• 배율 가산: x${prevAmp.multBonus.toFixed(2)} ➔ +x${nextAmp.multBonus.toFixed(2)}`,
+    `• 헤드샷 가중치: ${Math.round(prevAmp.headWeight * 100)}% ➔ +${Math.round(nextAmp.headWeight * 100)}%`,
+    `• 금괴 획득 수량: ${goldRangePrev} ➔ ${goldRangeNext}`
   ].join('\n');
 
   return { 
@@ -882,19 +916,19 @@ function processUseKey(profile) {
     const combatPower = getCombatPower(profile);
     const cashAmt = combatPower * 10;
     profile.cash += cashAmt;
-    rewardMsg = `현금 ${won(cashAmt)} 획득! (전투력 ${combatPower.toLocaleString()} × 10)`;
+    rewardMsg = `현금 ${won(cashAmt)} 획득!`;
   } else if (randRoll < 99) { 
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const goldBar = rand(ampInfo.minGold, ampInfo.maxGold);
     profile.gold += goldBar;
-    rewardMsg = `금괴 ${goldBar}개 획득! (증폭 Lv.${profile.combatLevel || 0} 범위 적용)`;
+    rewardMsg = `금괴 ${goldBar}개 획득!`;
   } else { 
     if (!profile.monthItems) profile.monthItems = 0;
     profile.monthItems += 1;
     rewardMsg = `✨ [1% 대박] 이달의 아이템 뽑기권 획득!`;
   }
 
-  return { text: `🔑 열쇠 사용:\n${rewardMsg}\n\n${profileText(profile)}`, imageUrl: null };
+  return { text: `🔑 열쇠 사용:\n${rewardMsg}`, imageUrl: null };
 }
 
 function startGame(existingProfile) {
@@ -1019,8 +1053,12 @@ function processTurn(state, utterance) {
     let count = parseInt(parts, 10);
     if (isNaN(count) || count <= 1) count = 1;
     const multiResult = processMultiEnhance(profile, count);
+
+    const isMax = multiResult.status === 'max';
+    const finalText = isMax ? multiResult.text : multiResult.text + `\n\n` + profileText(profile);
+
     return { 
-      text: multiResult.text + `\n\n` + profileText(profile), 
+      text: finalText, 
       imageUrl: multiResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
@@ -1029,8 +1067,12 @@ function processTurn(state, utterance) {
 
   if (input === '/강화') {
     const enhanceResult = processEnhance(profile);
+
+    const isMax = enhanceResult.status === 'max';
+    const finalText = isMax ? enhanceResult.text : enhanceResult.text + `\n\n` + profileText(profile);
+
     return { 
-      text: enhanceResult.text + `\n\n` + profileText(profile), 
+      text: finalText, 
       imageUrl: enhanceResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
