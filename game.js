@@ -288,23 +288,31 @@ function createProfile(existing = {}) {
   };
 }
 
-function profileText(profile, earnedStats = null) {
+function formatEarnedRewardsText(earnedStats) {
+  if (!earnedStats) return '';
+  let lines = [];
+  if (earnedStats.cash && earnedStats.cash > 0) {
+    lines.push(`💵 현금 +${won(earnedStats.cash)}`);
+  }
+  if (earnedStats.exp && earnedStats.exp > 0) {
+    lines.push(`⭐ EXP +${earnedStats.exp.toLocaleString()}`);
+  }
+  if (earnedStats.gold && earnedStats.gold > 0) {
+    lines.push(`🧈 금괴 +${earnedStats.gold}개`);
+  }
+  if (earnedStats.keys && earnedStats.keys > 0) {
+    lines.push(`🔑 비밀열쇠 +${earnedStats.keys}개`);
+  }
+  return lines.join('\n');
+}
+
+function profileText(profile) {
   const p = createProfile(profile);
   const reqExp = getRequiredExp(p.level);
   const combatPower = getCombatPower(p);
   const [wName] = getWeaponInfo(p.enhance);
   
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
-
-  const getGainStr = (val, isMoney = false) => {
-    if (!val || val <= 0) return '';
-    return isMoney ? ` (+${won(val)})` : ` (+${val}개)`;
-  };
-
-  const expGainStr = (earnedStats && earnedStats.exp > 0) ? ` (EXP +${earnedStats.exp.toLocaleString()})` : '';
-  const cashGainStr = getGainStr(earnedStats?.cash, true);
-  const goldGainStr = getGainStr(earnedStats?.gold);
-  const keyGainStr = getGainStr(earnedStats?.keys);
 
   return [
     `📊 프로필 대시보드`,
@@ -313,13 +321,13 @@ function profileText(profile, earnedStats = null) {
     `🎮 플레이 판수 : ${p.gamesPlayed}판`,
     `🎯 강화 : +${p.enhance} ${wName}`,
     `🔨 제련 : ${p.refine}`,
-    `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})${expGainStr}`,
+    `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
     `🔘 배율 : x${totalMult}`,
     ``,
-    `💵 현금 : ${won(p.cash)}${cashGainStr}`,
-    `🧈 금괴 : ${p.gold}개${goldGainStr}`,
-    `🔑 비밀열쇠 : ${p.keys}개${keyGainStr}`,
+    `💵 현금 : ${won(p.cash)}`,
+    `🧈 금괴 : ${p.gold}개`,
+    `🔑 비밀열쇠 : ${p.keys}개`,
     `📦 보급 : ${p.monthItems || 0}개`
   ].join('\n');
 }
@@ -386,7 +394,6 @@ function battleStatusBoard(profile, battle) {
   const [wName] = getWeaponInfo(p.enhance);
   const reqExp = getRequiredExp(p.level);
   
-  // 강화 배율 + 증폭 배율 합산값 계산
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
   const survivorsText = b.survivors <= 10 ? '?명' : `${b.survivors}명`;
@@ -1072,8 +1079,11 @@ function processTurn(state, utterance) {
         exp: battle.accumulatedExp || 0,
       };
 
+      const rewardsText = formatEarnedRewardsText(earnedStats);
+      const rewardsBlock = rewardsText ? `\n${rewardsText}` : '';
+
       return {
-        text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+        text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==${rewardsBlock}\n\n${profileText(profile)}`,
         imageUrl: null,
         choices: LOBBY_CHOICES,
         category: 'dead'
@@ -1116,8 +1126,11 @@ function processTurn(state, utterance) {
           exp: battle.accumulatedExp || 0,
         };
 
+        const rewardsText = formatEarnedRewardsText(earnedStats);
+        const rewardsBlock = rewardsText ? `\n${rewardsText}` : '';
+
         return {
-          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==${rewardsBlock}\n\n${profileText(profile)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'dead'
@@ -1143,8 +1156,11 @@ function processTurn(state, utterance) {
           exp: battle.accumulatedExp || 0,
         };
 
+        const rewardsText = formatEarnedRewardsText(earnedStats);
+        const rewardsBlock = rewardsText ? `\n${rewardsText}` : '';
+
         return {
-          text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}${rewardsBlock}\n\n${profileText(profile)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'win'
@@ -1179,8 +1195,11 @@ function processTurn(state, utterance) {
           exp: battle.accumulatedExp || 0,
         };
 
+        const rewardsText = formatEarnedRewardsText(earnedStats);
+        const rewardsBlock = rewardsText ? `\n${rewardsText}` : '';
+
         return {
-          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==${rewardsBlock}\n\n${profileText(profile)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'dead'
@@ -1206,8 +1225,11 @@ function processTurn(state, utterance) {
           exp: battle.accumulatedExp || 0,
         };
 
+        const rewardsText = formatEarnedRewardsText(earnedStats);
+        const rewardsBlock = rewardsText ? `\n${rewardsText}` : '';
+
         return {
-          text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}\n\n${profileText(profile, earnedStats)}`,
+          text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained.toLocaleString()}${rewardsBlock}\n\n${profileText(profile)}`,
           imageUrl: null,
           choices: LOBBY_CHOICES,
           category: 'win'
