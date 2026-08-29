@@ -68,16 +68,16 @@ const REFINE_STARS = [
 ];
 
 const REFINE_TABLE = [
-  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, destroy: 0.000, drop: 0.00 },
-  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 },
-  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 },
-  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 },
-  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 },
-  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },
-  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 },
-  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },
-  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 },
-  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 },
+  { cashCost: 10000000, goldCost: 10, success: 1.00, keep: 0.00, fail: 0.000, drop: 0.00 },
+  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, fail: 0.000, drop: 0.00 },
+  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, fail: 0.000, drop: 0.00 },
+  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, fail: 0.000, drop: 0.05 },
+  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, fail: 0.000, drop: 0.10 },
+  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, fail: 0.025, drop: 0.00 },
+  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, fail: 0.050, drop: 0.00 },
+  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, fail: 0.075, drop: 0.00 },
+  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, fail: 0.100, drop: 0.00 },
+  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, fail: 0.150, drop: 0.00 },
 ];
 
 const AMPLIFY_TABLE = [
@@ -960,7 +960,7 @@ function processRefine(profile) {
 
   const tableData = REFINE_TABLE[profile.refine];
   if (!tableData) {
-    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다. (현재 제련 레벨: ${profile.refine})`, imageUrl: null, status: 'error' };
+    return { text: `⚠️ 제련 정보 불러오기에 실패했습니다.`, imageUrl: null, status: 'error' };
   }
 
   const cashCost = tableData.cashCost;
@@ -984,7 +984,7 @@ function processRefine(profile) {
 
   const pSuccess = tableData.success;
   const pKeep = pSuccess + tableData.keep;
-  const pDestroy = pKeep + tableData.destroy;
+  const pFail = pKeep + tableData.fail;
 
   if (roll < pSuccess) {
     profile.refine += 1;
@@ -996,10 +996,10 @@ function processRefine(profile) {
     resultStatus = 'keep';
     const currStar = REFINE_STARS[currentRefine] || '0성';
     resultMsg = `🔨 [제련 유지] ${currentRefine}성(${currStar}) (변동 없음)\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
-  } else if (roll < pDestroy) {
+  } else if (roll < pFail) {
     profile.refine = 0;
-    resultStatus = 'destroy';
-    resultMsg = `💥 [제련 파괴!] 무기 제련이 파괴되어 0성으로 초기화되었습니다!\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
+    resultStatus = 'fail';
+    resultMsg = `💥 [제련 실패!] 무기 제련이 실패하여 0성으로 초기화되었습니다!\n(소모: ${won(cashCost)}, 금괴 ${goldCost}개)`;
   } else {
     profile.refine = Math.max(0, profile.refine - 1);
     resultStatus = 'drop';
@@ -1016,7 +1016,7 @@ function processRefine(profile) {
 
 function processGoldEnhance(profile) {
   if (profile.combatLevel === undefined) profile.combatLevel = 0;
-
+  
   if (profile.combatLevel >= 10) {
     return { text: `✨ 증폭 레벨이 최고 단계(Lv.10)에 도달했습니다!`, imageUrl: null };
   }
@@ -1128,7 +1128,7 @@ function startGame(existingProfile) {
 
 function processTurn(state, utterance) {
   if (!state || typeof state !== 'object') state = {};
-
+  
   let profile = createProfile(state.profile);
   let battle = state.battle;
 
