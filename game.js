@@ -376,10 +376,14 @@ function processBuffs(battle) {
       const heal = Math.min(buff.healAmount, 100 - battle.hp);
       battle.hp = Math.min(100, battle.hp + buff.healAmount);
       buff.turnsLeft -= 1;
-      buffMessages.push(`✨ ${buff.name} 효과! HP +${heal} 회복 (남은 효과: ${buff.turnsLeft}턴)`);
-    }
-    if (buff.turnsLeft <= 0) {
-      buffMessages.push(`✨ ${buff.name} 지속 시간이 종료되었습니다.`);
+      
+      // 0턴이 된 경우 메시지를 출력하지 않고 삭제 처리
+      if (buff.turnsLeft > 0) {
+        buffMessages.push(`✨ ${buff.name} 효과! HP +${heal} 회복 (남은 효과: ${buff.turnsLeft}턴)`);
+      } else {
+        battle.buffs.splice(i, 1);
+      }
+    } else {
       battle.buffs.splice(i, 1);
     }
   }
@@ -648,7 +652,6 @@ function resolveEscapeEvent(profile, battle) {
   if (!battle.buffs) battle.buffs = [];
   const outcome = pickWeighted(ESCAPE_TABLE);
   let textResult = '';
-  const activeBuffCount = battle.buffs.length;
 
   switch (outcome) {
     case 'instant_heal': {
@@ -659,14 +662,22 @@ function resolveEscapeEvent(profile, battle) {
       break;
     }
     case 'drink': {
-      if (activeBuffCount === 0) {
+      const existingBuff = battle.buffs.find(b => b.name === '에너지 드링크');
+      if (existingBuff) {
+        existingBuff.turnsLeft += 2;
+        textResult = `🧪 [에너지 드링크] 효과 추가 발동! (남은 지속 시간 +2턴 연장 -> 총 ${existingBuff.turnsLeft}턴)`;
+      } else {
         battle.buffs.push({ name: '에너지 드링크', turnsLeft: 2, healAmount: 5 });
         textResult = `🧪 [에너지 드링크] 효과 발동 (2턴 동안 매턴 HP +5 회복)`;
       }
       break;
     }
     case 'painkiller': {
-      if (activeBuffCount === 0) {
+      const existingBuff = battle.buffs.find(b => b.name === '진통제');
+      if (existingBuff) {
+        existingBuff.turnsLeft += 3;
+        textResult = `💊 [진통제] 효과 추가 발동! (남은 지속 시간 +3턴 연장 -> 총 ${existingBuff.turnsLeft}턴)`;
+      } else {
         battle.buffs.push({ name: '진통제', turnsLeft: 3, healAmount: 5 });
         textResult = `💊 [진통제] 효과 발동 (3턴 동안 매턴 HP +5 회복)`;
       }
