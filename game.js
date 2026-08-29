@@ -115,19 +115,16 @@ const BATTLE_CHOICES = [
   { label: '도망', action: '/도망' }
 ];
 
+// 메뉴 선택지에서 증폭, 전직, 제련 제거
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
-  { label: '증폭', action: '/증폭' },
-  { label: '전직', action: '/전직' },
   { label: '열쇠', action: '/열쇠' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
-  { label: '증폭', action: '/증폭' },
   { label: '전투', action: '/전투' },
-  { label: '전직', action: '/전직' },
   { label: '열쇠', action: '/열쇠' }
 ];
 
@@ -262,7 +259,6 @@ function calculatePartDamage(profile) {
   
   const stats = getEnhanceStats(enhanceLevel, combatLevel);
   
-  // 센티넬: 헤드샷 확률 증가 (가산 보정)
   let headProbability = stats.numHead;
   if (job === '센티넬') {
     headProbability += 10.0;
@@ -534,7 +530,6 @@ function resolveFarmFight(profile, battle) {
   const mult = getProfileGoldMultiplier(profile);
   const ampInfo = getAmplifyInfo(combatLv);
 
-  // 섀도우 전직 특성: 파밍 시 1% 확률로 전리품 상자 획득
   if (profile.job === '섀도우' && Math.random() < 0.01) {
     const boxRoll = Math.random() * 100;
     let lootMsg = '';
@@ -671,7 +666,6 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'kill_multi': {
-      // 스팅거 전직 특성: 1% 확률로 4~5 KILL 대량 학살 발동
       let killCount = rand(2, 3);
       let isStingerTriggered = false;
       if (profile.job === '스팅거' && Math.random() < 0.01) {
@@ -1067,7 +1061,7 @@ function processJobChange(profile, jobName) {
       `   • 능력: 헤드샷 명중 확률 증가 (+10% 보정)`,
       ``,
       `3. 섀도우 (Shadow)`,
-      `   • 능력: 전리품 상자 획득 (파밍 시 1% 확률로 전리품 상구 획득)`,
+      `   • 능력: 전리품 상자 획득 (파밍 시 1% 확률로 전리품 상자 획득)`,
       `     - 현금 50% (전투력 × 100)`,
       `     - 금괴 40% (증폭 레벨 비례)`,
       `     - 비밀열쇠 10% (1~3개)`,
@@ -1144,14 +1138,14 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
-    const validCommands = ['전투', '파밍', '도망', '강화', '증폭', '전직', '열쇠', '프로필', '연속강화'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련', '증폭', '전직', '열쇠', '프로필', '연속강화'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
     } else {
       const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
       return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화, /증폭, /전직)\n\n${currentBoard}`,
+        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화, /제련, /증폭, /전직)\n\n${currentBoard}`,
         imageUrl: null,
         choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
       };
@@ -1165,6 +1159,7 @@ function processTurn(state, utterance) {
       `• /파밍 - 전투 중 파밍 진행`,
       `• /도망 - 전투 중 도망 및 HP 회복`,
       `• /강화 - 현금으로 무기 강화`,
+      `• /제련 - 현금 및 금괴로 무기 제련`,
       `• /증폭 - 금괴로 전투력 증폭 강화`,
       `• /전직 [직업명] - 스팅거 / 센티넬 / 섀도우 전직`,
       `• /연속강화 [횟수] - 지정 횟수만큼 자동 강화`,
@@ -1212,12 +1207,23 @@ function processTurn(state, utterance) {
     };
   }
 
-  if (isPlayingBattle && (input.startsWith('/강화') || input.startsWith('/증폭') || input.startsWith('/전직') || input.startsWith('/연속강화'))) {
+  if (isPlayingBattle && (input.startsWith('/강화') || input.startsWith('/제련') || input.startsWith('/증폭') || input.startsWith('/전직') || input.startsWith('/연속강화'))) {
     return { 
-      text: `⚠️ 전투 중에는 강화, 증폭, 전직을 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
+      text: `⚠️ 전투 중에는 강화, 제련, 증폭, 전직을 진행할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`, 
       imageUrl: null, 
       choices: BATTLE_CHOICES, 
       category: 'battle_block' 
+    };
+  }
+
+  // /제련 명령어 수정을 위해 추가된 부분
+  if (input.startsWith('/제련')) {
+    const refineResult = processRefine(profile);
+    return {
+      text: refineResult.text + `\n\n` + profileText(profile),
+      imageUrl: refineResult.imageUrl,
+      choices: ENHANCE_CHOICES,
+      category: 'refine'
     };
   }
 
