@@ -83,24 +83,22 @@ const ESCAPE_TABLE = [
   ['painkiller', 20.0]
 ];
 
+// 메뉴 선택에서 [프로필] 제거
 const BATTLE_CHOICES = [
   { label: '파밍', action: '/파밍' },
-  { label: '도망', action: '/도망' },
-  { label: '프로필', action: '/프로필' }
+  { label: '도망', action: '/도망' }
 ];
 
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
   { label: '강화', action: '/강화' },
-  { label: '열쇠', action: '/열쇠' },
-  { label: '프로필', action: '/프로필' }
+  { label: '열쇠', action: '/열쇠' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
   { label: '전투', action: '/전투' },
-  { label: '열쇠', action: '/열쇠' },
-  { label: '프로필', action: '/프로필' }
+  { label: '열쇠', action: '/열쇠' }
 ];
 
 function rand(min, max) {
@@ -206,9 +204,9 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0) {
 
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
-    `   배율 | ${oldStats.mult} -> ${newStats.mult}`,
+    `　　 배율 | ${oldStats.mult} -> ${newStats.mult}`,
     `헤드 확률 | ${oldStats.head} -> ${newStats.head}`,
-    ` 몸 확률 | ${oldStats.body} -> ${newStats.body}`,
+    `　몸 확률 | ${oldStats.body} -> ${newStats.body}`,
     `다리 확률 | ${oldStats.leg} -> ${newStats.leg}`
   ].join('\n');
 }
@@ -388,10 +386,13 @@ function battleStatusBoard(profile, battle) {
   const [wName] = getWeaponInfo(p.enhance);
   const reqExp = getRequiredExp(p.level);
   const expMultiplier = getExpMultiplier(p);
+
+  // 생존자 수 10명 이하 시 은폐 처리
+  const survivorsText = b.survivors <= 10 ? '?' : `${b.survivors}명`;
   
   let boardLines = [
     `[배틀로얄 중] 매칭: ${b.mode}`,
-    `| 턴 ${b.turn}/${b.maxTurn} | 생존: ${b.survivors}명`,
+    `| 턴 ${b.turn}/${b.maxTurn} | 생존: ${survivorsText}`,
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
@@ -571,7 +572,8 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${hitPartName})에 명중시켜 서바이버가 사망했습니다.`;
 
-      mainText = `[${killCount} Kill](+${won(killAssistReward)})\n` +
+      // 대문자 [1 KILL] 형식으로 수정
+      mainText = `[${killCount} KILL] (+${won(killAssistReward)})\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${damageVal}] (+${won(damageReward)})\n` +
                  `HP -${finalDamage}${reduceMsg}${notes}`;
@@ -587,11 +589,11 @@ function resolveFarmFight(profile, battle) {
       for (let i = 0; i < killCount; i++) {
         const { hitPartName, damageVal } = calculatePartDamage(profile);
         totalDamageVal += damageVal;
-        hitPartsList.push(hitPartName);
+        hitPartsList.push(hitPartName); // 킬 수만큼 적중 부위 전부 기록
       }
 
-      const uniqueParts = [...new Set(hitPartsList)];
-      const partsText = uniqueParts.join(', ');
+      // 중복 제거(Set) 없이 킬 수대로 부위 전체 나열 (예: 헤드, 다리, 몸)
+      const partsText = hitPartsList.join(', ');
 
       const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(battle, rand(15, 30));
 
@@ -609,9 +611,10 @@ function resolveFarmFight(profile, battle) {
       let reduceMsg = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
 
+      // 대문자 [N KILL] 형식으로 수정
       let killTextHeader = assistCount > 0 
-        ? `[${killCount} Kill / ${assistCount} Assist](+${won(killAssistReward)})`
-        : `[${killCount} Kill](+${won(killAssistReward)})`;
+        ? `[${killCount} KILL / ${assistCount} ASSIST] (+${won(killAssistReward)})`
+        : `[${killCount} KILL] (+${won(killAssistReward)})`;
 
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
@@ -907,16 +910,14 @@ function processTurn(state, utterance) {
 
   let input = typeof utterance === 'string' ? utterance.trim() : '';
 
-  // [수정] 슬래시('/')로 시작하지 않더라도 메뉴 버튼 텍스트("전투", "파밍" 등)인 경우 자동으로 슬래시 명령어 형태로 전환
+  // 1. 슬래시('/') 자동 보정 처리
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
     const validCommands = ['전투', '파밍', '도망', '강화', '열쇠', '프로필'];
     
-    // 명령어 매칭이 되는 단어라면 슬래시를 붙여서 내부 처리로 넘김
     if (validCommands.includes(rawClean)) {
       input = '/' + rawClean;
     } else {
-      // 그 외 진짜 일반 대화일 경우 기존처럼 안내 메시지 출력
       const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
       return {
         text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화)\n\n${currentBoard}`,
@@ -959,12 +960,24 @@ function processTurn(state, utterance) {
     };
   }
 
-  // 4. 시크릿 코드
+  // 4. 시크릿 코드 (/4655 - 현금 1,000,000원)
   if (input === '/4655') {
     profile.cash += 1000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
       text: `🎁 [시크릿 코드]\n현금 1,000,000원 지급!${board}`, 
+      imageUrl: null, 
+      choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
+      category: 'secret' 
+    };
+  }
+
+  // 4-1. 시크릿 코드 (/5292 - 금괴 1,000개)
+  if (input === '/5292') {
+    profile.gold += 1000;
+    const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
+    return { 
+      text: `🎁 [시크릿 코드]\n금괴 1,000개 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
@@ -1052,65 +1065,13 @@ function processTurn(state, utterance) {
     };
   }
 
-  if (!battle || battle.finished || !battle.alive) {
-    battle = createBattle(profile);
-    state.battle = battle;
-    return { 
-      text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`, 
-      imageUrl: null, 
-      choices: BATTLE_CHOICES, 
-      category: 'start' 
-    };
-  }
-
-  let buffMsgs = processBuffs(battle);
-  checkDeath(battle);
-  if (!battle.alive) {
-    const earnedStats = {
-      cash: battle.accumulatedCash || 0,
-      gold: battle.accumulatedGold || 0,
-      keys: battle.accumulatedKeys || 0,
-      exp: battle.accumulatedExp || 0,
-    };
-
-    return {
-      text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
-      imageUrl: null,
-      choices: LOBBY_CHOICES,
-      category: 'dead'
-    };
-  }
-
-  // 11. 전투 중 파밍
-  if (input === '/파밍') {
-    const outcome = resolveFarmFight(profile, battle);
-
-    let baseExp = Math.round((outcome.earnedCash || 0) * 0.0005);
-    let expRes = { gained: 0, leveledUp: false, msg: '' };
-    let expMsg = '';
-    let levelUpMsg = '';
-
-    if (baseExp > 0) {
-      expRes = addExp(profile, baseExp);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained; 
-      levelUpMsg = expRes.leveledUp ? `\n${expRes.msg}` : '';
-      expMsg = ` (EXP +${expRes.gained})`;
-    }
-
+  // === 이하 전투 진행 로직 (/파밍, /도망) ===
+  if (isPlayingBattle) {
+    let buffMsgs = processBuffs(battle);
     checkDeath(battle);
 
-    let combinedTextParts = [];
-    if (buffMsgs.length > 0) combinedTextParts.push(buffMsgs.join('\n'));
-    combinedTextParts.push(`${outcome.text}${expMsg}${levelUpMsg}`);
-
+    // 버프 적용으로 인한 사망 체크
     if (!battle.alive) {
-      const snap = battle.startSnapshot || { cash: profile.cash };
-      const deltaCash = profile.cash - snap.cash;
-      if (deltaCash > 0) {
-        profile.cash = snap.cash + Math.round(deltaCash * 0.7);
-        battle.accumulatedCash = Math.round(deltaCash * 0.7); 
-      }
-
       const earnedStats = {
         cash: battle.accumulatedCash || 0,
         gold: battle.accumulatedGold || 0,
@@ -1119,101 +1080,164 @@ function processTurn(state, utterance) {
       };
 
       return {
-        text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+        text: `${buffMsgs.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
         imageUrl: null,
         choices: LOBBY_CHOICES,
         category: 'dead'
       };
     }
 
-    if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
-      battle.finished = true;
-      battle.result = 'win';
-      battle.buffs = []; 
-      const winCash = rand(500, 3000);
-      const winExp = rand(100, 500);
-      profile.cash += winCash;
-      const finalWinExp = addExp(profile, winExp);
+    // 11. 전투 중 파밍
+    if (input === '/파밍') {
+      const outcome = resolveFarmFight(profile, battle);
 
-      battle.accumulatedCash += winCash;
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + finalWinExp.gained;
+      let baseExp = Math.round((outcome.earnedCash || 0) * 0.0005);
+      let expRes = { gained: 0, leveledUp: false, msg: '' };
+      let expMsg = '';
+      let levelUpMsg = '';
 
-      const earnedStats = {
-        cash: battle.accumulatedCash || 0,
-        gold: battle.accumulatedGold || 0,
-        keys: battle.accumulatedKeys || 0,
-        exp: battle.accumulatedExp || 0,
-      };
+      if (baseExp > 0) {
+        expRes = addExp(profile, baseExp);
+        battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained; 
+        levelUpMsg = expRes.leveledUp ? `\n${expRes.msg}` : '';
+        expMsg = ` (EXP +${expRes.gained})`;
+      }
 
-      return {
-        text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
-        imageUrl: null,
-        choices: LOBBY_CHOICES,
-        category: 'win'
+      checkDeath(battle);
+
+      let combinedTextParts = [];
+      if (buffMsgs.length > 0) combinedTextParts.push(buffMsgs.join('\n'));
+      combinedTextParts.push(`${outcome.text}${expMsg}${levelUpMsg}`);
+
+      if (!battle.alive) {
+        const snap = battle.startSnapshot || { cash: profile.cash };
+        const deltaCash = profile.cash - snap.cash;
+        if (deltaCash > 0) {
+          profile.cash = snap.cash + Math.round(deltaCash * 0.7);
+          battle.accumulatedCash = Math.round(deltaCash * 0.7); 
+        }
+
+        const earnedStats = {
+          cash: battle.accumulatedCash || 0,
+          gold: battle.accumulatedGold || 0,
+          keys: battle.accumulatedKeys || 0,
+          exp: battle.accumulatedExp || 0,
+        };
+
+        return {
+          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+          imageUrl: null,
+          choices: LOBBY_CHOICES,
+          category: 'dead'
+        };
+      }
+
+      if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
+        battle.finished = true;
+        battle.result = 'win';
+        battle.buffs = []; 
+        const winCash = rand(500, 3000);
+        const winExp = rand(100, 500);
+        profile.cash += winCash;
+        const finalWinExp = addExp(profile, winExp);
+
+        battle.accumulatedCash += winCash;
+        battle.accumulatedExp = (battle.accumulatedExp || 0) + finalWinExp.gained;
+
+        const earnedStats = {
+          cash: battle.accumulatedCash || 0,
+          gold: battle.accumulatedGold || 0,
+          keys: battle.accumulatedKeys || 0,
+          exp: battle.accumulatedExp || 0,
+        };
+
+        return {
+          text: `${combinedTextParts.join('\n')}\n\n== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
+          imageUrl: null,
+          choices: LOBBY_CHOICES,
+          category: 'win'
+        };
+      }
+
+      applyZoneAttrition(battle);
+      battle.turn += 1;
+
+      return { 
+        text: `${combinedTextParts.join('\n')}\n\n${battleStatusBoard(profile, battle)}`, 
+        imageUrl: null, 
+        choices: BATTLE_CHOICES,
+        category: outcome.category
       };
     }
 
-    applyZoneAttrition(battle);
-    battle.turn += 1;
+    // 12. 전투 중 도망
+    if (input === '/도망') {
+      const outcome = resolveEscapeEvent(profile, battle);
 
-    return { 
-      text: `${combinedTextParts.join('\n')}\n\n${battleStatusBoard(profile, battle)}`, 
-      imageUrl: null, 
-      choices: BATTLE_CHOICES,
-      category: outcome.category
-    };
-  }
+      checkDeath(battle);
 
-  // 12. 전투 중 도망
-  if (input === '/도망') {
-    const outcome = resolveEscapeEvent(profile, battle);
+      let combinedTextParts = [];
+      if (buffMsgs.length > 0) combinedTextParts.push(buffMsgs.join('\n'));
+      if (outcome.text) combinedTextParts.push(outcome.text);
 
-    checkDeath(battle);
+      if (!battle.alive) {
+        const earnedStats = {
+          cash: battle.accumulatedCash || 0,
+          gold: battle.accumulatedGold || 0,
+          keys: battle.accumulatedKeys || 0,
+          exp: battle.accumulatedExp || 0,
+        };
 
-    let combinedTextParts = [];
-    if (buffMsgs.length > 0) combinedTextParts.push(buffMsgs.join('\n'));
-    if (outcome.text) combinedTextParts.push(outcome.text);
+        return {
+          text: `${combinedTextParts.join('\n')}\n\n== [사망] 탈락 (${battle.turn}턴) ==\n\n${profileText(profile, earnedStats)}`,
+          imageUrl: null,
+          choices: LOBBY_CHOICES,
+          category: 'dead'
+        };
+      }
 
-    if (battle.turn >= battle.maxTurn) {
-      battle.finished = true;
-      battle.result = 'win';
-      battle.buffs = []; 
-      const winCash = rand(500, 3000);
-      const winExp = rand(100, 500);
-      profile.cash += winCash;
-      const finalWinExp = addExp(profile, winExp);
+      if (battle.turn >= battle.maxTurn) {
+        battle.finished = true;
+        battle.result = 'win';
+        battle.buffs = []; 
+        const winCash = rand(500, 3000);
+        const winExp = rand(100, 500);
+        profile.cash += winCash;
+        const finalWinExp = addExp(profile, winExp);
 
-      battle.accumulatedCash += winCash;
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + finalWinExp.gained;
+        battle.accumulatedCash += winCash;
+        battle.accumulatedExp = (battle.accumulatedExp || 0) + finalWinExp.gained;
 
-      const earnedStats = {
-        cash: battle.accumulatedCash || 0,
-        gold: battle.accumulatedGold || 0,
-        keys: battle.accumulatedKeys || 0,
-        exp: battle.accumulatedExp || 0,
-      };
+        const earnedStats = {
+          cash: battle.accumulatedCash || 0,
+          gold: battle.accumulatedGold || 0,
+          keys: battle.accumulatedKeys || 0,
+          exp: battle.accumulatedExp || 0,
+        };
 
-      return {
-        text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
-        imageUrl: null,
-        choices: LOBBY_CHOICES,
-        category: 'win'
+        return {
+          text: `${combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : ''}== 🏆 [우승] 최종 생존! (${battle.turn}턴) ==\n💵 추가 현금: ${won(winCash)} | EXP +${finalWinExp.gained}\n\n${profileText(profile, earnedStats)}`,
+          imageUrl: null,
+          choices: LOBBY_CHOICES,
+          category: 'win'
+        };
+      }
+
+      applyZoneAttrition(battle);
+      battle.turn += 1;
+
+      const bodyText = combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : '';
+
+      return { 
+        text: `${bodyText}${battleStatusBoard(profile, battle)}`, 
+        imageUrl: null, 
+        choices: BATTLE_CHOICES,
+        category: outcome.category
       };
     }
-
-    applyZoneAttrition(battle);
-    battle.turn += 1;
-
-    const bodyText = combinedTextParts.length > 0 ? combinedTextParts.join('\n') + '\n\n' : '';
-
-    return { 
-      text: `${bodyText}${battleStatusBoard(profile, battle)}`, 
-      imageUrl: null, 
-      choices: BATTLE_CHOICES,
-      category: outcome.category
-    };
   }
 
+  // 13. 잘못된 입력 예외 처리
   const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
   return {
     text: `올바른 명령어(/)를 사용해주세요.\n\n${currentBoard}`,
