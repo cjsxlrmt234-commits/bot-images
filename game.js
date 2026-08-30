@@ -892,9 +892,13 @@ function processEnhance(profile) {
     const detailMsg = formatEnhanceStatDiff(stats, stats);
     const refineStar = REFINE_STARS[profile.refine] || '';
 
+    // [수정 포인트] 전직 여부에 따라 최고 단계 문구 분기 처리
+    const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20)`;
+    const subWeaponLine = isJob ? `+20 ${wName}` : `+20 싱귤래리티`;
+
     const maxText = [
-      `최고 강화 단계 도달! (+20 ${wName})`,
-      `+20 ${wName}`,
+      maxTitle,
+      subWeaponLine,
       detailMsg,
       ``,
       `🎯 강화 : +${currentLevel} ${wName}`,
@@ -945,7 +949,9 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${wName}\n${detailMsg}`;
+    // [수정 포인트] 전직 전에는 전직 전용 무기 대신 일반 무기 이름이 뜨도록 수정
+    const failWeaponName = isJob ? wName : getWeaponInfo(profile[currentEnhanceKey])[0];
+    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${failWeaponName}\n${detailMsg}`;
   }
 
   return { 
@@ -1008,9 +1014,12 @@ function processMultiEnhance(profile, count) {
       const detailMsg = formatEnhanceStatDiff(stats, stats);
       const refineStar = REFINE_STARS[profile.refine] || '';
 
+      const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20)`;
+      const subWeaponLine = isJob ? `+20 ${wName}` : `+20 싱귤래리티`;
+
       const maxText = [
-        `최고 강화 단계 도달! (+20 ${wName})`,
-        `+20 ${wName}`,
+        maxTitle,
+        subWeaponLine,
         detailMsg,
         ``,
         `🎯 강화 : +${profile[currentEnhanceKey]} ${wName}`,
@@ -1465,10 +1474,10 @@ function processTurn(state, utterance) {
   }
 
   if (input === '/4655') {
-    profile.cash += 100000000;
+    profile.cash += 1000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
-      text: `🎁 [시크릿 코드]\n현금 100,000,000원 지급!${board}`, 
+      text: `🎁 [시크릿 코드]\n현금 1,000,000원 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
@@ -1476,10 +1485,10 @@ function processTurn(state, utterance) {
   }
 
   if (input === '/5292') {
-    profile.gold += 10000;
+    profile.gold += 1000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
-      text: `🎁 [시크릿 코드]\n금괴 10,000개 지급!${board}`, 
+      text: `🎁 [시크릿 코드]\n금괴 1,000개 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
