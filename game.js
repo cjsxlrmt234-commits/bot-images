@@ -1465,10 +1465,10 @@ function processTurn(state, utterance) {
   }
 
   if (input === '/4655') {
-    profile.cash += 1000000;
+    profile.cash += 100000000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
-      text: `🎁 [시크릿 코드]\n현금 1,000,000원 지급!${board}`, 
+      text: `🎁 [시크릿 코드]\n현금 100,000,000원 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
@@ -1476,10 +1476,10 @@ function processTurn(state, utterance) {
   }
 
   if (input === '/5292') {
-    profile.gold += 1000;
+    profile.gold += 10000;
     const board = isPlayingBattle ? `\n\n${battleStatusBoard(profile, battle)}` : `\n\n${profileText(profile)}`;
     return { 
-      text: `🎁 [시크릿 코드]\n금괴 1,000개 지급!${board}`, 
+      text: `🎁 [시크릿 코드]\n금괴 10,000개 지급!${board}`, 
       imageUrl: null, 
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES, 
       category: 'secret' 
