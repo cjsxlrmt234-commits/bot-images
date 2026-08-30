@@ -151,10 +151,6 @@ function won(amount) {
   return `${Math.floor(amount).toLocaleString()}원`;
 }
 
-function getRandomSurvivorName() {
-  return `Survivor ${String(rand(1, 9999)).padStart(4, '0')}`;
-}
-
 function generateRandomNickname() {
   const adjectives = ['조용한', '별속의', '용감한', '빛나는', '차가운', '뜨거운', '화려한', '어두운', '신비로운', '재빠른'];
   const nouns = ['사업자', '미인', '모험가', '사냥꾼', '지배자', '방랑자', '지장보살', '지킴이', '전사', '마법사'];
@@ -215,18 +211,24 @@ function getExpMultiplier(profile) {
 function getCurrentEnhanceLevel(profile) {
   if (!profile) return 0;
   if (profile.job) {
-    return profile.jobEnhance ?? 0;
+    return profile.jobEnhance ?? profile.enhance ?? 0;
   }
   return profile.enhance ?? 0;
 }
 
-// [버그 수정 완료] 전직 전에는 직업 무기 대신 일반 무기 이름을 반환하도록 수정
+function getWeaponInfo(enhanceLevel) {
+  const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
+  return WEAPON_TIERS[lvl] || WEAPON_TIERS[0];
+}
+
+// [수정 완료] 전직 전에는 WEAPON_TIERS 이름을 반환하고, 전직 후일 때만 직업 무기 반환
 function getCurrentWeaponName(profile) {
   if (!profile) return '맨손';
-  if (profile.job && JOB_WEAPONS[profile.job]) {
-    return JOB_WEAPONS[profile.job];
+  if (profile.job) {
+    return JOB_WEAPONS[profile.job] || '전직 무기';
   }
-  const [wName] = getWeaponInfo(profile.enhance);
+  const enhanceLvl = profile.enhance ?? 0;
+  const [wName] = getWeaponInfo(enhanceLvl);
   return wName;
 }
 
@@ -331,11 +333,6 @@ function calculatePartDamage(profile) {
   return { hitPartName, damageVal, isSentinelSkill };
 }
 
-function getWeaponInfo(enhanceLevel) {
-  const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
-  return WEAPON_TIERS[lvl] || WEAPON_TIERS[0];
-}
-
 function addExp(profile, baseAmount) {
   if (!profile) return { leveledUp: false, msg: '', gained: 0 };
   if (!profile.level) profile.level = 1;
@@ -409,7 +406,7 @@ function profileText(profile) {
   const totalMult = getProfileGoldMultiplier(p).toFixed(2);
 
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
-  const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel})` : '없음';
+  const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
   return [
     `📊 프로필 대시보드`,
@@ -893,8 +890,8 @@ function processEnhance(profile) {
     const detailMsg = formatEnhanceStatDiff(stats, stats);
     const refineStar = REFINE_STARS[profile.refine] || '';
 
-    const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20)`;
-    const subWeaponLine = isJob ? `+20 ${wName}` : `+20 싱귤래리티`;
+    const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20 ${wName})`;
+    const subWeaponLine = `+20 ${wName}`;
 
     const maxText = [
       maxTitle,
@@ -916,7 +913,6 @@ function processEnhance(profile) {
   }
 
   const tableData = ENHANCE_TABLE[currentLevel];
-  // [수정 포인트] 전직 후에는 기본 비용의 10배 적용
   const cost = isJob ? tableData.cost * 10 : tableData.cost;
 
   if (profile.cash < cost) {
@@ -984,7 +980,6 @@ function processMultiEnhance(profile, count) {
     if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) break; 
 
     const tableData = ENHANCE_TABLE[profile[currentEnhanceKey]];
-    // [수정 포인트] 연속 강화 시에도 전직 여부에 따라 10배 비용 적용
     const cost = isJob ? tableData.cost * 10 : tableData.cost;
     if (profile.cash < cost) break; 
 
@@ -1015,8 +1010,8 @@ function processMultiEnhance(profile, count) {
       const detailMsg = formatEnhanceStatDiff(stats, stats);
       const refineStar = REFINE_STARS[profile.refine] || '';
 
-      const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20)`;
-      const subWeaponLine = isJob ? `+20 ${wName}` : `+20 싱귤래리티`;
+      const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
+      const subWeaponLine = `+20 ${wName}`;
 
       const maxText = [
         maxTitle,
@@ -1267,7 +1262,7 @@ function processJobCommand(profile, targetJob) {
 
   if (profile.job) {
     const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
-    const currentJobName = jobNames[profile.job];
+    const currentJobName = jobNames[profile.job] || profile.job;
     const skillLevel = profile.jobSkillLevel || 1;
     const currentSkillInfo = getJobInfoText(profile.job, skillLevel);
 
