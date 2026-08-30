@@ -221,7 +221,6 @@ function getWeaponInfo(enhanceLevel) {
   return WEAPON_TIERS[lvl] || WEAPON_TIERS[0];
 }
 
-// [수정 완료] 전직 전에는 WEAPON_TIERS 이름을 반환하고, 전직 후일 때만 직업 무기 반환
 function getCurrentWeaponName(profile) {
   if (!profile) return '맨손';
   if (profile.job) {
@@ -232,13 +231,30 @@ function getCurrentWeaponName(profile) {
   return wName;
 }
 
+// [수정] 전직 여부(+21~+42 구간)에 따른 배율 및 헤드/몸/다리 확률 계산 로직 분기 적용
 function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
+  const isJob = profile && Boolean(profile.job);
   const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
-  const baseMult = (1 + (lvl * 0.05)).toFixed(2);
 
-  const baseHead = lvl * 1.00;
-  const baseBody = Math.max(0, 50.00 - (lvl * 0.50));
-  const baseLeg = Math.max(0, 50.00 - (lvl * 0.50));
+  let baseMult, baseHead, baseBody, baseLeg;
+
+  if (isJob) {
+    // 전직 장비 (+0 ~ +20 섀도우 대거 등, 전체 흐름상 +21 ~ +42 구간)
+    // 배율: x2.00부터 시작해서 매 강화당 +0.05씩 증가 (예: +1일 때 x2.05)
+    baseMult = (2.00 + (lvl * 0.05)).toFixed(2);
+    // 헤드 확률: 20.00%부터 시작해서 매 강화당 +1.00%씩 증가 (예: +1일 때 21.00%)
+    baseHead = 20.00 + (lvl * 1.00);
+    // 몸 확률: 40.00%부터 시작해서 매 강화당 -0.50%씩 감소 (예: +1일 때 39.50%)
+    baseBody = Math.max(0, 40.00 - (lvl * 0.50));
+    // 다리 확률: 40.00%부터 시작해서 매 강화당 -0.50%씩 감소 (예: +1일 때 39.50%)
+    baseLeg = Math.max(0, 40.00 - (lvl * 0.50));
+  } else {
+    // 일반 장비 (+0 ~ +20)
+    baseMult = (1 + (lvl * 0.05)).toFixed(2);
+    baseHead = lvl * 1.00;
+    baseBody = Math.max(0, 50.00 - (lvl * 0.50));
+    baseLeg = Math.max(0, 50.00 - (lvl * 0.50));
+  }
 
   const ampInfo = getAmplifyInfo(combatLevel);
   const numHead = baseHead * (1 + ampInfo.headWeight);
@@ -602,7 +618,7 @@ function triggerShadowLoot(profile, battle) {
 function resolveFarmFight(profile, battle) {
   let resultMessages = [];
   let earnedCash = 0;
-  const targetName = getRandomSurvivorName(); 
+  const targetName = getRandomSurvivorName ? getRandomSurvivorName() : '적 서바이버'; 
   const combatLv = profile.combatLevel || 0;
   const mult = getProfileGoldMultiplier(profile);
   const ampInfo = getAmplifyInfo(combatLv);
@@ -890,7 +906,7 @@ function processEnhance(profile) {
     const detailMsg = formatEnhanceStatDiff(stats, stats);
     const refineStar = REFINE_STARS[profile.refine] || '';
 
-    const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20 ${wName})`;
+    const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
     const subWeaponLine = `+20 ${wName}`;
 
     const maxText = [
@@ -946,7 +962,7 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    const failWeaponName = isJob ? wName : getWeaponInfo(profile[currentEnhanceKey])[0];
+    const failWeaponName = wName; // 전직 상태일 경우에도 해당 전직 무기 이름 유지
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${failWeaponName}\n${detailMsg}`;
   }
 
