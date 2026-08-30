@@ -393,26 +393,18 @@ function getCombatPower(profile) {
   return Math.floor(basePower * refineBonusMult);
 }
 
-function calculatePartDamage(profile) {
+function calculatePartDamage(profile, forceHead = false) {
   const enhanceLevel = getCurrentEnhanceLevel(profile);
   const combatLevel = profile ? (profile.combatLevel || 0) : 0;
   const refineLevel = profile ? (profile.refine || 0) : 0;
   
-  let isSentinelSkill = false;
-  if (profile && profile.job === 'sentinel') {
-    const sentinelChance = (profile.jobSkillLevel || 1) * 0.01;
-    if (Math.random() < sentinelChance) {
-      isSentinelSkill = true;
-    }
-  }
-
   const stats = getEnhanceStats(enhanceLevel, combatLevel, profile);
   const roll = Math.random() * 100;
 
   let hitPartName = '다리';
   let damageVal = 0;
 
-  if (isSentinelSkill || roll < stats.numHead) {
+  if (forceHead || roll < stats.numHead) {
     hitPartName = '헤드';
     const combatPower = getCombatPower(profile);
     const powerDamage = Math.floor(combatPower * 0.1);
@@ -428,7 +420,7 @@ function calculatePartDamage(profile) {
     damageVal = rand(1, 30);
   }
 
-  return { hitPartName, damageVal, isSentinelSkill };
+  return { hitPartName, damageVal };
 }
 
 function addExp(profile, baseAmount) {
@@ -794,6 +786,13 @@ function resolveFarmFight(profile, battle) {
       const assistCount = 0;
       const triggerChance = (profile.jobSkillLevel || 1) * 0.01;
 
+      let sentinelTriggered = false;
+      if (profile.job === 'sentinel') {
+        if (Math.random() < triggerChance) {
+          sentinelTriggered = true;
+        }
+      }
+
       let skillNote = "";
       if (profile.job === 'stinger' && Math.random() < triggerChance) {
         killCount = rand(4, 5);
@@ -802,13 +801,11 @@ function resolveFarmFight(profile, battle) {
 
       let totalDamageVal = 0;
       let hitPartsList = [];
-      let sentinelTriggered = false;
 
       for (let i = 0; i < killCount; i++) {
-        const { hitPartName, damageVal, isSentinelSkill } = calculatePartDamage(profile);
+        const { hitPartName, damageVal } = calculatePartDamage(profile, sentinelTriggered);
         totalDamageVal += damageVal;
-        hitPartsList.push(hitPartName);
-        if (isSentinelSkill) sentinelTriggered = true;
+        hitPartsList.push(sentinelTriggered ? '헤드' : hitPartName);
       }
 
       if (sentinelTriggered) {
@@ -850,6 +847,13 @@ function resolveFarmFight(profile, battle) {
       const assistCount = rand(0, 2);
       const triggerChance = (profile.jobSkillLevel || 1) * 0.01;
 
+      let sentinelTriggered = false;
+      if (profile.job === 'sentinel') {
+        if (Math.random() < triggerChance) {
+          sentinelTriggered = true;
+        }
+      }
+
       let skillNote = "";
       if (profile.job === 'stinger' && Math.random() < triggerChance) {
         killCount = rand(4, 5);
@@ -858,13 +862,11 @@ function resolveFarmFight(profile, battle) {
 
       let totalDamageVal = 0;
       let hitPartsList = [];
-      let sentinelTriggered = false;
 
       for (let i = 0; i < killCount; i++) {
-        const { hitPartName, damageVal, isSentinelSkill } = calculatePartDamage(profile);
+        const { hitPartName, damageVal } = calculatePartDamage(profile, sentinelTriggered);
         totalDamageVal += damageVal;
-        hitPartsList.push(hitPartName);
-        if (isSentinelSkill) sentinelTriggered = true;
+        hitPartsList.push(sentinelTriggered ? '헤드' : hitPartName);
       }
 
       if (sentinelTriggered) {
@@ -986,7 +988,6 @@ function processEnhance(profile) {
   if (currentLevel >= ENHANCE_TABLE.length) {
     const stats = getEnhanceStats(currentLevel, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
-    const refineStar = REFINE_STARS[profile.refine] || '';
 
     const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
     const subWeaponLine = `+20 ${wName}`;
@@ -996,15 +997,7 @@ function processEnhance(profile) {
       subWeaponLine,
       detailMsg,
       ``,
-      `🎯 강화 : +${currentLevel} ${wName}`,
-      `🔨 제련 : ${refineStar}`,
-      `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
-      `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
-      ``,
-      `💵 현금 : ${won(profile.cash)}`,
-      `🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`,
-      `🔑 비밀열쇠 : ${(profile.keys || 0).toLocaleString()}개`,
-      `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
+      resourceText(profile)
     ].join('\n');
 
     return { text: maxText, imageUrl: getEnhanceImage('success', 20, profile.job), status: 'max' };
@@ -1048,8 +1041,14 @@ function processEnhance(profile) {
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${failWeaponName}\n${detailMsg}`;
   }
 
+  const finalResultText = [
+    resultMsg,
+    ``,
+    resourceText(profile)
+  ].join('\n');
+
   return { 
-    text: resultMsg, 
+    text: finalResultText, 
     imageUrl: getEnhanceImage(resultStatus, profile[currentEnhanceKey], profile.job), 
     status: resultStatus 
   };
@@ -1106,7 +1105,6 @@ function processMultiEnhance(profile, count) {
     if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) {
       const stats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
-      const refineStar = REFINE_STARS[profile.refine] || '';
 
       const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
       const subWeaponLine = `+20 ${wName}`;
@@ -1116,15 +1114,7 @@ function processMultiEnhance(profile, count) {
         subWeaponLine,
         detailMsg,
         ``,
-        `🎯 강화 : +${profile[currentEnhanceKey]} ${wName}`,
-        `🔨 제련 : ${refineStar}`,
-        `💪 전투력 : ${getCombatPower(profile).toLocaleString()} (증폭 Lv.${profile.combatLevel || 0})`,
-        `🔘 배율 : x${getProfileGoldMultiplier(profile).toFixed(2)}`,
-        ``,
-        `💵 현금 : ${won(profile.cash)}`,
-        `🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`,
-        `🔑 비밀열쇠 : ${(profile.keys || 0).toLocaleString()}개`,
-        `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
+        resourceText(profile)
       ].join('\n');
 
       return { 
@@ -1152,7 +1142,9 @@ function processMultiEnhance(profile, count) {
     `(총 소모 비용: ${won(totalCost)})`,
     ``,
     `+${profile[currentEnhanceKey]} ${wName}`,
-    detailMsg
+    detailMsg,
+    ``,
+    resourceText(profile)
   ].join('\n');
 
   return {
@@ -1681,11 +1673,8 @@ function processTurn(state, utterance) {
     if (isNaN(count) || count <= 1) count = 1;
     const multiResult = processMultiEnhance(profile, count);
 
-    const isMax = multiResult.status === 'max';
-    const finalText = isMax ? multiResult.text : multiResult.text + `\n\n` + profileText(profile);
-
     return { 
-      text: finalText, 
+      text: multiResult.text, 
       imageUrl: multiResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
@@ -1695,11 +1684,8 @@ function processTurn(state, utterance) {
   if (input === '/강화') {
     const enhanceResult = processEnhance(profile);
 
-    const isMax = enhanceResult.status === 'max';
-    const finalText = isMax ? enhanceResult.text : enhanceResult.text + `\n\n` + profileText(profile);
-
     return { 
-      text: finalText, 
+      text: enhanceResult.text, 
       imageUrl: enhanceResult.imageUrl, 
       choices: ENHANCE_CHOICES, 
       category: 'enhance' 
