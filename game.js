@@ -220,10 +220,11 @@ function getCurrentEnhanceLevel(profile) {
   return profile.enhance ?? 0;
 }
 
+// [버그 수정 완료] 전직 전에는 직업 무기 대신 일반 무기 이름을 반환하도록 수정
 function getCurrentWeaponName(profile) {
   if (!profile) return '맨손';
-  if (profile.job) {
-    return JOB_WEAPONS[profile.job] || '전직 전용 무기';
+  if (profile.job && JOB_WEAPONS[profile.job]) {
+    return JOB_WEAPONS[profile.job];
   }
   const [wName] = getWeaponInfo(profile.enhance);
   return wName;
@@ -892,7 +893,6 @@ function processEnhance(profile) {
     const detailMsg = formatEnhanceStatDiff(stats, stats);
     const refineStar = REFINE_STARS[profile.refine] || '';
 
-    // [수정 포인트] 전직 여부에 따라 최고 단계 문구 분기 처리
     const maxTitle = isJob ? `최고 강화 단계 도달! (+20 ${wName})` : `최고 강화 단계 도달! (+20)`;
     const subWeaponLine = isJob ? `+20 ${wName}` : `+20 싱귤래리티`;
 
@@ -916,6 +916,7 @@ function processEnhance(profile) {
   }
 
   const tableData = ENHANCE_TABLE[currentLevel];
+  // [수정 포인트] 전직 후에는 기본 비용의 10배 적용
   const cost = isJob ? tableData.cost * 10 : tableData.cost;
 
   if (profile.cash < cost) {
@@ -949,7 +950,6 @@ function processEnhance(profile) {
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
 
-    // [수정 포인트] 전직 전에는 전직 전용 무기 대신 일반 무기 이름이 뜨도록 수정
     const failWeaponName = isJob ? wName : getWeaponInfo(profile[currentEnhanceKey])[0];
     resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${failWeaponName}\n${detailMsg}`;
   }
@@ -984,6 +984,7 @@ function processMultiEnhance(profile, count) {
     if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) break; 
 
     const tableData = ENHANCE_TABLE[profile[currentEnhanceKey]];
+    // [수정 포인트] 연속 강화 시에도 전직 여부에 따라 10배 비용 적용
     const cost = isJob ? tableData.cost * 10 : tableData.cost;
     if (profile.cash < cost) break; 
 
@@ -1312,20 +1313,17 @@ function processJobCommand(profile, targetJob) {
     return { text: `⚠️ 올바른 전직 직업명을 입력해 주세요. (스팅거, 센티넬, 섀도우)` };
   }
 
-  // 1. +20강 싱귤래리티 조건 확인
   const currentEnhance = profile.enhance ?? 0;
   if (currentEnhance < 20) {
     return { text: `⚠️ 전직 조건이 부족합니다!\n(+20강 싱귤래리티 달성 필요 | 현재 강화 단계: +${currentEnhance})` };
   }
 
-  // 2. 전직 비용 확인 (50,000,000원, 금괴 500개)
   if (profile.cash < REQUIRED_CASH || (profile.gold || 0) < REQUIRED_GOLD) {
     return { 
       text: `⚠️ 전직 비용이 부족합니다!\n(필요: ${won(REQUIRED_CASH)}, 금괴 ${REQUIRED_GOLD}개 | 보유: ${won(profile.cash)}, 금괴 ${(profile.gold || 0).toLocaleString()}개)` 
     };
   }
 
-  // 재화 차감 및 전직 처리
   profile.cash -= REQUIRED_CASH;
   profile.gold -= REQUIRED_GOLD;
   profile.job = jobCode;
