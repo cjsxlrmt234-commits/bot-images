@@ -30,6 +30,78 @@ const WEAPON_TIERS = [
   ['싱귤래리티', '블랙홀 특이점의 정점']
 ];
 
+const SHADOW_WEAPON_TIERS = [
+  ['흑단 일륜도', '어둠을 머금은 첫 번째 일륜도'],
+  ['혈월의 검', '붉은 달의 기운이 서린 검'],
+  ['음영참마도', '그림자를 베어내는 거대한 도'],
+  ['야행의 칼날', '밤을 걷는 자의 예리한 칼날'],
+  ['무영의 태도', '그림자조차 남지 않는 태도'],
+  ['귀면 일륜도', '도깨비의 형상이 새겨진 일륜도'],
+  ['은빛 섬광', '눈부시게 빛나는 은빛 검신'],
+  ['자죽엽 도신', '푸른 대나무 잎사귀처럼 유연한 도신'],
+  ['암야의 백귀', '밤의 유령들을 불러모으는 칼날'],
+  ['수라의 낙인', '아수라의 분노가 새겨진 낙인'],
+  ['절명 일륜도', '적의 숨통을 단번에 끊는 일륜도'],
+  ['명부의 인도', '저승의 문으로 이끄는 안내자'],
+  ['파멸의 이자나기', '모든 것을 파멸시키는 신들의 도구'],
+  ['칠흑의 야마토', '빛을 삼키는 칠흑의 명도'],
+  ['진은 월하광', '달빛을 받아 찬란하게 빛나는 진은'],
+  ['아수라 혈풍참', '피바람을 일으키는 아수라의 참격'],
+  ['공허의 절단자', '공허마저 베어버리는 절단자'],
+  ['아마테라스의 업화', '모든 것을 태우는 태양의 검화'],
+  ['창백한 나락', '끝없는 나락으로 떨어뜨리는 검'],
+  ['태허의 무진', '우주의 근원인 태허의 무한한 힘'],
+  ['월식의 종언', '달이 완전히 가려질 때 찾아오는 종말']
+];
+
+const STINGER_WEAPON_TIERS = [
+  ['대전차 파편총', '전차의 장갑을 찢기 위해 만든 파편총'],
+  ['장갑 관통 리볼버', '단단한 장갑을 뚫는 특수 리볼버'],
+  ['경량 플래싯 런처', '기동성을 높인 소형 플래싯 런처'],
+  ['철갑탄 오토캐논', '연사력이 강화된 철갑탄 오토캐논'],
+  ['대형 파쇄 블래스터', '구조물을 완전히 파쇄하는 대형 블래스터'],
+  ['티타늄 파일벙커', '강인한 티타늄 재질의 근접 파일벙커'],
+  ['골드 코팅 헤비건', '화려한 금장으로 코팅된 중기관총'],
+  ['중장갑 바이스 암', '단단하게 조여매는 중장갑 암 웨폰'],
+  ['플라즈마 슈터', '고열의 플라즈마 에너지를 발사하는 슈터'],
+  ['마그네틱 레일캐논', '전자석의 힘으로 탄환을 사출하는 레일캐논'],
+  ['중성자 파괴포', '주변 물질을 붕괴시키는 중성자 포격기'],
+  ['붕괴 유탄발사기', '지형을 뒤흔드는 강력한 붕괴 유탄발사기'],
+  ['바이브레이트 소닉건', '음파 진동으로 내부를 파괴하는 소닉건'],
+  ['앱솔루트 프리저', '주위의 모든 것을 얼려버리는 냉동 총'],
+  ['버스트 썬더 캐논', '벼락의 폭발력을 연속으로 뿜어내는 캐논'],
+  ['디멘션 브레이커', '공간의 균열을 내는 차원 파괴 무기'],
+  ['아포칼립스 포격기', '종말의 전조를 알리는 거대 포격기'],
+  ['인페르노 볼케이노', '화산의 용암을 발사하는 인페르노 무기'],
+  ['타임 슬립 캐논', '시간의 흐름을 일시적으로 왜곡하는 총'],
+  ['오메가 싱귤래리티', '궁극의 중력장을 형성하는 오메가 무기'],
+  ['울티메이트 판처 코어', '모든 화력을 집약한 궁극의 장갑 코어']
+];
+
+const SENTINEL_WEAPON_TIERS = [
+  ['센티넬 스카우트', '정찰용으로 개조된 기본형 센티넬 총기'],
+  ['가드너 마크 I', '경계 태세를 강화하기 위한 첫 번째 제식 무기'],
+  ['디펜더 카빈', '방어전에 특화된 안정적인 카빈 소총'],
+  ['실드 브레이커', '적의 방어선을 무너뜨리기 위해 조율된 총기'],
+  ['불워크 리플', '든든한 방벽 같은 묵직한 타격감의 소총'],
+  ['오비탈 바스천', '정밀한 조준 장치가 결합된 바스천 모델'],
+  ['펄스 가디언', '에너지 펄스를 방출하는 경계용 가디언 건'],
+  ['제니스 오브젝트', '정점에 도달하기 시작한 센티넬의 무기'],
+  ['A.I. 코어 라이플', '인공지능 보조 조준 시스템이 탑재된 라이플'],
+  ['퀀텀 불워크', '양자역학적 방벽을 두른 중장갑형 라이플'],
+  ['에테르 센티넬', '에테르 에너지를 두른 궁극의 경계 무기'],
+  ['네오 가드너', '차세대 기술로 재설계된 가드너 아티팩트'],
+  ['바이오닉 디펜더', '생체신호와 동기화되는 방어형 총기'],
+  ['태로스 바스천', '고대 거인의 힘이 깃든 강력한 바스천'],
+  ['아크 펄스건', '전기 아크를 연속 방사하는 펄스 총기'],
+  ['헤븐리 불워크', '천상의 가호를 받는 난공불락의 방벽 무기'],
+  ['제네시스 오비탈', '새로운 질서를 창조하는 오비탈 총기'],
+  ['디바인 가디언', '신성한 수호의 권능이 서린 가디언 건'],
+  ['이터널 센티넬', '시공을 초월하여 영원히 빛나는 센티넬 총기'],
+  ['옴니포턴트 코어', '모든 것을 감시하고 심판하는 전능의 코어'],
+  ['앱솔루트 오비탈', '센티넬 기술력의 궁극적인 정점']
+];
+
 const JOB_WEAPONS = {
   stinger: '스팅거 블래스터',
   sentinel: '센티넬 라이플',
@@ -163,11 +235,11 @@ function generateRandomNickname() {
 }
 
 function getRandomSurvivorName() {
-  const names = ['배고픈수류탄', '치킨먹고싶다', '여포재림', '존버의신', '핵미사일', '순삭전문가', '초보서바이버', '랭커킬러', '급발진맨', '무빙의신'];
-  return names[rand(0, names.length - 1)];
+  const num = String(rand(1000, 9999));
+  return `Survivor_${num}`;
 }
 
-function getEnhanceImage(statusType, enhanceLevel) {
+function getEnhanceImage(statusType, enhanceLevel, job = null) {
   if (statusType === 'fail' && enhanceLevel > 0) {
     return `${BASE_URL}/fail.png`; 
   }
@@ -176,6 +248,14 @@ function getEnhanceImage(statusType, enhanceLevel) {
     level = Number(enhanceLevel);
   }
   level = Math.max(0, Math.min(20, level));
+
+  if (job === 'shadow') {
+    return `${BASE_URL}/SDW_${level}.png`;
+  } else if (job === 'stinger') {
+    return `${BASE_URL}/STG_${level}.png`;
+  } else if (job === 'sentinel') {
+    return `${BASE_URL}/SEN_${level}.png`;
+  }
   return `${BASE_URL}/enhance_${level}.png`; 
 }
 
@@ -221,18 +301,22 @@ function getCurrentEnhanceLevel(profile) {
   return profile.enhance ?? 0;
 }
 
-function getWeaponInfo(enhanceLevel) {
+function getWeaponInfo(enhanceLevel, job = null) {
   const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
+  if (job === 'shadow') {
+    return SHADOW_WEAPON_TIERS[lvl] || SHADOW_WEAPON_TIERS[0];
+  } else if (job === 'stinger') {
+    return STINGER_WEAPON_TIERS[lvl] || STINGER_WEAPON_TIERS[0];
+  } else if (job === 'sentinel') {
+    return SENTINEL_WEAPON_TIERS[lvl] || SENTINEL_WEAPON_TIERS[0];
+  }
   return WEAPON_TIERS[lvl] || WEAPON_TIERS[0];
 }
 
 function getCurrentWeaponName(profile) {
   if (!profile) return '맨손';
-  if (profile.job) {
-    return JOB_WEAPONS[profile.job] || '전직 무기';
-  }
-  const enhanceLvl = profile.enhance ?? 0;
-  const [wName] = getWeaponInfo(enhanceLvl);
+  const enhanceLvl = getCurrentEnhanceLevel(profile);
+  const [wName] = getWeaponInfo(enhanceLvl, profile.job);
   return wName;
 }
 
@@ -923,7 +1007,7 @@ function processEnhance(profile) {
       `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
     ].join('\n');
 
-    return { text: maxText, imageUrl: getEnhanceImage('success', 20), status: 'max' };
+    return { text: maxText, imageUrl: getEnhanceImage('success', 20, profile.job), status: 'max' };
   }
 
   const tableData = ENHANCE_TABLE[currentLevel];
@@ -966,7 +1050,7 @@ function processEnhance(profile) {
 
   return { 
     text: resultMsg, 
-    imageUrl: getEnhanceImage(resultStatus, profile[currentEnhanceKey]), 
+    imageUrl: getEnhanceImage(resultStatus, profile[currentEnhanceKey], profile.job), 
     status: resultStatus 
   };
 }
@@ -1045,7 +1129,7 @@ function processMultiEnhance(profile, count) {
 
       return { 
         text: maxText, 
-        imageUrl: getEnhanceImage('success', 20), 
+        imageUrl: getEnhanceImage('success', 20, profile.job), 
         status: 'max' 
       };
     }
@@ -1073,7 +1157,7 @@ function processMultiEnhance(profile, count) {
 
   return {
     text: resultMsg,
-    imageUrl: getEnhanceImage(lastStatus, profile[currentEnhanceKey]),
+    imageUrl: getEnhanceImage(lastStatus, profile[currentEnhanceKey], profile.job),
     status: lastStatus
   };
 }
@@ -1295,7 +1379,13 @@ function processJobCommand(profile, targetJob) {
       msg.unshift(`⚠️ 이미 전직이 완료된 상태입니다! (/전직 명령어로는 전직을 변경할 수 없습니다)\n`);
     }
 
-    return { text: msg.join('\n') };
+    return { 
+      text: [
+        msg.join('\n'),
+        ``,
+        resourceText(profile)
+      ].join('\n') 
+    };
   }
 
   if (!targetJob) {
@@ -1315,7 +1405,9 @@ function processJobCommand(profile, targetJob) {
         `3. 🗡️ 섀도우 (/전직 섀도우)`,
         `   - 적 처치 시 일정 확률로 추가 재화(현금/금괴/열쇠) 은밀 획득`,
         ``,
-        `💡 입력예시: [/전직 스팅거], [/전직 센티넬], [/전직 섀도우]`
+        `💡 입력예시: [/전직 스팅거], [/전직 센티넬], [/전직 섀도우]`,
+        ``,
+        resourceText(profile)
       ].join('\n')
     };
   }
@@ -1341,7 +1433,15 @@ function processJobCommand(profile, targetJob) {
   profile.job = jobCode;
   profile.jobSkillLevel = 1;
 
-  return { text: `🎉 [전직 완료] '${targetJob}'(으)로 전직했습니다!\n(소모: ${won(REQUIRED_CASH)}, 금괴 ${REQUIRED_GOLD}개)\n${getJobInfoText(jobCode, 1)}` };
+  return { 
+    text: [
+      `🎉 [전직 완료] '${targetJob}'(으)로 전직했습니다!`,
+      `(소모: ${won(REQUIRED_CASH)}, 금괴 ${REQUIRED_GOLD}개)`,
+      getJobInfoText(jobCode, 1),
+      ``,
+      resourceText(profile)
+    ].join('\n') 
+  };
 }
 
 function processJobChange(profile, targetJob) {
@@ -1440,7 +1540,7 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화', '전직변경', '전직스킬', '전직', '초기화'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화', '전직변경', '전직스킬', '전직'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
@@ -1469,8 +1569,7 @@ function processTurn(state, utterance) {
       `• /전직변경 [직업명] - 금괴 1,000개로 직업 변경 (스킬레벨 유지)`,
       `• /전직스킬 - 금괴를 소모하여 전직 스킬 레벨업 (MAX Lv.10)`,
       `• /열쇠 - 비밀열쇠 사용`,
-      `• /프로필 - 현재 정보 확인`,
-      `• /초기화 - 프로필 정보 초기화`
+      `• /프로필 - 현재 정보 확인`
     ].join('\n');
 
     return {
@@ -1488,26 +1587,6 @@ function processTurn(state, utterance) {
       imageUrl: null,
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
       category: 'profile'
-    };
-  }
-
-  if (input === '/초기화') {
-    if (isPlayingBattle) {
-      return {
-        text: `⚠️ 전투 중에는 프로필을 초기화할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`,
-        imageUrl: null,
-        choices: BATTLE_CHOICES,
-        category: 'battle_block'
-      };
-    }
-    profile = createProfile({});
-    state.profile = profile;
-    state.battle = null;
-    return {
-      text: `🔄 프로필이 초기화되었습니다.\n\n${profileText(profile)}`,
-      imageUrl: null,
-      choices: LOBBY_CHOICES,
-      category: 'reset'
     };
   }
 
@@ -1576,7 +1655,7 @@ function processTurn(state, utterance) {
     const targetJob = input.replace('/전직', '').trim();
     const res = processJobCommand(profile, targetJob);
     return {
-      text: `${res.text}\n\n${profileText(profile)}`,
+      text: res.text,
       imageUrl: null,
       choices: LOBBY_CHOICES,
       category: 'job_info'
