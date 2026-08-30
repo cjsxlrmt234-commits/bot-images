@@ -162,6 +162,11 @@ function generateRandomNickname() {
   return `${adj}${noun}${num}`;
 }
 
+function getRandomSurvivorName() {
+  const names = ['배고픈수류탄', '치킨먹고싶다', '여포재림', '존버의신', '핵미사일', '순삭전문가', '초보서바이버', '랭커킬러', '급발진맨', '무빙의신'];
+  return names[rand(0, names.length - 1)];
+}
+
 function getEnhanceImage(statusType, enhanceLevel) {
   if (statusType === 'fail' && enhanceLevel > 0) {
     return `${BASE_URL}/fail.png`; 
@@ -611,7 +616,7 @@ function triggerShadowLoot(profile, battle) {
 function resolveFarmFight(profile, battle) {
   let resultMessages = [];
   let earnedCash = 0;
-  const targetName = getRandomSurvivorName ? getRandomSurvivorName() : '적 서바이버'; 
+  const targetName = getRandomSurvivorName(); 
   const combatLv = profile.combatLevel || 0;
   const mult = getProfileGoldMultiplier(profile);
   const ampInfo = getAmplifyInfo(combatLv);
@@ -1435,7 +1440,7 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화', '전직변경', '전직스킬', '전직'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '금괴강화', '연속강화', '전직변경', '전직스킬', '전직', '초기화'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
@@ -1464,7 +1469,8 @@ function processTurn(state, utterance) {
       `• /전직변경 [직업명] - 금괴 1,000개로 직업 변경 (스킬레벨 유지)`,
       `• /전직스킬 - 금괴를 소모하여 전직 스킬 레벨업 (MAX Lv.10)`,
       `• /열쇠 - 비밀열쇠 사용`,
-      `• /프로필 - 현재 정보 확인`
+      `• /프로필 - 현재 정보 확인`,
+      `• /초기화 - 프로필 정보 초기화`
     ].join('\n');
 
     return {
@@ -1482,6 +1488,26 @@ function processTurn(state, utterance) {
       imageUrl: null,
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
       category: 'profile'
+    };
+  }
+
+  if (input === '/초기화') {
+    if (isPlayingBattle) {
+      return {
+        text: `⚠️ 전투 중에는 프로필을 초기화할 수 없습니다!\n\n${battleStatusBoard(profile, battle)}`,
+        imageUrl: null,
+        choices: BATTLE_CHOICES,
+        category: 'battle_block'
+      };
+    }
+    profile = createProfile({});
+    state.profile = profile;
+    state.battle = null;
+    return {
+      text: `🔄 프로필이 초기화되었습니다.\n\n${profileText(profile)}`,
+      imageUrl: null,
+      choices: LOBBY_CHOICES,
+      category: 'reset'
     };
   }
 
