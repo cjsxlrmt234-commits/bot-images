@@ -530,22 +530,14 @@ function profileText(profile) {
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
   const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
-  // [수정사항 2 반영] 프로필 대시보드에 '🎮 플레이 판수' 및 '전직무기' 또는 일반 무기 표기 양식 맞춤
-  let weaponDisplayLine = '';
-  if (p.job) {
-    let jobWeaponTitle = wName;
-    weaponDisplayLine = `🎯 강화 : +${currentEnhance} 전직무기 ${jobWeaponTitle}`;
-  } else {
-    weaponDisplayLine = `무기 : +${currentEnhance} ${wName}`;
-  }
-
+  // [수정사항 3 반영] 플레이 판수 없앰, 프로필 대시보드 위에 한 칸 띄움, 강화 무기 명칭 변경
   return [
+    ``,
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
     `칭호 : ${p.title}`,
     `🎖️ 직업 : ${jobDisplay}`,
-    `🎮 플레이 판수 : ${(p.gamesPlayed || 0).toLocaleString()}판`,
-    weaponDisplayLine,
+    `무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
@@ -582,9 +574,12 @@ function createBattle(profile) {
     profile.gamesPlayed = (profile.gamesPlayed || 0) + 1;
   }
 
+  // [수정사항 2 반영] 13~15턴 사이로 무작위 배정
+  const randomizedMaxTurn = rand(13, 15);
+
   return {
     turn: 1,
-    maxTurn: MAX_TURN,
+    maxTurn: randomizedMaxTurn,
     survivors: initialSurvivors,
     hp: 100,
     alive: true,
@@ -885,7 +880,6 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      // [수정사항 1 반영] EXP 추가 및 포맷 수정
       const expReward = 126;
       addExp(profile, expReward);
 
@@ -1958,62 +1952,8 @@ function processTurn(state, utterance) {
       applyZoneAttrition(battle);
       const buffMsgs = processBuffs(battle);
 
-      if (battle.survivors <= 1) {
-        battle.finished = true;
-        battle.result = 'victory';
-        const mult = getGoldMultiplier(profile);
-        const finalCashReward = Math.round(battle.accumulatedCash + (rand(50000, 150000) * mult));
-        profile.cash += finalCashReward;
-
-        const expGainedResult = addExp(profile, 500);
-
-        result.text = [
-          `== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==`,
-          `💵 추가 현금: ${won(rand(500, 2000))} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 +${won(finalCashReward)}`,
-          `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
-          battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : `🧈 금괴 +2개`,
-          battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : `🔑 비밀열쇠 +1개`,
-          ``,
-          profileText(profile)
-        ].filter(Boolean).join('\n');
-
-        result.choices = LOBBY_CHOICES;
-        result.category = 'victory';
-        state.battle = null;
-        break;
-      }
-
-      if (!battle.alive) {
-        const adjustedCash = Math.round(battle.accumulatedCash * 0.7);
-        profile.cash += adjustedCash;
-        profile.gold += (battle.accumulatedGold || 0);
-        profile.keys += (battle.accumulatedKeys || 0);
-
-        const expGainedResult = addExp(profile, 300);
-
-        result.text = [
-          `== [사망] 탈락 (${battle.turn}턴) ==`,
-          `💵 현금 +${won(adjustedCash)}`,
-          `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
-          battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : ``,
-          battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : ``,
-          ``,
-          profileText(profile)
-        ].filter(Boolean).join('\n');
-
-        result.choices = LOBBY_CHOICES;
-        result.category = 'dead';
-        state.battle = null;
-        break;
-      }
-
       const farmRes = resolveFarmFight(profile, battle);
-      
-      // [수정사항 1 반영] '[배틀로얄 턴 8/15] 파밍 진행' 멘트 삭제 및 결과 내용만 반영
-      let textLines = [
-        farmRes.text
-      ];
+      let textLines = [ farmRes.text ];
 
       if (buffMsgs.length > 0) {
         textLines.push(buffMsgs.join('\n'));
@@ -2048,7 +1988,7 @@ function processTurn(state, utterance) {
         break;
       }
 
-      if (battle.turn >= battle.maxTurn) {
+      if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
         battle.finished = true;
         battle.result = 'victory';
         const mult = getGoldMultiplier(profile);
@@ -2091,9 +2031,7 @@ function processTurn(state, utterance) {
       const buffMsgs = processBuffs(battle);
 
       const escapeRes = resolveEscapeEvent(profile, battle);
-      let textLines = [
-        escapeRes.text
-      ];
+      let textLines = [ escapeRes.text ];
 
       if (buffMsgs.length > 0) {
         textLines.push(buffMsgs.join('\n'));
