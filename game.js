@@ -530,7 +530,6 @@ function profileText(profile) {
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
   const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
-  // [수정사항 2 반영] 프로필 대시보드에 '🎮 플레이 판수' 및 '전직무기' 또는 일반 무기 표기 양식 맞춤
   let weaponDisplayLine = '';
   if (p.job) {
     let jobWeaponTitle = wName;
@@ -885,7 +884,6 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      // [수정사항 1 반영] EXP 추가 및 포맷 수정
       const expReward = 126;
       addExp(profile, expReward);
 
@@ -2010,7 +2008,6 @@ function processTurn(state, utterance) {
 
       const farmRes = resolveFarmFight(profile, battle);
       
-      // [수정사항 1 반영] '[배틀로얄 턴 8/15] 파밍 진행' 멘트 삭제 및 결과 내용만 반영
       let textLines = [
         farmRes.text
       ];
