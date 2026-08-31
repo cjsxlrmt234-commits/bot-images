@@ -530,13 +530,22 @@ function profileText(profile) {
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
   const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
+  // [수정사항 2 반영] 프로필 대시보드에 '🎮 플레이 판수' 및 '전직무기' 또는 일반 무기 표기 양식 맞춤
+  let weaponDisplayLine = '';
+  if (p.job) {
+    let jobWeaponTitle = wName;
+    weaponDisplayLine = `🎯 강화 : +${currentEnhance} 전직무기 ${jobWeaponTitle}`;
+  } else {
+    weaponDisplayLine = `무기 : +${currentEnhance} ${wName}`;
+  }
+
   return [
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
     `칭호 : ${p.title}`,
     `🎖️ 직업 : ${jobDisplay}`,
     `🎮 플레이 판수 : ${(p.gamesPlayed || 0).toLocaleString()}판`,
-    `무기 : +${currentEnhance} ${wName}`,
+    weaponDisplayLine,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
@@ -876,10 +885,14 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
+      // [수정사항 1 반영] EXP 추가 및 포맷 수정
+      const expReward = 126;
+      addExp(profile, expReward);
+
       mainText = `[${killCount} KILL] (+${won(killAssistReward)})${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg}${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${expReward})${notes}`;
       break;
     }
     case 'kill_multi': {
@@ -942,10 +955,13 @@ function resolveFarmFight(profile, battle) {
 
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
+      const expReward = 150;
+      addExp(profile, expReward);
+
       mainText = `${killTextHeader}${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg}${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${expReward})${notes}`;
       break;
     }
     default: {
@@ -1581,9 +1597,6 @@ function processUpgradeJobSkill(profile) {
   };
 }
 
-// ==========================================
-// 각인 시스템 관련 함수 수정
-// ==========================================
 function processImprintCommand(profile) {
   if (!profile.imprints) profile.imprints = {};
   if (!profile.imprintLocks) profile.imprintLocks = { I: false, II: false, III: false, IV: false, V: false };
@@ -1839,7 +1852,6 @@ function processImprintReroll(profile) {
   resultLines.push(resourceText(profile));
   return { text: resultLines.join('\n') };
 }
-// ==========================================
 
 function startGame(existingProfile) {
   let profile = createProfile(existingProfile);
@@ -1973,7 +1985,6 @@ function processTurn(state, utterance) {
       }
 
       if (!battle.alive) {
-        // 사망 시 이번 게임 현금 70%, 금괴/열쇠 100% 반영
         const adjustedCash = Math.round(battle.accumulatedCash * 0.7);
         profile.cash += adjustedCash;
         profile.gold += (battle.accumulatedGold || 0);
@@ -1998,8 +2009,9 @@ function processTurn(state, utterance) {
       }
 
       const farmRes = resolveFarmFight(profile, battle);
+      
+      // [수정사항 1 반영] '[배틀로얄 턴 8/15] 파밍 진행' 멘트 삭제 및 결과 내용만 반영
       let textLines = [
-        `[배틀로얄 턴 ${battle.turn}/${battle.maxTurn}] 파밍 진행`,
         farmRes.text
       ];
 
@@ -2009,7 +2021,6 @@ function processTurn(state, utterance) {
 
       if (!battle.alive) {
         battle.finished = true;
-        // 사망 시 이번 게임 현금 70%, 금괴/열쇠 100% 반영
         const adjustedCash = Math.round(battle.accumulatedCash * 0.7);
         profile.cash += adjustedCash;
         profile.gold += (battle.accumulatedGold || 0);
@@ -2081,7 +2092,6 @@ function processTurn(state, utterance) {
 
       const escapeRes = resolveEscapeEvent(profile, battle);
       let textLines = [
-        `[배틀로얄 턴 ${battle.turn}/${battle.maxTurn}] 안전지대로 도망 및 정비`,
         escapeRes.text
       ];
 
