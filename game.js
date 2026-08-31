@@ -203,7 +203,7 @@ const ENHANCE_CHOICES = [
   { label: '전투', action: '/전투' }
 ];
 
-// 각인 옵션 풀 정의 (피해량 감소 수치를 1, 2, 3, 4, 5로 변경)
+// 각인 옵션 풀 정의 (확률이 높을수록 가중치를 낮게 설정, 피해량 감소 수치 1,2,3,4,5%로 변경)
 const IMPRINT_OPTION_POOL = [
   { name: '헤드샷 데미지 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headDmg' },
   { name: '현금 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'cashBoost' },
@@ -215,7 +215,7 @@ const IMPRINT_OPTION_POOL = [
   { name: '다중 적 만날 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'multiMeet' },
   { name: '경험치 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'expBoost' },
   { name: '비밀열쇠 획득 확률 증가', values: [0.002, 0.004, 0.006, 0.008, 0.01], weights: [30, 30, 20, 10, 10], unit: '%', key: 'keyChance' },
-  { name: '피해량 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '', key: 'damageReduce' },
+  { name: '피해량 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'damageReduce' },
   { name: '전투력 증가', values: [1, 1.5, 2, 2.5, 3], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
 ];
 
@@ -228,6 +228,7 @@ function randFloat(min, max, decimals = 2) {
   return Number(val.toFixed(decimals));
 }
 
+// 가중치 기반으로 배열 내의 값 선택 함수
 function pickWeightedValue(values, weights) {
   const totalWeight = weights.reduce((sum, w) => sum + w, 0);
   let r = Math.random() * totalWeight;
@@ -361,7 +362,8 @@ function getCurrentWeaponName(profile) {
   if (!profile) return '무기';
   const enhanceLvl = getCurrentEnhanceLevel(profile);
   const [wName] = getWeaponInfo(enhanceLvl, profile.job);
-  return `${wName}`;
+  const prefix = profile.job ? '전직무기' : '무기';
+  return `${prefix} ${wName}`;
 }
 
 function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
@@ -541,7 +543,7 @@ function profileText(profile) {
   const reqExp = getRequiredExp(p.level);
   const combatPower = getCombatPower(p);
   const currentEnhance = getCurrentEnhanceLevel(p);
-  const wName = getCurrentWeaponName(p);
+  const [wName] = getWeaponInfo(currentEnhance, p.job);
   const refineStar = REFINE_STARS[p.refine] || '';
   
   const totalMult = getGoldMultiplier(p).toFixed(2);
@@ -555,7 +557,7 @@ function profileText(profile) {
     `칭호 : ${p.title}`,
     `🎖️ 직업 : ${jobDisplay}`,
     `🎮 플레이 판수 : ${(p.gamesPlayed || 0).toLocaleString()}판`,
-    `🎯 무기 : +${currentEnhance} ${wName}`,
+    `무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
@@ -1042,14 +1044,15 @@ function processenhance(profile) {
   }
 
   const currentLevel = profile[currentEnhanceKey];
-  const wName = getCurrentWeaponName(profile);
+  const [wName] = getWeaponInfo(currentLevel, profile.job);
+  const targetLabel = isJob ? `+10 전직무기 ${wName}` : `+10 ${wName}`; // 요청하신 수정사항 1 반영
 
   if (currentLevel >= ENHANCE_TABLE.length) {
     const stats = getEnhanceStats(currentLevel, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
 
     const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
-    const subWeaponLine = `+20 ${wName}`;
+    const subWeaponLine = isJob ? `🎯 강화 : +20 전직무기 ${wName}\n🎯 무기 : +20 ${wName}` : `🎯 강화 : +20 ${wName}`;
 
     const maxText = [
       maxTitle,
@@ -1091,22 +1094,30 @@ function processenhance(profile) {
     resultStatus = 'success';
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
+    const [newWName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
-    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile[currentEnhanceKey]}\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${wName}\n${detailMsg}`;
+    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile[currentEnhanceKey]}\n(소모 비용: ${won(cost)})\n` +
+                (isJob ? `🎯 강화 : +${profile[currentEnhanceKey]} 전직무기 ${newWName}\n🎯 무기 : +${profile[currentEnhanceKey]} ${newWName}` : `🎯 강화 : +${profile[currentEnhanceKey]} ${newWName}`) +
+                `\n${detailMsg}`;
   } else if (roll < successRate + keepRate) {
     resultStatus = 'keep';
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
+    const [currWName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
-    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${wName}\n${detailMsg}`;
+    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n` +
+                (isJob ? `🎯 강화 : +${profile[currentEnhanceKey]} 전직무기 ${currWName}\n🎯 무기 : +${profile[currentEnhanceKey]} ${currWName}` : `🎯 강화 : +${profile[currentEnhanceKey]} ${currWName}`) +
+                `\n${detailMsg}`;
   } else {
     resultStatus = 'fail';
     profile[currentEnhanceKey] = 0;
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
+    const [zeroWName] = getWeaponInfo(0, profile.job);
 
-    const failWeaponName = wName; 
-    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n+${profile[currentEnhanceKey]} ${failWeaponName}\n${detailMsg}`;
+    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n` +
+                (isJob ? `🎯 강화 : +0 전직무기 ${zeroWName}\n🎯 무기 : +0 ${zeroWName}` : `🎯 강화 : +0 ${zeroWName}`) +
+                `\n${detailMsg}`;
   }
 
   const finalResultText = [
@@ -1176,7 +1187,7 @@ function processMultiEnhance(profile, count) {
     }
   }
 
-  const wName = getCurrentWeaponName(profile);
+  const [wName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
   if (attempted === 0) {
     if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) {
@@ -1184,7 +1195,7 @@ function processMultiEnhance(profile, count) {
       const detailMsg = formatEnhanceStatDiff(stats, stats);
 
       const maxTitle = `최고 강화 단계 도달! (+20 ${wName})`;
-      const subWeaponLine = `+20 ${wName}`;
+      const subWeaponLine = isJob ? `🎯 강화 : +20 전직무기 ${wName}\n🎯 무기 : +20 ${wName}` : `🎯 강화 : +20 ${wName}`;
 
       const maxText = [
         maxTitle,
@@ -1214,13 +1225,15 @@ function processMultiEnhance(profile, count) {
   const finalStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
   const detailMsg = formatEnhanceStatDiff(initialStats, finalStats);
 
+  const weaponLine = isJob ? `🎯 강화 : +${profile[currentEnhanceKey]} 전직무기 ${wName}\n🎯 무기 : +${profile[currentEnhanceKey]} ${wName}` : `🎯 강화 : +${profile[currentEnhanceKey]} ${wName}`;
+
   let resultMsg = [
     `⚡ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
     `결과 : +${initialLevel} ➔ +${profile[currentEnhanceKey]}`,
     `📊 성공: ${successCount.toLocaleString()}회 | 유지: ${keepCount.toLocaleString()}회 | 실패: ${failCount.toLocaleString()}회`,
     `(총 소모 비용: ${won(totalCost)})`,
     ``,
-    `+${profile[currentEnhanceKey]} ${wName}`,
+    weaponLine,
     detailMsg,
     ``,
     resourceText(profile)
@@ -1497,9 +1510,9 @@ function processJobCommand(profile, targetJob) {
     return { text: `⚠️ 올바른 전직 직업명을 입력해 주세요. (스팅거, 센티넬, 섀도우)` };
   }
 
-  const currentenhance = profile.enhance ?? 0;
-  if (currentenhance < 20) {
-    return { text: `⚠️ 전직 조건이 부족합니다!\n(+20강 싱귤래리티 달성 필요 | 현재 강화 단계: +${currentenhance})` };
+  const currentEnhance = profile.enhance ?? 0;
+  if (currentEnhance < 20) {
+    return { text: `⚠️ 전직 조건이 부족합니다!\n(+20강 싱귤래리티 달성 필요 | 현재 강화 단계: +${currentEnhance})` };
   }
 
   if (profile.cash < REQUIRED_CASH || (profile.gold || 0) < REQUIRED_GOLD) {
@@ -1590,6 +1603,9 @@ function processUpgradeJobSkill(profile) {
   };
 }
 
+// ==========================================
+// 각인 시스템 관련 함수 수정
+// ==========================================
 function processImprintCommand(profile) {
   if (!profile.imprints) profile.imprints = {};
   if (!profile.imprintLocks) profile.imprintLocks = { I: false, II: false, III: false, IV: false, V: false };
@@ -1609,11 +1625,11 @@ function processImprintCommand(profile) {
 
     if (isUnlocked) {
       const imprintData = profile.imprints[tier.key];
-      let opt = imprintData.options[0];
-      lines.push(` 🔓* ${tier.name} * : ${opt.name} +${opt.value}${opt.unit}`);
+      let opt = imprintData.options[0]; // 각인당 1개 옵션
+      lines.push(`🔓* ${tier.name} * : ${opt.name} +${opt.value}${opt.unit}`);
     } else {
       if (tier.key === 'I') {
-        lines.push(`🔓 * ${tier.name} * : 금괴 획득 확률(수량) 증가 +0.01%`);
+        lines.push(`🔓* ${tier.name} * : 금괴 획득 확률(수량) 증가 +0.01%`);
       } else if (tier.key === 'II') {
         lines.push(`🔒 * ${tier.name} * : 해금 조건 : 금괴 500개`);
       } else if (tier.key === 'III') {
@@ -1626,14 +1642,11 @@ function processImprintCommand(profile) {
     }
   });
 
-  lines.push(
-    ``,
-    `💡 사용 가능한 명령어:`,
-    `• /각인해금 [1~5] - 조건 만족 시 해당 슬롯 해금`,
-    `• /각인잠금 [1~5] - 해당 슬롯 옵션 잠금`,
-    `• /각인해제 [1~5] - 잠긴 슬롯 해제`,
-    `• /각인변경 - 각인 변경 (잠긴 개수당 비용 2배)`
-  );
+  lines.push(`\n💡 사용 가능한 명령어:`);
+  lines.push(`• /각인해금 [1~5] - 조건 만족 시 해당 슬롯 해금`);
+  lines.push(`• /각인잠금 [1~5] - 해당 슬롯 옵션 잠금`);
+  lines.push(`• /각인해제 [1~5] - 잠긴 슬롯 해제`);
+  lines.push(`• /각인변경 - 각인 변경 (잠긴 개수당 비용 2배)`);
 
   return { text: lines.join('\n') };
 }
@@ -1672,8 +1685,8 @@ function processImprintUnlock(profile, tierArg) {
     consumeGold = 1000;
     unlockSuccess = true;
   } else if (tierKey === 'IV') {
-    const hasAchievedSingularity = (profile.enhance || 0) >= 20 || Boolean(profile.job);
-    if (!hasAchievedSingularity) {
+    // 수정사항 3: 이미 +20 싱귤래리티를 달성한 조건이 있다면 해금 가능 (직업 여부와 관계없이 enhance >= 20 이면 해금)
+    if ((profile.enhance || 0) < 20) {
       return { text: `⚠️ 해금 조건 미달성! (+20 싱귤래리티 달성 필요)` };
     }
     unlockSuccess = true;
@@ -1687,18 +1700,21 @@ function processImprintUnlock(profile, tierArg) {
   if (unlockSuccess) {
     if (consumeGold > 0) profile.gold -= consumeGold;
 
-    const pool = IMPRINT_OPTION_POOL;
-    const optTemplate = pool[rand(0, pool.length - 1)];
+    // 수정사항 4: 각인 하나당 1개의 옵션으로 나오게 설정
+    let pool = [...IMPRINT_OPTION_POOL];
+    const idx = rand(0, pool.length - 1);
+    const optTemplate = pool[idx];
     const val = pickWeightedValue(optTemplate.values, optTemplate.weights);
-    const selectedOption = { name: optTemplate.name, value: val, unit: optTemplate.unit, key: optTemplate.key };
+    const selectedOptions = [{ name: optTemplate.name, value: val, unit: optTemplate.unit, key: optTemplate.key }];
 
-    profile.imprints[tierKey] = { options: [selectedOption] };
+    profile.imprints[tierKey] = { options: selectedOptions };
 
+    let optText = `• ${selectedOptions[0].name} +${selectedOptions[0].value}${selectedOptions[0].unit}`;
     return {
       text: [
         `🎉 [각인 ${tierKey} 해금 및 옵션 장착 성공!]`,
         `랜덤 옵션이 부여되었습니다:`,
-        `• ${selectedOption.name} +${selectedOption.value}${selectedOption.unit}`,
+        optText,
         ``,
         resourceText(profile)
       ].join('\n')
@@ -1789,72 +1805,390 @@ function processImprintReroll(profile) {
 
   unlockedKeys.forEach(k => {
     if (!profile.imprintLocks[k]) {
-      const pool = IMPRINT_OPTION_POOL;
-      const optTemplate = pool[rand(0, pool.length - 1)];
+      let pool = [...IMPRINT_OPTION_POOL];
+      const idx = rand(0, pool.length - 1);
+      const optTemplate = pool[idx];
       const val = pickWeightedValue(optTemplate.values, optTemplate.weights);
-      const selectedOption = { name: optTemplate.name, value: val, unit: optTemplate.unit, key: optTemplate.key };
-      profile.imprints[k] = { options: [selectedOption] };
+      const selectedOptions = [{ name: optTemplate.name, value: val, unit: optTemplate.unit, key: optTemplate.key }];
+      profile.imprints[k] = { options: selectedOptions };
     }
   });
 
-  let imprintLines = [];
+  // 수정사항 7: 요청하신 /각인변경 출력 포맷에 맞춤
+  let resultLines = [`✨ [각인 변경 완료!]`];
+  resultLines.push(`💰 소모 재화`);
+  resultLines.push(`현금 ${won(costCash)}`);
+  resultLines.push(`금괴 ${costGold}개\n`);
+
   const imprintNames = { I: '각인 I', II: '각인 II', III: '각인 III', IV: '각인 IV', V: '각인 V' };
   
   ['I', 'II', 'III', 'IV', 'V'].forEach(k => {
     if (profile.imprints[k]) {
+      const isLocked = profile.imprintLocks[k];
+      const mark = isLocked ? '🔒' : '🔄';
       const opt = profile.imprints[k].options[0];
-      imprintLines.push(`🔄* ${imprintNames[k]} * : ${opt.name} +${opt.value}${opt.unit}`);
+      
+      if (isLocked) {
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : ${k === 'IV' ? '+20 싱귤래리티 달성' : (k === 'V' ? '+20 전직무기 달성' : '해금됨')}`);
+      } else {
+        resultLines.push(`${mark}* ${imprintNames[k]} * : ${opt.name} +${opt.value}${opt.unit}`);
+      }
     } else {
       if (k === 'IV') {
-        imprintLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 싱귤래리티 달성`);
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 싱귤래리티 달성`);
       } else if (k === 'V') {
-        imprintLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 전직무기 달성`);
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 전직무기 달성`);
       }
     }
   });
 
-  let resultLines = [
-    `✨ [각인 변경 완료!]`,
-    `💰 소모 재화`,
-    `현금 10,000,000원`,
-    `금괴 20개`,
-    ``,
-    ...imprintLines,
-    ``,
-    `💵 현금 : ${won(profile.cash)}`,
-    `🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`,
-    `🔑 비밀열쇠 : ${(profile.keys || 0).toLocaleString()}개`,
-    `📦 보급 : ${(profile.monthItems || 0).toLocaleString()}개`
-  ];
-
+  resultLines.push(``);
+  resultLines.push(resourceText(profile));
   return { text: resultLines.join('\n') };
 }
+// ==========================================
 
-// ─────────────────────────────────────────
-// 모듈 내보내기 (다른 파일에서 불러올 수 있도록 설정)
-// ─────────────────────────────────────────
+function startGame(existingProfile) {
+  let profile = createProfile(existingProfile);
+  let battle = createBattle(profile);
+
+  return {
+    text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`,
+    imageUrl: null, 
+    choices: BATTLE_CHOICES,
+    category: 'start',
+    state: { profile, battle }
+  };
+}
+
+function processTurn(state, utterance) {
+  if (!state || typeof state !== 'object') state = {};
+  
+  let profile = createProfile(state.profile);
+  let battle = state.battle;
+
+  let input = typeof utterance === 'string' ? utterance.trim() : '';
+
+  if (input === '/초기화') {
+    state.profile = createProfile({}); 
+    state.battle = null; 
+    return {
+      text: `🔄 [초기화 완료]\n프로필 대시보드와 모든 재화가 초기화되었습니다.\n\n${profileText(state.profile)}`,
+      imageUrl: null,
+      choices: LOBBY_CHOICES,
+      category: 'reset'
+    };
+  }
+
+  state.profile = profile;
+
+  if (profile.job && profile.jobEnhance === undefined) profile.jobEnhance = 0;
+  if (profile.enhance === undefined || profile.enhance < 0) profile.enhance = 0;
+  
+  const isPlayingBattle = battle && battle.alive && !battle.finished;
+
+  if (!input.startsWith('/')) {
+    const rawClean = input.replace(/^\//, '').trim();
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화'];
+    
+    if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
+      input = '/' + rawClean;
+    } else {
+      const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
+      return {
+        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화, /각인, /초기화)\n\n${currentBoard}`,
+        imageUrl: null,
+        choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES
+      };
+    }
+  }
+
+  if (input === '/') {
+    const helpText = [
+      `📜 [사용 가능한 명령어 안내]`,
+      `• /전투 - 배틀로얄 시작`,
+      `• /파밍 - 전투 중 파밍 진행`,
+      `• /도망 - 전투 중 도망 및 HP 회복`,
+      `• /강화 - 현금으로 무기 강화`,
+      `• /제련 - 현재 무기 제련 정보 확인`,
+      `• /제련강화 - 현금과 금괴로 무기 제련 시도`,
+      `• /연속강화 [횟수] - 지정 횟수만큼 자동 강화`,
+      `• /증폭 [수량] - 금괴로 전투력 증폭 강화`,
+      `• /전직 [직업명] - 전직 안내 및 직업 전직`,
+      `• /전직변경 [직업변경]`,
+      `• /각인 - 각인 대시보드 확인`,
+      `• /프로필 - 내 정보 확인`
+    ].join('\n');
+    return { text: helpText, imageUrl: null };
+  }
+
+  let cmdParts = input.split(' ');
+  let command = cmdParts[0];
+  let arg = cmdParts[1];
+
+  let result = { text: '', imageUrl: null, choices: null, category: 'normal' };
+
+  switch (command) {
+    case '/전투': {
+      if (isPlayingBattle) {
+        result.text = `이미 배틀로얄 진행 중입니다!\n\n${battleStatusBoard(profile, battle)}`;
+        result.choices = BATTLE_CHOICES;
+      } else {
+        battle = createBattle(profile);
+        state.battle = battle;
+        result.text = `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`;
+        result.choices = BATTLE_CHOICES;
+        result.category = 'start';
+      }
+      break;
+    }
+    case '/파밍': {
+      if (!isPlayingBattle) {
+        result.text = `현재 전투 중이 아닙니다. [/전투]를 입력해 배틀로얄을 시작하세요.\n\n${profileText(profile)}`;
+        result.choices = LOBBY_CHOICES;
+        break;
+      }
+
+      battle.turn += 1;
+      applyZoneAttrition(battle);
+      const buffMsgs = processBuffs(battle);
+
+      if (battle.survivors <= 1) {
+        battle.finished = true;
+        battle.result = 'victory';
+        const mult = getGoldMultiplier(profile);
+        const finalCashReward = Math.round(battle.accumulatedCash + (rand(50000, 150000) * mult));
+        profile.cash += finalCashReward;
+
+        const expGainedResult = addExp(profile, 500);
+
+        result.text = [
+          `🏆 [배틀로얄 승리!] 마지막 생존자가 되었습니다!`,
+          `━━━━━━━━━━━━━━━━━━━`,
+          `💵 획득 현금: +${won(finalCashReward)}`,
+          battle.accumulatedGold > 0 ? `🧈 획득 금괴: +${battle.accumulatedGold}개` : '',
+          battle.accumulatedKeys > 0 ? `🔑 획득 열쇠: +${battle.accumulatedKeys}개` : '',
+          `⭐ 획득 경험치: +${expGainedResult.gained.toLocaleString()}`,
+          expGainedResult.leveledUp ? `\n${expGainedResult.msg}` : '',
+          `━━━━━━━━━━━━━━━━━━━`,
+          ``,
+          profileText(profile)
+        ].filter(Boolean).join('\n');
+
+        result.choices = LOBBY_CHOICES;
+        result.category = 'victory';
+        state.battle = null;
+        break;
+      }
+
+      if (!battle.alive) {
+        result.text = `💀 [전투 패배] 사망하였습니다...\n\n${profileText(profile)}`;
+        result.choices = LOBBY_CHOICES;
+        result.category = 'dead';
+        state.battle = null;
+        break;
+      }
+
+      const farmRes = resolveFarmFight(profile, battle);
+      let textLines = [
+        `[배틀로얄 턴 ${battle.turn}/${battle.maxTurn}] 파밍 진행`,
+        farmRes.text
+      ];
+
+      if (buffMsgs.length > 0) {
+        textLines.push(buffMsgs.join('\n'));
+      }
+
+      if (!battle.alive) {
+        battle.finished = true;
+        result.text = [...textLines, `\n💀 체력이 0이 되어 사망했습니다...\n\n${profileText(profile)}`].join('\n');
+        result.choices = LOBBY_CHOICES;
+        result.category = 'dead';
+        state.battle = null;
+        break;
+      }
+
+      if (battle.turn >= battle.maxTurn) {
+        battle.finished = true;
+        battle.result = 'victory';
+        const mult = getGoldMultiplier(profile);
+        const finalCashReward = Math.round(battle.accumulatedCash + (rand(50000, 150000) * mult));
+        profile.cash += finalCashReward;
+        const expGainedResult = addExp(profile, 500);
+
+        result.text = [
+          ...textLines,
+          ``,
+          `🏆 [최종 생존 성공!] 제한 턴 도달로 생존에 성공했습니다!`,
+          `💵 최종 획득 현금: +${won(finalCashReward)}`,
+          `⭐ 획득 경험치: +${expGainedResult.gained.toLocaleString()}`,
+          expGainedResult.leveledUp ? `\n${expGainedResult.msg}` : '',
+          ``,
+          profileText(profile)
+        ].join('\n');
+
+        result.choices = LOBBY_CHOICES;
+        result.category = 'victory';
+        state.battle = null;
+        break;
+      }
+
+      result.text = [...textLines, `\n${battleStatusBoard(profile, battle)}`].join('\n');
+      result.choices = BATTLE_CHOICES;
+      break;
+    }
+    case '/도망': {
+      if (!isPlayingBattle) {
+        result.text = `현재 전투 중이 아닙니다. [/전투]를 입력해 배틀로얄을 시작하세요.\n\n${profileText(profile)}`;
+        result.choices = LOBBY_CHOICES;
+        break;
+      }
+
+      battle.turn += 1;
+      applyZoneAttrition(battle);
+      const buffMsgs = processBuffs(battle);
+
+      const escapeRes = resolveEscapeEvent(profile, battle);
+      let textLines = [
+        `[배틀로얄 턴 ${battle.turn}/${battle.maxTurn}] 안전지대로 도망 및 정비`,
+        escapeRes.text
+      ];
+
+      if (buffMsgs.length > 0) {
+        textLines.push(buffMsgs.join('\n'));
+      }
+
+      if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
+        battle.finished = true;
+        battle.result = 'victory';
+        const mult = getGoldMultiplier(profile);
+        const finalCashReward = Math.round(battle.accumulatedCash + (rand(30000, 100000) * mult));
+        profile.cash += finalCashReward;
+        const expGainedResult = addExp(profile, 400);
+
+        result.text = [
+          ...textLines,
+          ``,
+          `🏆 [생존 성공!] 무사히 도망 및 정비에 성공했습니다!`,
+          `💵 보상 현금: +${won(finalCashReward)}`,
+          expGainedResult.leveledUp ? `\n${expGainedResult.msg}` : '',
+          ``,
+          profileText(profile)
+        ].join('\n');
+
+        result.choices = LOBBY_CHOICES;
+        result.category = 'victory';
+        state.battle = null;
+        break;
+      }
+
+      result.text = [...textLines, `\n${battleStatusBoard(profile, battle)}`].join('\n');
+      result.choices = BATTLE_CHOICES;
+      break;
+    }
+    case '/강화': {
+      const enhanceRes = processenhance(profile);
+      result.text = enhanceRes.text;
+      result.imageUrl = enhanceRes.imageUrl;
+      result.choices = ENHANCE_CHOICES;
+      break;
+    }
+    case '/연속강화': {
+      const count = parseInt(arg, 10) || 10;
+      const multiRes = processMultiEnhance(profile, count);
+      result.text = multiRes.text;
+      result.imageUrl = multiRes.imageUrl;
+      result.choices = ENHANCE_CHOICES;
+      break;
+    }
+    case '/제련': {
+      const refineInfo = showRefineInfo(profile);
+      result.text = refineInfo.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/제련강화': {
+      const refineRes = processRefine(profile);
+      result.text = refineRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/증폭': {
+      const count = parseInt(arg, 10) || 1;
+      const ampRes = processAmplify(profile, count);
+      result.text = ampRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/열쇠': {
+      const keyRes = processUseKey(profile);
+      result.text = keyRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/전직': {
+      const jobRes = processJobCommand(profile, arg);
+      result.text = jobRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/전직변경': {
+      const changeRes = processJobChange(profile, arg);
+      result.text = changeRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/전직스킬': {
+      const skillRes = processUpgradeJobSkill(profile);
+      result.text = skillRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/각인': {
+      const imprintRes = processImprintCommand(profile);
+      result.text = imprintRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/각인해금': {
+      const unlockRes = processImprintUnlock(profile, arg);
+      result.text = unlockRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/각인잠금': {
+      const lockRes = processImprintLock(profile, arg);
+      result.text = lockRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/각인해제': {
+      const unlockSlotRes = processImprintUnlockSlot(profile, arg);
+      result.text = unlockSlotRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/각인변경': {
+      const rerollRes = processImprintReroll(profile);
+      result.text = rerollRes.text;
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/프로필': {
+      result.text = profileText(profile);
+      result.choices = LOBBY_CHOICES;
+      break;
+    }
+    default: {
+      result.text = `⚠️ 알 수 없는 명령어입니다. (입력: ${input})\n사용 가능한 명령어는 '/'를 입력하여 확인하세요.`;
+      result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
+      break;
+    }
+  }
+
+  return result;
+}
 module.exports = {
-  createProfile,
-  profileText,
-  resourceText,
-  createBattle,
-  processBuffs,
-  battleStatusBoard,
-  resolveFarmFight,
-  resolveEscapeEvent,
-  applyZoneAttrition,
-  processenhance,
-  processMultiEnhance,
-  showRefineInfo,
-  processRefine,
-  processAmplify,
-  processUseKey,
-  processJobCommand,
-  processJobChange,
-  processUpgradeJobSkill,
-  processImprintCommand,
-  processImprintUnlock,
-  processImprintLock,
-  processImprintUnlockSlot,
-  processImprintReroll
+  startGame,
+  processTurn
 };
