@@ -696,7 +696,6 @@ function calculateCombatDamage(profile, battle, rawDamage) {
   let helmetReduce = (battle.helmetLevel > 0 && battle.helmetDurability > 0) ? (battle.helmetLevel * 3) : 0;
   let vestReduce = (battle.vestLevel > 0 && battle.vestDurability > 0) ? (battle.vestLevel * 3) : 0;
   
-  // 피해량 감소 각인 수치 직접 차감 적용 (예: 수치가 5이면 원 데미지에서 5를 뺀 값 적용)
   const imprintDamageReduce = getImprintTotalBonus(profile, 'damageReduce');
   const totalReduce = helmetReduce + vestReduce + imprintDamageReduce;
   const finalDamage = Math.max(1, rawDamage - totalReduce);
@@ -1830,3 +1829,32 @@ function processImprintReroll(profile) {
 
   return { text: resultLines.join('\n') };
 }
+
+// ─────────────────────────────────────────
+// 모듈 내보내기 (다른 파일에서 불러올 수 있도록 설정)
+// ─────────────────────────────────────────
+module.exports = {
+  createProfile,
+  profileText,
+  resourceText,
+  createBattle,
+  processBuffs,
+  battleStatusBoard,
+  resolveFarmFight,
+  resolveEscapeEvent,
+  applyZoneAttrition,
+  processenhance,
+  processMultiEnhance,
+  showRefineInfo,
+  processRefine,
+  processAmplify,
+  processUseKey,
+  processJobCommand,
+  processJobChange,
+  processUpgradeJobSkill,
+  processImprintCommand,
+  processImprintUnlock,
+  processImprintLock,
+  processImprintUnlockSlot,
+  processImprintReroll
+};
