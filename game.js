@@ -1960,8 +1960,11 @@ function processTurn(state, utterance) {
       if (!battle.alive) {
         battle.finished = true;
         
-        // [수정사항 4 반영] 누적된 현금 중복 가산 버그 수정 (이미 battle.accumulatedCash 등에 합산되어 있으므로 중복 플러스 연산 제거)
-        const totalCashGained = battle.accumulatedCash;
+        // [수정사항 1 반영] 이번 게임에서 얻은 누적 현금의 70%만 반영 (기존에 더해졌던 100%를 빼고 70%만 재가산)
+        const totalCashGained = Math.round(battle.accumulatedCash * 0.7);
+        profile.cash -= battle.accumulatedCash; // 이미 더해진 전체 현금 원복
+        profile.cash += totalCashGained;         // 70%만 적용
+
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
 
