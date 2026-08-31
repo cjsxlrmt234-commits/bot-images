@@ -1842,7 +1842,7 @@ function processImprintReroll(profile) {
 
   resultLines.push(``);
   resultLines.push(resourceText(profile));
-  return { text: resultLines.join('\n') };
+  return { text: resultLines.join('\n' ) };
 }
 
 function startGame(existingProfile) {
@@ -1960,10 +1960,9 @@ function processTurn(state, utterance) {
       if (!battle.alive) {
         battle.finished = true;
         
-        // [수정사항 1 반영] 이번 게임에서 얻은 누적 현금의 70%만 반영 (기존에 더해졌던 100%를 빼고 70%만 재가산)
         const totalCashGained = Math.round(battle.accumulatedCash * 0.7);
-        profile.cash -= battle.accumulatedCash; // 이미 더해진 전체 현금 원복
-        profile.cash += totalCashGained;         // 70%만 적용
+        profile.cash -= battle.accumulatedCash; 
+        profile.cash += totalCashGained;         
 
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
@@ -1992,11 +1991,16 @@ function processTurn(state, utterance) {
       if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
         battle.finished = true;
         battle.result = 'victory';
+        
+        // [수정사항 반영] 이미 파밍턴마다 `profile.cash`에 더해졌던 `battle.accumulatedCash` 중복분을 제거하고,
+        // 우승 보너스 현금만 정확히 누적되도록 수정
+        profile.cash -= battle.accumulatedCash; 
+        
         const mult = getGoldMultiplier(profile);
         const victoryBonusCash = Math.round(rand(50000, 150000) * mult);
         
-        profile.cash += victoryBonusCash;
-        battle.accumulatedCash += victoryBonusCash;
+        const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
+        profile.cash += finalTotalCash;
 
         const expGainedResult = addExp(profile, 500);
 
@@ -2004,8 +2008,8 @@ function processTurn(state, utterance) {
           ...textLines,
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==`,
-          `💵 추가 현금: ${won(rand(500, 2000))} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 +${won(battle.accumulatedCash)}`,
+          `💵 추가 현금: ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `💵 현금 +${won(finalTotalCash)}`,
           `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
           battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : `🧈 금괴 +2개`,
           battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : `🔑 비밀열쇠 +1개`,
@@ -2044,11 +2048,15 @@ function processTurn(state, utterance) {
       if (battle.turn >= battle.maxTurn || battle.survivors <= 1) {
         battle.finished = true;
         battle.result = 'victory';
+        
+        // [수정사항 반영] 도망 시 우승 처리에도 동일하게 누적 현금 중복 합산 방지 적용
+        profile.cash -= battle.accumulatedCash;
+
         const mult = getGoldMultiplier(profile);
         const victoryBonusCash = Math.round(rand(30000, 100000) * mult);
         
-        profile.cash += victoryBonusCash;
-        battle.accumulatedCash += victoryBonusCash;
+        const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
+        profile.cash += finalTotalCash;
 
         const expGainedResult = addExp(profile, 400);
 
@@ -2056,8 +2064,8 @@ function processTurn(state, utterance) {
           ...textLines,
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==`,
-          `💵 추가 현금: ${won(rand(500, 2000))} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 +${won(battle.accumulatedCash)}`,
+          `💵 추가 현금: ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `💵 현금 +${won(finalTotalCash)}`,
           `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
           battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : `🧈 금괴 +2개`,
           battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : `🔑 비밀열쇠 +1개`,
@@ -2154,7 +2162,7 @@ function processTurn(state, utterance) {
     case '/각인해제': {
       const unlockSlotRes = processImprintUnlockSlot(profile, arg);
       result.text = unlockSlotRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = LOBOS_CHOICES = LOBBY_CHOICES;
       break;
     }
     case '/각인변경': {
