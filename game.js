@@ -322,7 +322,7 @@ function getImprintTotalBonus(profile, keyName) {
 
 function getGoldMultiplier(profile) {
   const currentEnhance = getCurrentEnhanceLevel(profile);
-  const baseMult = Number((2.00 + (currentEnhance * 0.05)).toFixed(2));
+  const baseMult = profile && profile.job ? Number((2.00 + (currentEnhance * 0.05)).toFixed(2)) : Number((1.00 + (currentEnhance * 0.05)).toFixed(2));
   const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
   const refineBonus = ((profile && profile.refine) || 0) * 0.10; 
   const imprintCashBoost = getImprintTotalBonus(profile, 'cashBoost') / 100;
@@ -331,7 +331,7 @@ function getGoldMultiplier(profile) {
 
 function getExpMultiplier(profile) {
   const currentEnhance = getCurrentEnhanceLevel(profile);
-  const base = 2.00 + (currentEnhance * 0.05);
+  const base = profile && profile.job ? (2.00 + (currentEnhance * 0.05)) : (1.00 + (currentEnhance * 0.05));
   const imprintExpBoost = getImprintTotalBonus(profile, 'expBoost') / 100;
   return base + imprintExpBoost;
 }
@@ -360,7 +360,7 @@ function getCurrentWeaponName(profile) {
   if (!profile) return '무기';
   const enhanceLvl = getCurrentEnhanceLevel(profile);
   const [wName] = getWeaponInfo(enhanceLvl, profile.job);
-  return `무기 ${wName}`;
+  return `🎯 무기 : +${enhanceLvl} ${wName}`;
 }
 
 function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
@@ -375,7 +375,7 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
     baseBody = Math.max(0, 40.00 - (lvl * 0.50));
     baseLeg = Math.max(0, 40.00 - (lvl * 0.50));
   } else {
-    baseMult = (1 + (lvl * 0.05)).toFixed(2);
+    baseMult = (1.00 + (lvl * 0.05)).toFixed(2);
     baseHead = lvl * 1.00;
     baseBody = Math.max(0, 50.00 - (lvl * 0.50));
     baseLeg = Math.max(0, 50.00 - (lvl * 0.50));
@@ -530,14 +530,13 @@ function profileText(profile) {
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
   const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
-  // [수정사항 3 반영] 플레이 판수 없앰, 프로필 대시보드 위에 한 칸 띄움, 강화 무기 명칭 변경
   return [
     ``,
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
     `칭호 : ${p.title}`,
     `🎖️ 직업 : ${jobDisplay}`,
-    `무기 : +${currentEnhance} ${wName}`,
+    `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
@@ -574,7 +573,6 @@ function createBattle(profile) {
     profile.gamesPlayed = (profile.gamesPlayed || 0) + 1;
   }
 
-  // [수정사항 2 반영] 13~15턴 사이로 무작위 배정
   const randomizedMaxTurn = rand(13, 15);
 
   return {
@@ -630,7 +628,7 @@ function battleStatusBoard(profile, battle) {
   if (!b.buffs) b.buffs = [];
 
   const currentEnhance = getCurrentEnhanceLevel(p);
-  const wName = getCurrentWeaponName(p);
+  const wName = getWeaponInfo(currentEnhance, p.job)[0];
   const reqExp = getRequiredExp(p.level);
   const refineStar = REFINE_STARS[p.refine] || '';
   
@@ -654,7 +652,7 @@ function battleStatusBoard(profile, battle) {
 
   boardLines.push(
     ``,
-    `🎯 무기 : +${currentEnhance} ${wName.replace('무기 ', '')}`,
+    `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💵 현금 : ${won(p.cash)}`,
@@ -1961,23 +1959,23 @@ function processTurn(state, utterance) {
 
       if (!battle.alive) {
         battle.finished = true;
-        const adjustedCash = Math.round(battle.accumulatedCash * 0.7);
-        profile.cash += adjustedCash;
-        profile.gold += (battle.accumulatedGold || 0);
-        profile.keys += (battle.accumulatedKeys || 0);
+        
+        // [수정사항 4 반영] 누적된 현금 중복 가산 버그 수정 (이미 battle.accumulatedCash 등에 합산되어 있으므로 중복 플러스 연산 제거)
+        const totalCashGained = battle.accumulatedCash;
+        const totalGoldGained = battle.accumulatedGold || 0;
+        const totalKeysGained = battle.accumulatedKeys || 0;
 
         const expGainedResult = addExp(profile, 300);
 
         result.text = [
           ...textLines,
           ``,
-          `💀 체력이 0이 되어 사망했습니다...`,
           ``,
           `== [사망] 탈락 (${battle.turn}턴) ==`,
-          `💵 현금 +${won(adjustedCash)}`,
+          `💵 현금 +${won(totalCashGained)}`,
           `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
-          battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : ``,
-          battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : ``,
+          totalGoldGained > 0 ? `🧈 금괴 +${totalGoldGained}개` : ``,
+          totalKeysGained > 0 ? `🔑 비밀열쇠 +${totalKeysGained}개` : ``,
           ``,
           profileText(profile)
         ].filter(Boolean).join('\n');
@@ -1992,8 +1990,11 @@ function processTurn(state, utterance) {
         battle.finished = true;
         battle.result = 'victory';
         const mult = getGoldMultiplier(profile);
-        const finalCashReward = Math.round(battle.accumulatedCash + (rand(50000, 150000) * mult));
-        profile.cash += finalCashReward;
+        const victoryBonusCash = Math.round(rand(50000, 150000) * mult);
+        
+        profile.cash += victoryBonusCash;
+        battle.accumulatedCash += victoryBonusCash;
+
         const expGainedResult = addExp(profile, 500);
 
         result.text = [
@@ -2001,7 +2002,7 @@ function processTurn(state, utterance) {
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==`,
           `💵 추가 현금: ${won(rand(500, 2000))} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 +${won(finalCashReward)}`,
+          `💵 현금 +${won(battle.accumulatedCash)}`,
           `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
           battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : `🧈 금괴 +2개`,
           battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : `🔑 비밀열쇠 +1개`,
@@ -2041,8 +2042,11 @@ function processTurn(state, utterance) {
         battle.finished = true;
         battle.result = 'victory';
         const mult = getGoldMultiplier(profile);
-        const finalCashReward = Math.round(battle.accumulatedCash + (rand(30000, 100000) * mult));
-        profile.cash += finalCashReward;
+        const victoryBonusCash = Math.round(rand(30000, 100000) * mult);
+        
+        profile.cash += victoryBonusCash;
+        battle.accumulatedCash += victoryBonusCash;
+
         const expGainedResult = addExp(profile, 400);
 
         result.text = [
@@ -2050,7 +2054,7 @@ function processTurn(state, utterance) {
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴) ==`,
           `💵 추가 현금: ${won(rand(500, 2000))} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 +${won(finalCashReward)}`,
+          `💵 현금 +${won(battle.accumulatedCash)}`,
           `⭐ EXP +${expGainedResult.gained.toLocaleString()}`,
           battle.accumulatedGold > 0 ? `🧈 금괴 +${battle.accumulatedGold}개` : `🧈 금괴 +2개`,
           battle.accumulatedKeys > 0 ? `🔑 비밀열쇠 +${battle.accumulatedKeys}개` : `🔑 비밀열쇠 +1개`,
