@@ -203,7 +203,7 @@ const ENHANCE_CHOICES = [
   { label: '전투', action: '/전투' }
 ];
 
-// 각인 옵션 풀 정의 (각인 하나당 1개의 옵션으로 수정)
+// 각인 옵션 풀 정의 (피해량 감소 수치를 1, 2, 3, 4, 5로 변경)
 const IMPRINT_OPTION_POOL = [
   { name: '헤드샷 데미지 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headDmg' },
   { name: '현금 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'cashBoost' },
@@ -361,7 +361,6 @@ function getCurrentWeaponName(profile) {
   if (!profile) return '무기';
   const enhanceLvl = getCurrentEnhanceLevel(profile);
   const [wName] = getWeaponInfo(enhanceLvl, profile.job);
-  // 수정사항 1: 전직 후 무기에 '전직무기'라는 말 제거 및 일원화
   return `${wName}`;
 }
 
@@ -556,7 +555,6 @@ function profileText(profile) {
     `칭호 : ${p.title}`,
     `🎖️ 직업 : ${jobDisplay}`,
     `🎮 플레이 판수 : ${(p.gamesPlayed || 0).toLocaleString()}판`,
-    // 수정사항 2: 프로필 대시보드에 강화 : 이걸 무기 : 로 변경
     `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
@@ -698,6 +696,7 @@ function calculateCombatDamage(profile, battle, rawDamage) {
   let helmetReduce = (battle.helmetLevel > 0 && battle.helmetDurability > 0) ? (battle.helmetLevel * 3) : 0;
   let vestReduce = (battle.vestLevel > 0 && battle.vestDurability > 0) ? (battle.vestLevel * 3) : 0;
   
+  // 피해량 감소 각인 수치 직접 차감 적용 (예: 수치가 5이면 원 데미지에서 5를 뺀 값 적용)
   const imprintDamageReduce = getImprintTotalBonus(profile, 'damageReduce');
   const totalReduce = helmetReduce + vestReduce + imprintDamageReduce;
   const finalDamage = Math.max(1, rawDamage - totalReduce);
@@ -1592,9 +1591,6 @@ function processUpgradeJobSkill(profile) {
   };
 }
 
-// ==========================================
-// 각인 시스템 관련 함수 수정 (수정사항 3, 4, 5, 6, 7 반영)
-// ==========================================
 function processImprintCommand(profile) {
   if (!profile.imprints) profile.imprints = {};
   if (!profile.imprintLocks) profile.imprintLocks = { I: false, II: false, III: false, IV: false, V: false };
@@ -1607,7 +1603,6 @@ function processImprintCommand(profile) {
     { key: 'V', name: '각인 V' }
   ];
 
-  // 수정사항 5: 지정된 출력 형식 반영
   let lines = [`🔮 [각인 시스템]\n`];
 
   imprintTiers.forEach((tier) => {
@@ -1678,7 +1673,6 @@ function processImprintUnlock(profile, tierArg) {
     consumeGold = 1000;
     unlockSuccess = true;
   } else if (tierKey === 'IV') {
-    // 수정사항 3: 이미 전직을 했다는 건 +20 싱귤래리티를 이미 달성했다는 뜻이므로 전직 여부(profile.job)가 있거나 강화가 20 이상이면 해금 가능
     const hasAchievedSingularity = (profile.enhance || 0) >= 20 || Boolean(profile.job);
     if (!hasAchievedSingularity) {
       return { text: `⚠️ 해금 조건 미달성! (+20 싱귤래리티 달성 필요)` };
@@ -1694,7 +1688,6 @@ function processImprintUnlock(profile, tierArg) {
   if (unlockSuccess) {
     if (consumeGold > 0) profile.gold -= consumeGold;
 
-    // 수정사항 4: 각인 하나당 1개의 옵션으로 나오게 설정
     const pool = IMPRINT_OPTION_POOL;
     const optTemplate = pool[rand(0, pool.length - 1)];
     const val = pickWeightedValue(optTemplate.values, optTemplate.weights);
@@ -1805,7 +1798,6 @@ function processImprintReroll(profile) {
     }
   });
 
-  // 수정사항 7: 요청하신 각인 변경 완료 출력 멘트 양식 그대로 반영
   let imprintLines = [];
   const imprintNames = { I: '각인 I', II: '각인 II', III: '각인 III', IV: '각인 IV', V: '각인 V' };
   
