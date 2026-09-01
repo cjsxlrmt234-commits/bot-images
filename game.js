@@ -177,20 +177,40 @@ const AMPLIFY_TABLE = [
   { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, headWeight: 1.00, successBonus: 5.0 }
 ];
 
-const FARM_TABLE = [
-  ['supply', 0.5],
-  ['gold', 1.5],
-  ['key', 2.0],
-  ['jackpot', 6.0],
-  ['damage', 45.0],
-  ['kill_single', 30.0],
-  ['kill_multi', 15.0]
-];
+const FARM_TABLE = {
+  solo: [
+    ['supply', 0.5],
+    ['gold', 1.5],
+    ['key', 2.0],
+    ['jackpot', 6.0],
+    ['damage', 45.0],
+    ['kill_single', 40.0],
+    ['kill_multi', 5.0]
+  ],
+  duo: [
+    ['supply', 0.75],
+    ['gold', 2],
+    ['key', 2.25],
+    ['jackpot', 6.0],
+    ['damage', 45.0],
+    ['kill_single', 22.0],
+    ['kill_multi', 22.0]
+  ],
+  squad: [
+    ['supply', 1.0],
+    ['gold', 3],
+    ['key', 5.0],
+    ['jackpot', 6.0],
+    ['damage', 45.0],
+    ['kill_single', 10.0],
+    ['kill_multi', 30.0]
+  ]
+};
 
 const ESCAPE_TABLE = [
-  ['instant_heal', 50.0],
-  ['drink', 30.0],
-  ['painkiller', 20.0]
+  ['instant_heal', 60.0],
+  ['drink', 25.0],
+  ['painkiller', 15.0]
 ];
 
 const BATTLE_CHOICES = [
@@ -590,6 +610,7 @@ function createBattle(profile) {
     result: null,
     buffs: [], 
     mode: mode,
+    escapeCount: 0,
     helmetLevel: 0, 
     helmetDurability: 0, 
     vestLevel: 0,    
@@ -739,7 +760,8 @@ function resolveFarmFight(profile, battle) {
   const mult = getGoldMultiplier(profile);
   const ampInfo = getAmplifyInfo(combatLv);
 
-  let outcome = pickWeighted(FARM_TABLE);
+  const currentFarmTable = FARM_TABLE[battle.mode.toLowerCase()] || FARM_TABLE.solo;
+  let outcome = pickWeighted(currentFarmTable);
 
   if (outcome === 'supply') {
     const combatPower = getCombatPower(profile);
@@ -1128,9 +1150,6 @@ function processenhance(profile) {
   };
 }
 
-// ----------------------------------------------------
-// [수정] 확정 강화 기댓값 계산 및 처리 함수 (전직 무기 확정 강화 차단 적용)
-// ----------------------------------------------------
 function calculateExpectedCost(targetLevel, isJob, profile) {
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
@@ -1231,7 +1250,6 @@ function processGuaranteedEnhance(profile, targetLevel) {
     status: 'success'
   };
 }
-// ----------------------------------------------------
 
 function processMultiEnhance(profile, count) {
   const isJob = Boolean(profile.job);
@@ -1518,9 +1536,6 @@ function processAmplify(profile, targetLevels = 1) {
   };
 }
 
-// ----------------------------------------------------
-// [수정] 비밀열쇠 수량 지정 및 연속 사용 처리 함수
-// ----------------------------------------------------
 function processUseKey(profile, countArg) {
   if (!profile.keys || profile.keys <= 0) {
     return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
@@ -1531,7 +1546,6 @@ function processUseKey(profile, countArg) {
     count = 1;
   }
 
-  // 본인 보유 열쇠 개수까지만 사용 가능하도록 제한
   count = Math.min(count, profile.keys);
 
   profile.keys -= count;
@@ -2082,7 +2096,7 @@ function processTurn(state, utterance) {
       `📜 [사용 가능한 명령어 안내]`,
       `• /전투 - 배틀로얄 시작`,
       `• /파밍 - 전투 중 파밍 진행`,
-      `• /도망 - 전투 중 도망 및 HP 회복`,
+      `• /도망 - 전투 중 도망 및 HP 회복 (최대 2회)`,
       `• /강화 - 현금으로 무기 강화`,
       `• /확정강화 [목표수치] - 조건 달성 시 기댓값x2.5배로 즉시 강화 (일반 무기 전용)`,
       `• /제련 - 현재 무기 제련 정보 확인`,
@@ -2139,7 +2153,7 @@ function processTurn(state, utterance) {
       if (!battle.alive) {
         battle.finished = true;
         
-        const totalCashGained = Math.round(battle.accumulatedCash * 0.7);
+        const totalCashGained = battle.accumulatedCash;
         profile.cash += totalCashGained; 
 
         const totalGoldGained = battle.accumulatedGold || 0;
@@ -2172,12 +2186,15 @@ function processTurn(state, utterance) {
         battle.result = 'victory';
         
         const combatPower = getCombatPower(profile);
-        const victoryBonusCash = rand(combatPower * 1, combatPower * 10);
+        const baseVictoryBonus = rand(combatPower * 1, combatPower * 10);
+        const victoryBonusCash = Math.round(baseVictoryBonus * 1.3);
         
-        const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
+        const baseTotalCash = battle.accumulatedCash + victoryBonusCash;
+        const finalTotalCash = Math.round(baseTotalCash * 1.3);
         profile.cash += finalTotalCash;
 
-        const expGainedResult = addExp(profile, rand(100, 500));
+        const baseExpGained = rand(100, 500);
+        const expGainedResult = addExp(profile, Math.round(baseExpGained * 1.3));
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
 
@@ -2185,9 +2202,9 @@ function processTurn(state, utterance) {
           ...textLines,
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴 / 생존 ${battle.survivors}명) ==`,
-          `💵 추가 현금: ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 총 보상 +${won(finalTotalCash)}`,
-          `⭐ EXP +${expGainedResult.gained.toLocaleString()}`
+          `💵 추가 현금 (30% 추가): ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `💵 현금 총 보상 (30% 추가 반영): +${won(finalTotalCash)}`,
+          `⭐ EXP (30% 추가 반영): +${expGainedResult.gained.toLocaleString()}`
         ];
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
@@ -2212,12 +2229,19 @@ function processTurn(state, utterance) {
         break;
       }
 
+      if (battle.escapeCount >= 2) {
+        result.text = `⚠️ /도망 커맨드는 게임당 최대 2회까지만 사용할 수 있습니다!\n\n${battleStatusBoard(profile, battle)}`;
+        result.choices = BATTLE_CHOICES;
+        break;
+      }
+
+      battle.escapeCount += 1;
       battle.turn += 1;
       applyZoneAttrition(battle);
       const buffMsgs = processBuffs(battle);
 
       const escapeRes = resolveEscapeEvent(profile, battle);
-      let textLines = [ escapeRes.text ];
+      let textLines = [ `${escapeRes.text} (도망 사용 횟수: ${battle.escapeCount}/2)` ];
 
       if (buffMsgs.length > 0) {
         textLines.push(buffMsgs.join('\n'));
@@ -2228,12 +2252,15 @@ function processTurn(state, utterance) {
         battle.result = 'victory';
         
         const combatPower = getCombatPower(profile);
-        const victoryBonusCash = rand(combatPower * 1, combatPower * 10);
+        const baseVictoryBonus = rand(combatPower * 1, combatPower * 10);
+        const victoryBonusCash = Math.round(baseVictoryBonus * 1.3);
         
-        const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
+        const baseTotalCash = battle.accumulatedCash + victoryBonusCash;
+        const finalTotalCash = Math.round(baseTotalCash * 1.3);
         profile.cash += finalTotalCash;
 
-        const expGainedResult = addExp(profile, rand(100, 500));
+        const baseExpGained = rand(100, 500);
+        const expGainedResult = addExp(profile, Math.round(baseExpGained * 1.3));
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
 
@@ -2241,9 +2268,9 @@ function processTurn(state, utterance) {
           ...textLines,
           ``,
           `== 🏆 [우승] 치킨 획득! (${battle.turn}턴 / 생존 ${battle.survivors}명) ==`,
-          `💵 추가 현금: ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
-          `💵 현금 총 보상 +${won(finalTotalCash)}`,
-          `⭐ EXP +${expGainedResult.gained.toLocaleString()}`
+          `💵 추가 현금 (30% 추가): ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `💵 현금 총 보상 (30% 추가 반영): +${won(finalTotalCash)}`,
+          `⭐ EXP (30% 추가 반영): +${expGainedResult.gained.toLocaleString()}`
         ];
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
@@ -2380,3 +2407,4 @@ module.exports = {
   processTurn,
   createProfile
 };
+```[cite: 1]
