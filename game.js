@@ -235,10 +235,10 @@ const IMPRINT_OPTION_POOL = [
   { name: '헤드샷 확률 가중치 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headWeight' },
   { name: '강화 성공 확률 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'enhanceSuccess' },
   { name: '강화 비용 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'enhanceCostDown' },
-  { name: '금괴 획득 확률 증가', values: [0.002, 0.004, 0.006, 0.008, 0.01], weights: [30, 30, 20, 10, 10], unit: '%', key: 'goldChance' },
-  { name: '다중 적 만날 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'multiMeet' },
+  { name: '추가 금괴 획득 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'goldChance' },
+  { name: '듀오, 스쿼드 매칭 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'multiMeet' },
   { name: '경험치 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'expBoost' },
-  { name: '비밀열쇠 획득 확률 증가', values: [0.002, 0.004, 0.006, 0.008, 0.01], weights: [30, 30, 20, 10, 10], unit: '%', key: 'keyChance' },
+  { name: '추가 비밀열쇠 획득 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'keyChance' },
   { name: '피해량 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'damageReduce' },
   { name: '전투력 증가', values: [1, 1.5, 2, 2.5, 3], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
 ];
@@ -618,6 +618,7 @@ function createBattle(profile) {
     accumulatedCash: 0,
     accumulatedGold: 0,  
     accumulatedKeys: 0,  
+    accumulatedMonthItems: 0,
     accumulatedExp: 0,   
     startSnapshot: { cash: profile?.cash || 0, gold: profile?.gold || 0, keys: profile?.keys || 0, monthItems: profile?.monthItems || 0 },
   };
@@ -732,23 +733,23 @@ function calculateCombatDamage(profile, battle, rawDamage) {
 
 function triggerShadowLoot(profile, battle) {
   const randVal = Math.random() * 100;
-  const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
 
   if (randVal < 50) {
     const combatPower = getCombatPower(profile);
     const lootCash = combatPower * 100;
     battle.accumulatedCash += lootCash;
     return `💵 현금 +${won(lootCash)}`;
-  } else if (randVal < (80 - keyChanceBonus)) {
+  } else if (randVal < 80) {
     const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
     const goldAmt = rand(ampInfo.minGold, ampInfo.maxGold);
     profile.gold += goldAmt;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldAmt;
     return `🧈 금괴 +${goldAmt}개`;
   } else {
-    profile.keys += 1;
-    battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
-    return `🔑 비밀열쇠 +1개`;
+    let keyAdd = 1;
+    profile.keys += keyAdd;
+    battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyAdd;
+    return `🔑 비밀열쇠 +${keyAdd}개`;
   }
 }
 
@@ -769,17 +770,36 @@ function resolveFarmFight(profile, battle) {
     
     const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
     profile.gold += goldBonus;
-    profile.keys += 1;
     
+    let keyBonus = 1;
+    const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
+    if (Math.random() < keyChanceBonus) {
+      keyBonus += 1;
+    }
+    profile.keys += keyBonus;
+    
+    let monthItemBonus = 0;
+    if (Math.random() < 0.005) {
+      monthItemBonus = 1;
+      profile.monthItems = (profile.monthItems || 0) + 1;
+      battle.accumulatedMonthItems = (battle.accumulatedMonthItems || 0) + 1;
+    }
+
     battle.accumulatedCash += earnedCash;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldBonus;
-    battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
+    battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyBonus;
 
     battle.helmetLevel = 3;
     battle.helmetDurability = 100;
     battle.vestLevel = 3;
     battle.vestDurability = 100;
-    resultMessages.push(`[황금 보급품 획득!]🎁 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus.toLocaleString()}개, 열쇠 1개)`);
+    
+    let supplyMsg = `[황금 보급품 획득!]📦 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus.toLocaleString()}개, 열쇠 ${keyBonus}개`;
+    if (monthItemBonus > 0) {
+      supplyMsg += `, 보급 1개`;
+    }
+    supplyMsg += `)`;
+    resultMessages.push(supplyMsg);
   } else {
     if (battle.turn >= 2 && Math.random() < 0.20) {
       if (battle.helmetLevel === 0) {
@@ -823,9 +843,14 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'key': {
-      profile.keys += 1;
-      battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
-      mainText = `비밀열쇠 1개 획득!`;
+      let keyAdd = 1;
+      const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
+      if (Math.random() < keyChanceBonus) {
+        keyAdd += 1;
+      }
+      profile.keys += keyAdd;
+      battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyAdd;
+      mainText = `비밀열쇠 ${keyAdd}개 획득!`;
       break;
     }
     case 'jackpot': {
@@ -1552,7 +1577,6 @@ function processUseKey(profile, countArg) {
 
   let totalCash = 0;
   let totalGold = 0;
-  let totalMonthItems = 0;
 
   for (let i = 0; i < count; i++) {
     const randRoll = Math.random() * 100;
@@ -1561,15 +1585,11 @@ function processUseKey(profile, countArg) {
       const cashAmt = combatPower * 10;
       totalCash += cashAmt;
       profile.cash += cashAmt;
-    } else if (randRoll < 99) { 
+    } else { 
       const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
       const goldBar = rand(ampInfo.minGold, ampInfo.maxGold);
       totalGold += goldBar;
       profile.gold += goldBar;
-    } else { 
-      if (!profile.monthItems) profile.monthItems = 0;
-      profile.monthItems += 1;
-      totalMonthItems += 1;
     }
   }
 
@@ -1579,9 +1599,6 @@ function processUseKey(profile, countArg) {
   }
   if (totalGold > 0) {
     rewardLines.push(`🧈 금괴 +${totalGold.toLocaleString()}개`);
-  }
-  if (totalMonthItems > 0) {
-    rewardLines.push(`✨ [대박] 이달의 아이템 뽑기권 +${totalMonthItems}개 획득!`);
   }
 
   rewardLines.push(``, resourceText(profile));
@@ -1778,7 +1795,7 @@ function processImprintCommand(profile) {
       lines.push(`🔓* ${tier.name} * : ${opt.name} +${opt.value}${opt.unit}`);
     } else {
       if (tier.key === 'I') {
-        lines.push(`🔓* ${tier.name} * : 금괴 획득 확률 증가 +0.01%`);
+        lines.push(`🔒 * ${tier.name} * : 해금 조건 : Lv.20 달성`);
       } else if (tier.key === 'II') {
         lines.push(`🔒 * ${tier.name} * : 해금 조건 : 금괴 500개`);
       } else if (tier.key === 'III') {
@@ -1800,7 +1817,7 @@ function processImprintCommand(profile) {
   lines.push(`• /각인해금 [1~5] - 조건 만족 시 해당 슬롯 해금`);
   lines.push(`• /각인잠금 [1~5] - 해당 슬롯 옵션 잠금`);
   lines.push(`• /각인해제 [1~5] - 잠긴 슬롯 해제`);
-  lines.push(`• /각인변경 - 각인 변경 (잠긴 개수당 비용 2배)`);
+  lines.push(`• /각인변경 - 각인 변경 (잠긴 슬롯당 비용 2배)`);
 
   return { text: lines.join('\n') };
 }
@@ -1814,17 +1831,21 @@ function processImprintUnlock(profile, tierArg) {
 
   const validKeys = ['I', 'II', 'III', 'IV', 'V'];
   if (!validKeys.includes(tierKey)) {
-    return { text: `⚠️ 올바른 각인 단계를 입력해 주세요. (예: /각인해금 1, /각인해금 2, /각인해금 4)` };
+    return { text: `⚠️ 올바른 각인 슬롯을 입력해 주세요. (예: /각인해금 1)` };
   }
 
   if (profile.imprints[tierKey]) {
-    return { text: `⚠️ 이미 해금된 각인 단계입니다 (${tierKey})` };
+    return { text: `⚠️ 이미 해금된 각인 슬롯입니다. (${tierKey})` };
   }
 
   let unlockSuccess = false;
   let consumeGold = 0;
 
   if (tierKey === 'I') {
+    const currentLevel = profile.level || 1;
+    if (currentLevel < 20) {
+      return { text: `⚠️ 해금 조건 미달성! (Lv.20 달성 필요)` };
+    }
     unlockSuccess = true;
   } else if (tierKey === 'II') {
     if ((profile.gold || 0) < 500) {
@@ -1872,7 +1893,7 @@ function processImprintUnlock(profile, tierArg) {
     return {
       text: [
         `🎉 [각인 ${tierKey} 해금 및 옵션 장착 성공!]`,
-        `랜덤 옵션이 부여되었습니다:`,
+        `랜덤 각인이 부여되었습니다:`,
         optText,
         ``,
         resourceText(profile)
@@ -1891,7 +1912,7 @@ function processImprintLock(profile, slotNumStr) {
   const key = mapNumToKey[slotNumStr];
 
   if (!key) {
-    return { text: `⚠️ 올바른 슬롯 번호를 입력해 주세요. (1~5 입력, 예: /각인잠금 1)` };
+    return { text: `⚠️ 올바른 각인 슬롯을 입력해 주세요. (1~5 입력, 예: /각인잠금 1)` };
   }
 
   if (!profile.imprints[key]) {
@@ -1993,14 +2014,17 @@ function processImprintReroll(profile) {
       
       if (isLocked) {
         let condText = '해금됨';
-        if (k === 'IV') condText = '+20 싱귤래리티 달성';
+        if (k === 'I') condText = 'Lv.20 달성';
+        else if (k === 'IV') condText = '+20 싱귤래리티 달성';
         else if (k === 'V') condText = `+20 ${jobWeaponName} 달성`;
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : ${condText}`);
       } else {
         resultLines.push(`${mark}* ${imprintNames[k]} * : ${opt.name} +${opt.value}${opt.unit}`);
       }
     } else {
-      if (k === 'IV') {
+      if (k === 'I') {
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : Lv.20 달성`);
+      } else if (k === 'IV') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 싱귤래리티 달성`);
       } else if (k === 'V') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 ${jobWeaponName} 달성`);
@@ -2158,6 +2182,7 @@ function processTurn(state, utterance) {
 
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
+        const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
         const expGainedResult = addExp(profile, 300);
 
@@ -2172,6 +2197,7 @@ function processTurn(state, utterance) {
 
         if (totalGoldGained > 0) deathLines.push(`🧈 금괴 +${totalGoldGained}개`);
         if (totalKeysGained > 0) deathLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
+        if (totalMonthItemsGained > 0) deathLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         deathLines.push(``, profileText(profile));
 
         result.text = deathLines.filter(Boolean).join('\n');
@@ -2197,6 +2223,7 @@ function processTurn(state, utterance) {
         const expGainedResult = addExp(profile, Math.round(baseExpGained * 1.3));
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
+        const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
         let victoryLines = [
           ...textLines,
@@ -2209,6 +2236,7 @@ function processTurn(state, utterance) {
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
         if (totalKeysGained > 0) victoryLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
+        if (totalMonthItemsGained > 0) victoryLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         victoryLines.push(``, profileText(profile));
 
         result.text = victoryLines.filter(Boolean).join('\n');
@@ -2263,6 +2291,7 @@ function processTurn(state, utterance) {
         const expGainedResult = addExp(profile, Math.round(baseExpGained * 1.3));
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
+        const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
         let victoryLines = [
           ...textLines,
@@ -2275,6 +2304,7 @@ function processTurn(state, utterance) {
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
         if (totalKeysGained > 0) victoryLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
+        if (totalMonthItemsGained > 0) victoryLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         victoryLines.push(``, profileText(profile));
 
         result.text = victoryLines.filter(Boolean).join('\n');
@@ -2407,4 +2437,3 @@ module.exports = {
   processTurn,
   createProfile
 };
-```[cite: 1]
