@@ -1,5 +1,7 @@
 // kakao.js
-// 카카오 i 오픈빌더 스킬 응답 포맷 헬퍼 (리스트 카드 세로 정렬 지원)
+// 카카오 i 오픈빌더 스킬 응답 포맷 헬퍼 및 사냥 시스템 연동
+
+const game2 = require('./game2.js');
 
 function buildResponse(text, choices = [], imageUrl = null) {
   const outputs = [];
@@ -44,4 +46,18 @@ function parseSkillRequest(body) {
   return { userId, utterance };
 }
 
-module.exports = { buildResponse, parseSkillRequest };
+// 사냥 명령어 처리 함수 예시
+function handleHuntCommand(utterance) {
+  if (utterance === "사냥" || utterance === "!사냥") {
+    const monster = game2.getRandomMonsterByProbability();
+    if (!monster) {
+      return buildResponse("사냥감을 찾지 못했습니다.");
+    }
+    
+    const text = `[사냥 발견!]\n등급: ${monster.grade}\n이름: ${monster.fullName}\n설명: ${monster.description}`;
+    return buildResponse(text);
+  }
+  return null;
+}
+
+module.exports = { buildResponse, parseSkillRequest, handleHuntCommand };
