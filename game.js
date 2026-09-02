@@ -2097,3 +2097,10 @@ function processImprintReroll(profile) {
     ].join('\n')
   };
 }
+
+// game.js 파일 맨 하단에 추가
+module.exports = {
+  startGame,
+  processTurn,
+  handleHuntCommand
+};
