@@ -4,7 +4,7 @@
 
 const path = require('path');
 const express = require('express');
-const { startGame, processTurn, handleHuntCommand } = require('./game');
+const { startGame, processTurn } = require('./game');
 const { buildResponse, parseSkillRequest } = require('./kakao');
 const { getSession, saveSession } = require('./db');
 
@@ -32,29 +32,23 @@ app.post('/skill', async (req, res) => {
   try {
     const { userId, utterance } = parseSkillRequest(req.body);
 
-    // 💡 1. 사냥 명령어 우선 처리 (game.js에서 가져온 함수 사용)
-    const huntResponse = handleHuntCommand(utterance);
-    if (huntResponse) {
-      return res.json(huntResponse);
-    }
-
     let state = await getSession(userId);
 
-    // 2. 아예 데이터가 없거나, 첫 접속인 경우
+    // 1. 아예 데이터가 없거나, 첫 접속인 경우
     if (!state) {
       const { state: newState, text, choices, category, imageUrl } = startGame();
       await saveSession(userId, newState);
       return res.json(buildResponse(text, choices, getImageUrl(req, category, imageUrl)));
     }
 
-    // 3. 게임이 끝난 상태에서 유저가 "다시하기"를 누른 경우
+    // 2. 게임이 끝난 상태에서 유저가 "다시하기"를 누른 경우
     if (state.finished && RESTART_WORDS.includes(utterance)) {
       const { state: newState, text, choices, category, imageUrl } = startGame(state);
       await saveSession(userId, newState);
       return res.json(buildResponse(text, choices, getImageUrl(req, category, imageUrl)));
     }
 
-    // 4. 일반적인 진행 중 턴 처리
+    // 3. 일반적인 진행 중 턴 처리
     const { text, choices, category, imageUrl } = processTurn(state, utterance);
     
     // 진행된 상태를 DB에 저장
