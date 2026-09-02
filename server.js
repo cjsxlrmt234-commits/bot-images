@@ -3,26 +3,23 @@
 
 const path = require('path');
 const express = require('express');
-const { startGame, processTurn } = require('./game');
-const { buildResponse, parseSkillRequest, handleHuntCommand } = require('./kakao');
+const { startGame, processTurn } = require('./game2');
+const { buildResponse, parseSkillRequest } = require('./kakao');
 const { getSession, saveSession } = require('./db');
 
 const app = express();
 app.set('trust proxy', true);
 app.use(express.json());
 
-// 💡 1. 절대 경로 대신 'public' 폴더를 정적 파일로 서빙하도록 수정했습니다.
-// 이렇게 하면 public 폴더 안에 있는 이미지가 외부 인터넷(ngrok 주소)으로 자동 공유됩니다.
+// public 폴더를 정적 파일로 서빙하여 이미지가 외부(ngrok 등)로 공유되도록 설정
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 이미지 URL 생성 함수 (ngrok 주소나 외부 접속 주소를 자동으로 반영)
+// 이미지 URL 생성 함수 (상대 경로인 경우 ngrok 등 현재 호스트 주소와 결합)
 function getImageUrl(req, category, customImageUrl) {
   if (customImageUrl) {
-    // 만약 이미 커스텀 URL이 전체 주소(http로 시작)라면 그대로 반환
     if (customImageUrl.startsWith('http')) {
       return customImageUrl;
     }
-    // 상대 경로라면 현재 서버의 호스트 주소(ngrok 주소 등)와 결합
     return `${req.protocol}://${req.get('host')}${customImageUrl}`;
   }
   return null;
@@ -34,40 +31,39 @@ app.post('/skill', async (req, res) => {
   try {
     const { userId, utterance } = parseSkillRequest(req.body);
 
-    // 💡 1. 사냥 명령어 우선 처리 (게임 세션 유무와 상관없이 작동)
-    const huntResponse = handleHuntCommand(utterance);
-    if (huntResponse) {
-      return res.json(huntResponse);
-    }
-
     let state = await getSession(userId);
 
-    // 2. 아예 데이터가 없거나, 첫 접속인 경우
+    // 1. 세션이 없거나 첫 접속인 경우
     if (!state) {
-      const { state: newState, text, choices, category, imageUrl } = startGame();
-      await saveSession(userId, newState);
-      return res.json(buildResponse(text, choices, getImageUrl(req, category, imageUrl)));
+      const initial = startGame();
+      state = initial.state;
+      await saveSession(userId, state);
+      return res.json(buildResponse(initial.text, initial.choices, getImageUrl(req, initial.category, initial.imageUrl)));
     }
 
-    // 3. 게임이 끝난 상태에서 유저가 "다시하기"를 누른 경우
+    // 2. 게임이 끝난 상태에서 재시작하려는 경우
     if (state.finished && RESTART_WORDS.includes(utterance)) {
-      const { state: newState, text, choices, category, imageUrl } = startGame(state);
-      await saveSession(userId, newState);
-      return res.json(buildResponse(text, choices, getImageUrl(req, category, imageUrl)));
+      const restarted = startGame(state);
+      state = restarted.state;
+      await saveSession(userId, state);
+      return res.json(buildResponse(restarted.text, restarted.choices, getImageUrl(req, restarted.category, restarted.imageUrl)));
     }
 
-    // 4. 일반적인 진행 중 턴 처리
-    const { text, choices, category, imageUrl } = processTurn(state, utterance);
+    // 3. 일반적인 턴 및 사냥 명령어 처리
+    const result = processTurn(state, utterance);
     
     // 진행된 상태를 DB에 저장
     await saveSession(userId, state);
 
-    return res.json(buildResponse(text, choices, getImageUrl(req, category, imageUrl)));
+    // 이미지 주소 변환 후 응답 전송
+    const finalImageUrl = getImageUrl(req, result.category, result.imageUrl || result.image);
+    return res.json(buildResponse(result.text, result.choices, finalImageUrl));
+
   } catch (err) {
     console.error(err);
     return res.json(
       buildResponse('오류가 발생했습니다. 잠시 후 다시 시도해주세요.', [
-        { label: '다시하기' },
+        { label: '다시하기', value: '다시하기' },
       ])
     );
   }
