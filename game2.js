@@ -1,4 +1,4 @@
-// game.js - 대문자 이미지 파일명 매핑이 적용된 통합 게임 파일
+// game.js - 명령어 인식 및 선택지(Choices) 반환을 강화한 통합 게임 파일
 
 const prefixes = {
   "D등급": ["초보", "약한", "지저분한", "배고픈", "겁먹은"],
@@ -9,7 +9,7 @@ const prefixes = {
 };
 
 const monsters = [
-  // D등급 (하급 몬스터) - 대문자 이미지 매핑
+  // D등급 (하급 몬스터)
   { name: "먼지 정령", grade: "D등급", description: "버려진 공간에서 자생하는 약한 마력의 작은 먼지 덩어리.", image: "/images/D_1.png" },
   { name: "이슬 슬라임", grade: "D등급", description: "숲속의 맑은 물웅덩이에서 발견되는 투명하고 해가 없는 물컹한 생명체.", image: "/images/D_2.png" },
   { name: "들쥐 포식자", grade: "D등급", description: "곡식 창고나 들판을 배회하며 농작물을 훔쳐 먹는 덩치 큰 일반 쥐.", image: "/images/D_3.png" },
@@ -106,7 +106,7 @@ function getRandomMonsterByProbability() {
     prefix = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
   }
 
-  const rewardMoney = getRewardMoney(selectedGrade);
+  const rewardMoney = getReward(selectedGrade); // 내부 보상 함수 매칭
 
   return {
     ...baseMonster,
@@ -115,6 +115,11 @@ function getRandomMonsterByProbability() {
     rewardMoney: rewardMoney,
     formattedReward: rewardMoney.toLocaleString() + "원"
   };
+}
+
+// 명칭 일치를 위한 별칭 함수 연결
+function getReward(grade) {
+  return getRewardMoney(grade);
 }
 
 function checkAndResetHuntLimit(playerState) {
@@ -128,19 +133,22 @@ function checkAndResetHuntLimit(playerState) {
   }
 }
 
+// 사냥 처리 메인 로직
 function processHunt(playerState) {
   if (!playerState.huntData) {
     playerState.huntData = { date: "", count: 0 };
   }
 
   checkAndResetHuntLimit(playerState);
-
   const MAX_HUNT_COUNT = 1000;
 
   if (playerState.huntData.count >= MAX_HUNT_COUNT) {
     return {
       text: `[사냥 불가]\n오늘 사냥 가능 횟수를 모두 소모했습니다.\n내일 자정(00:00) 이후에 다시 도전해주세요!\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "메인으로", value: "메인" }],
+      choices: [
+        { label: "사냥하기", value: "사냥" },
+        { label: "메인으로", value: "메인" }
+      ],
       imageUrl: null
     };
   }
@@ -150,7 +158,7 @@ function processHunt(playerState) {
     return {
       text: `사냥감을 찾지 못했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
       choices: [
-        { label: "계속 사냥하기", value: "사냥" },
+        { label: "사냥하기", value: "사냥" },
         { label: "메인으로", value: "메인" }
       ],
       imageUrl: null
@@ -174,21 +182,26 @@ function processHunt(playerState) {
   };
 }
 
+// 게임 시작 함수
 function startGame(existingState = {}) {
   return {
     state: { ...existingState, finished: false },
-    text: "배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 메뉴를 선택하거나 '사냥'을 입력해 사냥을 시작하세요.",
+    text: "배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '사냥'을 입력해 사냥을 시작하세요.",
     choices: [
       { label: "사냥하기", value: "사냥" },
-      { label: "다시하기", value: "다시하기" }
+      { label: "메인으로", value: "메인" }
     ],
     category: "main",
     imageUrl: null
   };
 }
 
+// 유저 입력(utterance) 처리 및 명령어 분기 강화
 function processTurn(state, utterance) {
-  if (utterance === "사냥" || utterance === "!사냥" || utterance === "사냥하기") {
+  // 공백 제거 및 소문자/특수문자 포함 여부 유연하게 체크 ('/사냥', '사냥', '사냥하기' 등 완벽 대응)
+  const cleanInput = (utterance || "").trim().replace(/^\//, "");
+
+  if (cleanInput === "사냥" || cleanInput === "사냥하기" || cleanInput === "!사냥") {
     const huntResult = processHunt(state);
     return {
       text: huntResult.text,
@@ -198,8 +211,19 @@ function processTurn(state, utterance) {
     };
   }
 
+  if (cleanInput === "메인" || cleanInput === "시작" || cleanInput === "처음으로") {
+    const startResult = startGame(state);
+    return {
+      text: startResult.text,
+      choices: startResult.choices,
+      category: "main",
+      imageUrl: startResult.imageUrl
+    };
+  }
+
+  // 그 외 명령어 입력 시 기본 안내 및 사냥 선택지 노출
   return {
-    text: `입력하신 명령: ${utterance}`,
+    text: `명령어를 인식하지 못했습니다. (입력값: ${utterance})\n아래 메뉴를 선택하거나 '사냥'을 입력해 주세요.`,
     choices: [
       { label: "사냥하기", value: "사냥" },
       { label: "메인으로", value: "메인" }
