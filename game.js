@@ -180,27 +180,27 @@ const AMPLIFY_TABLE = [
 const FARM_TABLE = {
   solo: [
     ['supply', 0.5],
-    ['gold', 1.5],
+    ['gold', 1],
     ['key', 2.0],
-    ['jackpot', 6.0],
+    ['jackpot', 6.5],
     ['damage', 45.0],
     ['kill_single', 40.0],
     ['kill_multi', 5.0]
   ],
   duo: [
     ['supply', 0.75],
-    ['gold', 2],
+    ['gold', 1.5],
     ['key', 2.25],
-    ['jackpot', 6.0],
+    ['jackpot', 6.5],
     ['damage', 45.0],
     ['kill_single', 22.0],
     ['kill_multi', 22.0]
   ],
   squad: [
     ['supply', 1.0],
-    ['gold', 3],
-    ['key', 5.0],
-    ['jackpot', 6.0],
+    ['gold', 2],
+    ['key', 2.5],
+    ['jackpot', 9.5],
     ['damage', 45.0],
     ['kill_single', 10.0],
     ['kill_multi', 30.0]
@@ -226,6 +226,20 @@ const LOBBY_CHOICES = [
 const ENHANCE_CHOICES = [
   { label: '강화', action: '/강화' },
   { label: '전투', action: '/전투' }
+];
+
+const AMPLIFY_CHOICES = [
+  { label: '승급', action: '/증폭강화' }
+];
+
+const REFINE_CHOICES = [
+  { label: '제련 강화', action: '/제련강화' }
+];
+
+const JOB_CHOICES = [
+  { label: '⚡스팅거 전직', action: '/전직 스팅거' },
+  { label: '🛡️센티넬 전직', action: '/전직 센티넬' },
+  { label: '🗡️섀도우 전직', action: '/전직 섀도우' }
 ];
 
 const IMPRINT_OPTION_POOL = [
@@ -541,10 +555,11 @@ function createProfile(existing = {}) {
     gamesPlayed: safeObj.gamesPlayed ?? 0,
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
+    hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
   };
 }
 
-function profileText(profile) {
+function profileText(profile, detailed = false) {
   const p = createProfile(profile);
   const reqExp = getRequiredExp(p.level);
   const combatPower = getCombatPower(p);
@@ -557,8 +572,7 @@ function profileText(profile) {
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
   const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '없음';
 
-  return [
-    ``,
+  let lines = [
     `📊 프로필 대시보드`,
     `닉네임 : ${p.nickname}`,
     `칭호 : ${p.title}`,
@@ -567,13 +581,40 @@ function profileText(profile) {
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
-    `🔘 배율 : x${totalMult}`,
+    `🔘 배율 : x${totalMult}`
+  ];
+
+  if (detailed) {
+    const headDmgBonus = getImprintTotalBonus(p, 'headDmg');
+    const headRateBonus = getImprintTotalBonus(p, 'headRate');
+    const headWeightBonus = getImprintTotalBonus(p, 'headWeight');
+    const combatBoostBonus = getImprintTotalBonus(p, 'combatBoost');
+
+    lines.push(`헤드샷 데미지 : +${headDmgBonus}%`);
+    lines.push(`헤드샷 가중치 : +${headWeightBonus}%`);
+    lines.push(`전투력 증가 : +${combatBoostBonus}%`);
+
+    if (p.imprints && Object.keys(p.imprints).length > 0) {
+      lines.push(``, `🔮 장착된 각인 목록 :`);
+      const imprintNames = { I: '각인 I', II: '각인 II', III: '각인 III', IV: '각인 IV', V: '각인 V' };
+      ['I', 'II', 'III', 'IV', 'V'].forEach(k => {
+        if (p.imprints[k] && p.imprints[k].options && p.imprints[k].options.length > 0) {
+          const opt = p.imprints[k].options[0];
+          lines.push(`• ${imprintNames[k]} : ${opt.name} +${opt.value}${opt.unit}`);
+        }
+      });
+    }
+  }
+
+  lines.push(
     ``,
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
     `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
     `📦 보급 : ${(p.monthItems || 0).toLocaleString()}개`
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
 function resourceText(profile) {
@@ -926,13 +967,14 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      const expReward = 126;
-      addExp(profile, expReward);
+      const expReward = Math.round(126 * 0.3);
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expReward;
+      addExp(profile, 126);
 
       mainText = `[${killCount} KILL] (+${won(killAssistReward)})${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${expReward})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${126 + expReward})${notes}`;
       break;
     }
     case 'kill_multi': {
@@ -994,13 +1036,14 @@ function resolveFarmFight(profile, battle) {
 
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      const expReward = 150;
-      addExp(profile, expReward);
+      const expReward = Math.round(150 * 0.3);
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expReward;
+      addExp(profile, 150);
 
       mainText = `${killTextHeader}${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${expReward})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${150 + expReward})${notes}`;
       break;
     }
     default: {
@@ -1519,9 +1562,10 @@ function showAmplifyInfo(profile) {
   let lines = [
     `⚡ [현재 증폭 정보]`,
     `현재 증폭 단계: Lv.${currentLevel} (최고 Lv.10)`,
-    `• 배율 가산: x${currentAmp.multBonus.toFixed(2)}`,
-    `• 헤드샷 가중치: ${Math.round(currentAmp.headWeight * 100)}%`,
-    `• 강화 성공 보정: +${currentAmp.successBonus.toFixed(1)}%`
+    `• 배율 가산 : x${currentAmp.multBonus.toFixed(2)}`,
+    `• 헤드샷 가중치 : ${Math.round(currentAmp.headWeight * 100)}%`,
+    `• 강화 성공 보정 : +${currentAmp.successBonus.toFixed(1)}%`,
+    `• 획득 가능 금괴 수량 : ${currentAmp.minGold === currentAmp.maxGold ? `${currentAmp.minGold}개` : `${currentAmp.minGold}개`}`
   ];
 
   if (currentLevel < 10) {
@@ -1530,8 +1574,8 @@ function showAmplifyInfo(profile) {
     lines.push(
       ``,
       `다음 단계(Lv.${currentLevel + 1}) 업그레이드 정보:`,
-      `• 필요 금괴: ${nextAmp.costNext.toLocaleString()}개`,
-      `• 획득 가능 금괴 수량: ${goldRange}`,
+      `• 필요 금괴 : ${nextAmp.costNext.toLocaleString()}개`,
+      `• 획득 가능 금괴 수량 : ${goldRange}`,
       ``,
       `증폭 강화를 진행하시려면 [/증폭강화] 명령어를 입력해 주세요.`
     );
@@ -1640,11 +1684,11 @@ function processUseKey(profile, countArg) {
 function getJobInfoText(jobCode, skillLevel = 1) {
   const chance = skillLevel * 2; 
   if (jobCode === 'stinger') {
-    return `⚡ 스팅거 (스킬 Lv.${skillLevel}): 적 처치 및 파밍 시 ${chance}% 확률로 대량의 킬수(4~5 KILL)를 단번에 쓸어담습니다.`;
+    return `⚡ 스팅거 : 적 처치 및 파밍 시 ${chance}% 확률로 대량의 킬수(4~5 KILL)를 단번에 쓸어담습니다.`;
   } else if (jobCode === 'sentinel') {
-    return `🛡️ 센티넬 (스킬 Lv.${skillLevel}): ${chance}% 확률로 정밀 사격 스킬이 발동하여 적의 헤드를 확정 타격합니다.`;
+    return `🛡️ 센티넬 : ${chance}% 확률로 정밀 사격 스킬이 발동하여 적의 헤드를 확정 타격합니다.`;
   } else if (jobCode === 'shadow') {
-    return `🗡️ 섀도우 (스킬 Lv.${skillLevel}): 적 처치 시 ${chance}% 확률로 은밀하게 추가 재화(현금/금괴/열쇠)를 훔쳐옵니다.`;
+    return `🗡️ 섀도우 : 적 처치 시 ${chance}% 확률로 은밀하게 추가 재화(현금/금괴/열쇠)를 훔쳐옵니다.`;
   }
   return '';
 }
@@ -1662,11 +1706,18 @@ function processJobCommand(profile, targetJob) {
 
     let msg = [
       `🎖️ [현재 전직 정보]`,
-      `현재 직업: ${currentJobName} (스킬 Lv.${skillLevel})`,
-      `효과: ${currentSkillInfo}`,
+      `직업: ${currentJobName}`,
       ``,
-      `💡 전직을 변경하시려면 [/전직변경 [직업명]] 명령어를 이용해 주세요. (비용: 금괴 1,000개, 스킬 레벨 유지)`
+      `⚡ [전직 스킬]`,
+      `${currentJobName} 스킬 레벨: Lv.${skillLevel}`,
+      currentSkillInfo,
+      `(비용 : 금괴 ${(skillLevel) * 500}개)`
     ];
+
+    if (!profile.hasSeenJobGuide) {
+      profile.hasSeenJobGuide = true;
+      msg.push(``, `💡 전직을 변경하시려면 [/전직변경 [직업명]] 명령어를 이용해 주세요. (비용: 금괴 1,000개, 스킬 레벨 유지)`);
+    }
 
     if (targetJob) {
       msg.unshift(`⚠️ 이미 전직이 완료된 상태입니다! (/전직 명령어로는 전직을 변경할 수 없습니다)\n`);
@@ -1725,6 +1776,7 @@ function processJobCommand(profile, targetJob) {
   profile.gold -= REQUIRED_GOLD;
   profile.job = jobCode;
   profile.jobSkillLevel = 1;
+  profile.hasSeenJobGuide = false;
 
   return { 
     text: [
@@ -1786,17 +1838,19 @@ function processUpgradeJobSkill(profile) {
     return { text: `금괴가 부족합니다!\n(Lv.${currentLevel}➔Lv.${currentLevel + 1} 강화 필요: 금괴 ${goldCost.toLocaleString()}개 | 보유: 금괴 ${(profile.gold || 0).toLocaleString()}개)` };
   }
 
+  const prevChance = currentLevel * 2;
   profile.gold -= goldCost;
   profile.jobSkillLevel = currentLevel + 1;
+  const nextChance = profile.jobSkillLevel * 2;
 
   const jobNames = { stinger: '스팅거', sentinel: '센티넬', shadow: '섀도우' };
 
   return { 
     text: [
-      `⚡ [전직 스킬 강화 성공!]`,
+      `⚡ [전직 스킬 승급 성공!]`,
       `${jobNames[profile.job]} 스킬 레벨: Lv.${currentLevel} ➔ Lv.${profile.jobSkillLevel}`,
       `(소모: 금괴 ${goldCost.toLocaleString()}개)`,
-      `${getJobInfoText(profile.job, profile.jobSkillLevel)}`,
+      `🗡️ ${jobNames[profile.job]} : 적 처치 시 ${prevChance}% ➔ ${nextChance}% 확률로 은밀하게 추가 재화(현금/금괴/열쇠)를 훔쳐옵니다.`,
       ``,
       resourceText(profile)
     ].join('\n')
@@ -2039,22 +2093,15 @@ function processImprintReroll(profile) {
 
   ['I', 'II', 'III', 'IV', 'V'].forEach(k => {
     if (profile.imprints[k]) {
-      const isLocked = profile.imprintLocks[k];
-      const mark = isLocked ? '🔒' : '🔄';
       const opt = profile.imprints[k].options[0];
-      
-      if (isLocked) {
-        let condText = '해금됨';
-        if (k === 'I') condText = 'Lv.20 달성';
-        else if (k === 'IV') condText = '+20 싱귤래리티 달성';
-        else if (k === 'V') condText = `+20 ${jobWeaponName} 달성`;
-        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : ${condText}`);
-      } else {
-        resultLines.push(`${mark}* ${imprintNames[k]} * : ${opt.name} +${opt.value}${opt.unit}`);
-      }
+      resultLines.push(`🔄* ${imprintNames[k]} * : ${opt.name} +${opt.value}${opt.unit}`);
     } else {
       if (k === 'I') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : Lv.20 달성`);
+      } else if (k === 'II') {
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : 금괴 500개`);
+      } else if (k === 'III') {
+        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : 금괴 1,000개`);
       } else if (k === 'IV') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 싱귤래리티 달성`);
       } else if (k === 'V') {
@@ -2249,13 +2296,14 @@ function processTurn(state, utterance) {
         battle.finished = true;
         battle.result = 'victory';
         
-        const combatPower = getCombatPower(profile);
-        const victoryBonusCash = rand(combatPower * 1, combatPower * 10);
-        
+        const victoryBonusCash = Math.round(battle.accumulatedCash * 0.3);
         const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
         profile.cash += finalTotalCash;
 
-        const expGainedResult = addExp(profile, rand(100, 500));
+        const baseExpReward = rand(100, 500);
+        const victoryBonusExp = Math.round(baseExpReward * 0.3);
+        const expGainedResult = addExp(profile, baseExpReward + victoryBonusExp);
+
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
@@ -2263,8 +2311,8 @@ function processTurn(state, utterance) {
         let victoryLines = [
           ...textLines,
           ``,
-          `== 🏆 [우승] 치킨 획득! (${battle.turn}턴 / 생존 ${battle.survivors}명) ==`,
-          `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `== 🏆 [우승] 치킨 획득! ==`,
+          `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${victoryBonusExp.toLocaleString()}`,
           `💵 현금 총 보상 : +${won(finalTotalCash)}`,
           `⭐ EXP : +${expGainedResult.gained.toLocaleString()}`
         ];
@@ -2314,13 +2362,14 @@ function processTurn(state, utterance) {
         battle.finished = true;
         battle.result = 'victory';
         
-        const combatPower = getCombatPower(profile);
-        const victoryBonusCash = rand(combatPower * 1, combatPower * 10);
-        
+        const victoryBonusCash = Math.round(battle.accumulatedCash * 0.3);
         const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
         profile.cash += finalTotalCash;
 
-        const expGainedResult = addExp(profile, rand(100, 500));
+        const baseExpReward = rand(100, 500);
+        const victoryBonusExp = Math.round(baseExpReward * 0.3);
+        const expGainedResult = addExp(profile, baseExpReward + victoryBonusExp);
+
         const totalGoldGained = battle.accumulatedGold || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
@@ -2328,8 +2377,8 @@ function processTurn(state, utterance) {
         let victoryLines = [
           ...textLines,
           ``,
-          `== 🏆 [우승] 치킨 획득! (${battle.turn}턴 / 생존 ${battle.survivors}명) ==`,
-          `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${expGainedResult.gained.toLocaleString()}`,
+          `== 🏆 [우승] 치킨 획득! ==`,
+          `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${victoryBonusExp.toLocaleString()}`,
           `💵 현금 총 보상 : +${won(finalTotalCash)}`,
           `⭐ EXP : +${expGainedResult.gained.toLocaleString()}`
         ];
@@ -2375,27 +2424,27 @@ function processTurn(state, utterance) {
     case '/제련': {
       const refineInfo = showRefineInfo(profile);
       result.text = refineInfo.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = REFINE_CHOICES;
       break;
     }
     case '/제련강화': {
       const refineRes = processRefine(profile);
       result.text = refineRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = REFINE_CHOICES;
       break;
     }
     case '/증폭': {
       const ampInfoRes = showAmplifyInfo(profile);
       result.text = ampInfoRes.text;
       result.imageUrl = ampInfoRes.imageUrl;
-      result.choices = LOBBY_CHOICES;
+      result.choices = AMPLIFY_CHOICES;
       break;
     }
     case '/증폭강화': {
       const targetLvl = parseInt(arg, 10) || 1;
       const ampRes = processAmplify(profile, targetLvl);
       result.text = ampRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = AMPLIFY_CHOICES;
       break;
     }
     case '/열쇠': {
@@ -2405,14 +2454,14 @@ function processTurn(state, utterance) {
       break;
     }
     case '/프로필': {
-      result.text = profileText(profile);
+      result.text = profileText(profile, true);
       result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
       break;
     }
     case '/전직': {
       const jobRes = processJobCommand(profile, arg);
       result.text = jobRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = profile.job ? null : JOB_CHOICES;
       break;
     }
     case '/전직변경': {
