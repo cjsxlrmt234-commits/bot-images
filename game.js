@@ -3040,4 +3040,3 @@ module.exports = {
   processTurn,
   createProfile
 };
-```[cite: 27]
