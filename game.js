@@ -693,7 +693,8 @@ function createProfile(existing = {}) {
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
-    huntData: safeObj.huntData ?? { date: "", count: 0 }
+    huntData: safeObj.huntData ?? { date: "", count: 0 },
+    speedMultiplier: safeObj.speedMultiplier ?? 1
   };
 }
 
@@ -719,7 +720,8 @@ function profileText(profile, detailed = false) {
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
-    `🔘 배율 : x${totalMult}`
+    `🔘 배율 : x${totalMult}`,
+    `⚡ 배속 : x${p.speedMultiplier || 1}`
   ];
 
   if (detailed) {
@@ -851,7 +853,7 @@ function battleStatusBoard(profile, battle) {
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
-    `배율 (x${totalMult})`
+    `배율 (x${totalMult}) | 배속 (x${p.speedMultiplier || 1})`
   ];
 
   if (b.buffs.length > 0) {
@@ -916,20 +918,21 @@ function calculateCombatDamage(profile, battle, rawDamage) {
 
 function triggerShadowLoot(profile, battle) {
   const randVal = Math.random() * 100;
+  const speed = profile.speedMultiplier || 1;
 
   if (randVal < 50) {
     const combatPower = getCombatPower(profile);
-    const lootCash = combatPower * 100;
+    const lootCash = combatPower * 100 * speed;
     battle.accumulatedCash += lootCash;
     return `💵 현금 +${won(lootCash)}`;
   } else if (randVal < 80) {
     const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
-    const goldAmt = rand(ampInfo.minGold, ampInfo.maxGold);
+    const goldAmt = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
     profile.gold += goldAmt;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldAmt;
     return `🧈 금괴 +${goldAmt}개`;
   } else {
-    let keyAdd = 1;
+    let keyAdd = 1 * speed;
     profile.keys += keyAdd;
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyAdd;
     return `🔑 비밀열쇠 +${keyAdd}개`;
@@ -943,18 +946,19 @@ function resolveFarmFight(profile, battle) {
   const combatLv = profile.combatLevel || 0;
   const mult = getGoldMultiplier(profile);
   const ampInfo = getAmplifyInfo(combatLv);
+  const speed = profile.speedMultiplier || 1;
 
   const currentFarmTable = FARM_TABLE[battle.mode.toLowerCase()] || FARM_TABLE.solo;
   let outcome = pickWeighted(currentFarmTable);
 
   if (outcome === 'supply') {
     const combatPower = getCombatPower(profile);
-    earnedCash = combatPower * 10;
+    earnedCash = combatPower * 10 * speed;
     
-    const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
+    const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
     profile.gold += goldBonus;
     
-    let keyBonus = 1;
+    let keyBonus = 1 * speed;
     const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
     if (Math.random() < keyChanceBonus) {
       keyBonus += 1;
@@ -963,9 +967,9 @@ function resolveFarmFight(profile, battle) {
     
     let monthItemBonus = 0;
     if (Math.random() < 0.005) {
-      monthItemBonus = 1;
-      profile.monthItems = (profile.monthItems || 0) + 1;
-      battle.accumulatedMonthItems = (battle.accumulatedMonthItems || 0) + 1;
+      monthItemBonus = 1 * speed;
+      profile.monthItems = (profile.monthItems || 0) + monthItemBonus;
+      battle.accumulatedMonthItems = (battle.accumulatedMonthItems || 0) + monthItemBonus;
     }
 
     battle.accumulatedCash += earnedCash;
@@ -979,7 +983,7 @@ function resolveFarmFight(profile, battle) {
     
     let supplyMsg = `[황금 보급품 획득!]📦 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus.toLocaleString()}개, 열쇠 ${keyBonus}개`;
     if (monthItemBonus > 0) {
-      supplyMsg += `, 보급 1개`;
+      supplyMsg += `, 보급 ${monthItemBonus}개`;
     }
     supplyMsg += `)`;
     resultMessages.push(supplyMsg);
@@ -1014,13 +1018,13 @@ function resolveFarmFight(profile, battle) {
   switch (outcome) {
     case 'supply':
       {
-        const expGained = 500;
+        const expGained = 500 * speed;
         const expRes = addExp(profile, expGained);
         resultMessages.push(`(EXP +${expRes.gained.toLocaleString()})`);
       }
       break;
     case 'gold': {
-      let goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
+      let goldBonus = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
       const goldChanceBonus = getImprintTotalBonus(profile, 'goldChance');
       if (Math.random() < goldChanceBonus) {
         goldBonus += 1;
@@ -1031,7 +1035,7 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'key': {
-      let keyAdd = 1;
+      let keyAdd = 1 * speed;
       const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
       if (Math.random() < keyChanceBonus) {
         keyAdd += 1;
@@ -1042,11 +1046,11 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'jackpot': {
-      const jackpotAmt = rand(5000, 10000) * mult;
+      const jackpotAmt = rand(5000, 10000) * mult * speed;
       earnedCash = jackpotAmt;
       battle.accumulatedCash += earnedCash;
       
-      const expGained = 500;
+      const expGained = 500 * speed;
       const expRes = addExp(profile, expGained);
 
       mainText = `[잭팟!] 현금 ${won(jackpotAmt)} 획득! (EXP +${expRes.gained.toLocaleString()})`;
@@ -1102,8 +1106,8 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
-      const damageReward = Math.round(totalDamageVal * mult);
+      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult * speed);
+      const damageReward = Math.round(totalDamageVal * mult * speed);
       const finalReward = damageReward + killAssistReward;
       
       earnedCash = finalReward;
@@ -1166,8 +1170,8 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
-      const damageReward = Math.round(totalDamageVal * mult);
+      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult * speed);
+      const damageReward = Math.round(totalDamageVal * mult * speed);
       const finalReward = damageReward + killAssistReward;
       
       earnedCash = finalReward;
@@ -1198,7 +1202,7 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     default: {
-      const lootCash = rand(100, 500) * mult;
+      const lootCash = rand(100, 500) * mult * speed;
       earnedCash = lootCash;
       battle.accumulatedCash += earnedCash;
       
@@ -2359,10 +2363,36 @@ function processHunt(playerState) {
     };
   }
 
+  const speed = playerState.speedMultiplier || 1;
   playerState.huntData.count += 1;
-  playerState.cash = (playerState.cash || 0) + monster.rewardMoney;
-  if (monster.rewardGem > 0) {
-    playerState.gem = (playerState.gem || 0) + monster.rewardGem;
+  const earnedCash = monster.rewardMoney * speed;
+  playerState.cash = (playerState.cash || 0) + earnedCash;
+  
+  let earnedGem = (monster.rewardGem > 0 ? monster.rewardGem : 0) * speed;
+  if (earnedGem > 0) {
+    playerState.gem = (playerState.gem || 0) + earnedGem;
+  }
+
+  let questRewardMsg = "";
+  const count = playerState.huntData.count;
+  const dice = rand(1, 6);
+
+  if (count === 100) {
+    const qCash = 10000 * dice * speed;
+    playerState.cash += qCash;
+    questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+  } else if (count === 250) {
+    const qCash = 20000 * dice * speed;
+    playerState.cash += qCash;
+    questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+  } else if (count === 500) {
+    const qGem = 1 * dice * speed;
+    playerState.gem += qGem;
+    questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
+  } else if (count === 1000) {
+    const qGem = 2 * dice * speed;
+    playerState.gem += qGem;
+    questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
   }
 
   let droppedLootText = "";
@@ -2405,12 +2435,21 @@ function processHunt(playerState) {
     droppedLootText = `\n\n🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/창고에서 확인)`;
   }
 
-  let rewardStr = monster.formattedReward;
-  if (monster.rewardGem > 0) {
-    rewardStr += `, 보석 ${monster.rewardGem}개`;
+  let rewardLines = `현금 +${won(earnedCash)}`;
+  if (earnedGem > 0) {
+    rewardLines += `\n보석 +${earnedGem}개`;
   }
 
-  const text = `[사냥 발견!] (${monster.grade})\n이름: ${monster.fullName}\n설명: ${monster.description}\n\n획득 보상: ${rewardStr} (지급 완료)${droppedLootText}\n오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})`;
+  const text = `[몬스터 발견!]
+${monster.grade}
+이름: ${monster.fullName}
+설명: ${monster.description}
+
+${rewardLines}
+
+총 현금 : ${won(playerState.cash)}
+총 보석 : ${(playerState.gem || 0).toLocaleString()}개
+오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})${questRewardMsg}${droppedLootText}`;
   
   const choices = [
     { label: "계속 사냥하기", value: "사냥" },
@@ -2426,6 +2465,23 @@ function processHunt(playerState) {
     url: monster.image,
     monster
   };
+}
+
+function processSpeedCommand(profile, arg) {
+  if (profile.combatLevel === undefined) profile.combatLevel = 0;
+  const maxAllowed = profile.combatLevel;
+
+  let speedVal = parseInt(arg, 10);
+  if (isNaN(speedVal) || speedVal < 1 || speedVal > 10) {
+    return { text: `⚠️ 올바른 배속 숫자를 입력해 주세요. (1~10 사이, 예: /배속 2)` };
+  }
+
+  if (speedVal > maxAllowed) {
+    return { text: `⚠️ 증폭 레벨이 부족하여 해당 배속을 설정할 수 없습니다!\n• 현재 증폭 레벨: Lv.${maxAllowed}\n• 최대 설정 가능 배속: x${maxAllowed}` };
+  }
+
+  profile.speedMultiplier = speedVal;
+  return { text: `⚡ 배속이 [x${speedVal}](으)로 설정되었습니다! (/전투 및 /사냥 보상 적용)` };
 }
 
 function getRandomMonsterByProbability() {
@@ -2605,7 +2661,7 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim().toLowerCase();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '사냥', '창고'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '사냥', '창고', '배속'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
@@ -2637,6 +2693,7 @@ function processTurn(state, utterance) {
       `• /연속강화 [횟수] - 지정 횟수만큼 연속 강화`,
       `• /증폭 - 증폭 정보 확인`,
       `• /증폭강화 [수량] - 금괴로 전투력 증폭 강화`,
+      `• /배속 [1~10] - 증폭 레벨 제한 내에서 보상 배속 설정`,
       `• /열쇠 [수량] - 비밀열쇠를 지정한 수량만큼 연속 사용`,
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
       `• /전직변경 [직업변경]`,
@@ -2880,6 +2937,12 @@ function processTurn(state, utterance) {
       result.choices = AMPLIFY_CHOICES;
       break;
     }
+    case '/배속': {
+      const speedRes = processSpeedCommand(profile, arg);
+      result.text = speedRes.text;
+      result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
+      break;
+    }
     case '/열쇠': {
       const keyRes = processUseKey(profile, arg);
       result.text = keyRes.text;
@@ -2977,3 +3040,4 @@ module.exports = {
   processTurn,
   createProfile
 };
+```[cite: 27]
