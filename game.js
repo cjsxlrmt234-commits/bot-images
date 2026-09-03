@@ -348,36 +348,36 @@ const ESCAPE_TABLE = [
 ];
 
 const BATTLE_CHOICES = [
-  { label: '파밍', action: '/파밍' },
-  { label: '도망', action: '/도망' }
+  { label: '/파밍', action: '/파밍' },
+  { label: '/도망', action: '/도망' }
 ];
 
 const LOBBY_CHOICES = [
-  { label: '전투', action: '/전투' },
-  { label: '강화', action: '/강화' }
+  { label: '/전투', action: '/전투' },
+  { label: '/강화', action: '/강화' }
 ];
 
 const ENHANCE_CHOICES = [
-  { label: '강화', action: '/강화' },
-  { label: '전투', action: '/전투' }
+  { label: '/강화', action: '/강화' },
+  { label: '/전투', action: '/전투' }
 ];
 
 const AMPLIFY_CHOICES = [
-  { label: '승급', action: '/증폭강화' }
+  { label: '/증폭강화', action: '/증폭강화' }
 ];
 
 const REFINE_CHOICES = [
-  { label: '제련 강화', action: '/제련강화' }
+  { label: '/제련강화', action: '/제련강화' }
 ];
 
 const IMPRINT_CHOICES = [
-  { label: '각인 변경', action: '/각인변경' }
+  { label: '/각인변경', action: '/각인변경' }
 ];
 
 const JOB_CHOICES = [
-  { label: '⚡스팅거 전직', action: '/전직 스팅거' },
-  { label: '🛡️센티넬 전직', action: '/전직 센티넬' },
-  { label: '🗡️섀도우 전직', action: '/전직 섀도우' }
+  { label: '/전직 스팅거', action: '/전직 스팅거' },
+  { label: '/전직 센티넬', action: '/전직 센티넬' },
+  { label: '/전직 섀도우', action: '/전직 섀도우' }
 ];
 
 const IMPRINT_OPTION_POOL = [
@@ -577,15 +577,17 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
   const imprintHeadRate = getImprintTotalBonus(profile, 'headRate');
   const imprintHeadWeight = getImprintTotalBonus(profile, 'headWeight');
 
-  const numHead = (baseHead + imprintHeadRate) * (1 + ampInfo.headWeight + (imprintHeadWeight / 100));
-  const numBody = Math.max(0, baseBody);
-  const numLeg = Math.max(0, baseLeg);
+  const rawHead = (baseHead + imprintHeadRate) * (1 + ampInfo.headWeight + (imprintHeadWeight / 100));
+  const remainingBodyLeg = Math.max(0, 100 - rawHead);
+  const numHead = rawHead;
+  const numBody = remainingBodyLeg / 2;
+  const numLeg = remainingBodyLeg / 2;
 
   return {
     mult: `x${baseMult}`,
-    head: `${(baseHead + imprintHeadRate).toFixed(2)}%`,
-    body: `${baseBody.toFixed(2)}%`,
-    leg: `${baseLeg.toFixed(2)}%`,
+    head: `${numHead.toFixed(2)}%`,
+    body: `${numBody.toFixed(2)}%`,
+    leg: `${numLeg.toFixed(2)}%`,
     numHead: numHead,
     numBody: numBody,
     numLeg: numLeg
@@ -766,9 +768,9 @@ function profileText(profile, detailed = false) {
     const keyChanceBonus = getImprintTotalBonus(p, 'keyChance');
     const damageReduceBonus = getImprintTotalBonus(p, 'damageReduce');
 
-    lines.push(`헤드샷 데미지 : +${headDmgBonus}%`);
-    lines.push(`헤드샷 가중치 : +${headWeightBonus}%`);
-    lines.push(`전투력 증가 : +${combatBoostBonus}%`);
+    if (headDmgBonus !== 0) lines.push(`헤드샷 데미지 : +${headDmgBonus}%`);
+    if (headWeightBonus !== 0) lines.push(`헤드샷 가중치 : +${headWeightBonus}%`);
+    if (combatBoostBonus !== 0) lines.push(`전투력 증가 : +${combatBoostBonus}%`);
 
     if (headRateBonus !== 0) lines.push(`헤드샷 확률 증가 : +${headRateBonus}%`);
     if (cashBoostBonus !== 0) lines.push(`현금 획득량 증가 : +${cashBoostBonus}%`);
@@ -2397,7 +2399,7 @@ function processHunt(playerState) {
   if (playerState.huntData.count >= MAX_HUNT_COUNT) {
     return {
       text: `[사냥 불가]\n오늘 사냥 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "메인", action: "/메인" }],
+      choices: [{ label: "/메인", action: "/메인" }],
       imageUrl: null,
       image: null,
       thumbnail: null
@@ -2408,7 +2410,7 @@ function processHunt(playerState) {
   if (!monster) {
     return {
       text: `사냥감을 찾지 못했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "메인", action: "/메인" }],
+      choices: [{ label: "/메인", action: "/메인" }],
       imageUrl: null,
       image: null,
       thumbnail: null
@@ -2513,8 +2515,8 @@ ${rewardLines}
 ⏩ ${speed}배속`;
   
   const choices = [
-    { label: "사냥", action: "/사냥" },
-    { label: "메인", action: "/메인" }
+    { label: "/사냥", action: "/사냥" },
+    { label: "/전투", action: "/전투" }
   ];
 
   return {
@@ -2649,15 +2651,15 @@ function processTurn(state, utterance) {
   let input = typeof utterance === 'string' ? utterance.trim().replace(/\s+/g, ' ') : '';
   const cleanInput = input.toLowerCase();
 
-  if (cleanInput === "메인" || cleanInput === "/메인" || cleanInput === "시작" || cleanInput === "처음으로") {
+  if (cleanInput === "/메인" || cleanInput === "메인" || cleanInput === "시작" || cleanInput === "처음으로") {
     const startResult = startGame(profile);
     state.profile = startResult.state.profile;
     state.battle = startResult.state.battle;
     return {
       text: startResult.text,
       choices: [
-        { label: "사냥", action: "/사냥" },
-        { label: "전투", action: '/전투' }
+        { label: "/사냥", action: "/사냥" },
+        { label: "/전투", action: '/전투' }
       ],
       category: "main",
       imageUrl: startResult.imageUrl,
@@ -2720,23 +2722,15 @@ function processTurn(state, utterance) {
   
   const isPlayingBattle = battle && battle.alive && !battle.finished;
 
-  if (input === '/사냥') {
-    // allow direct /사냥
-  } else if (!input.startsWith('/')) {
-    const rawClean = input.replace(/^\//, '').trim().toLowerCase();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '창고', '배속'];
-    
-    if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
-      input = '/' + rawClean;
-    } else {
-      const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
-      return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /사냥)\n\n${currentBoard}`,
-        imageUrl: null,
-        choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
-        state: { profile, battle }
-      };
-    }
+  // 무조건 슬래시(/)로 시작해야만 명령어로 인정되도록 엄격하게 검사
+  if (!input.startsWith('/')) {
+    const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
+    return {
+      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 반드시 붙여야 동작합니다. (예: /전투, /프로필, /사냥)\n\n${currentBoard}`,
+      imageUrl: null,
+      choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
+      state: { profile, battle }
+    };
   } else {
     let parts = input.split(' ');
     parts[0] = parts[0].toLowerCase();
