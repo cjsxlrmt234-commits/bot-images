@@ -73,16 +73,16 @@ const monsters = [
 ];
 
 const gradeRewards = {
-  "D등급": { min: 10000, max: 50000 },
-  "D+등급": { min: 25000, max: 75000 },
-  "C등급": { min: 50000, max: 100000 },
-  "C+등급": { min: 75000, max: 150000 },
-  "B등급": { min: 100000, max: 200000 },
-  "B+등급": { min: 200000, max: 350000, gem: 1 },
-  "A등급": { min: 300000, max: 500000, gem: 1 },
-  "A+등급": { min: 500000, max: 800000, gem: 5 },
-  "S등급": { min: 500000, max: 5000000, gem: 10 },
-  "S+등급": { min: 2000000, max: 10000000, gem: 50 }
+  "D등급": { min: 200, max: 500 },
+  "D+등급": { min: 550, max: 1000 },
+  "C등급": { min: 1100, max: 2000 },
+  "C+등급": { min: 2200, max: 3000 },
+  "B등급": { min: 3300, max: 4000 },
+  "B+등급": { min: 4400, max: 6000, gem: 1 },
+  "A등급": { min: 7000, max: 10000, gem: 1 },
+  "A+등급": { min: 15000, max: 30000, gem: 5 },
+  "S등급": { min: 50000, max: 100000, gem: 10 },
+  "S+등급": { min: 100000, max: 500000, gem: 50 }
 };
 
 const LOOT_DATABASE = {
@@ -299,15 +299,15 @@ const REFINE_TABLE = [
 
 const AMPLIFY_TABLE = [
   { level: 0, costNext: 1000, minGold: 1, maxGold: 1, multBonus: 0.00, headWeight: 0.00, successBonus: 0.0 },
-  { level: 1, costNext: 2000, minGold: 1, maxGold: 2, multBonus: 0.20, headWeight: 0.05, successBonus: 0.5 },
-  { level: 2, costNext: 3000, minGold: 1, maxGold: 3, multBonus: 0.40, headWeight: 0.10, successBonus: 1.0 },
-  { level: 3, costNext: 4000, minGold: 1, maxGold: 4, multBonus: 0.60, headWeight: 0.15, successBonus: 1.5 },
-  { level: 4, costNext: 5000, minGold: 1, maxGold: 5, multBonus: 0.80, headWeight: 0.20, successBonus: 2.0 },
-  { level: 5, costNext: 6000, minGold: 2, maxGold: 6, multBonus: 1.00, headWeight: 0.30, successBonus: 2.5 },
-  { level: 6, costNext: 7000, minGold: 2, maxGold: 7, multBonus: 1.20, headWeight: 0.40, successBonus: 3.0 },
-  { level: 7, costNext: 8000, minGold: 2, maxGold: 8, multBonus: 1.50, headWeight: 0.50, successBonus: 3.5 },
-  { level: 8, costNext: 9000, minGold: 2, maxGold: 9, multBonus: 1.60, headWeight: 0.65, successBonus: 4.0 },
-  { level: 9, costNext: 10000, minGold: 2, maxGold: 10, multBonus: 1.80, headWeight: 0.80, successBonus: 4.5 },
+  { level: 1, costNext: 1000, minGold: 1, maxGold: 2, multBonus: 0.20, headWeight: 0.05, successBonus: 0.5 },
+  { level: 2, costNext: 2000, minGold: 1, maxGold: 3, multBonus: 0.40, headWeight: 0.10, successBonus: 1.0 },
+  { level: 3, costNext: 3000, minGold: 1, maxGold: 4, multBonus: 0.60, headWeight: 0.15, successBonus: 1.5 },
+  { level: 4, costNext: 4000, minGold: 1, maxGold: 5, multBonus: 0.80, headWeight: 0.20, successBonus: 2.0 },
+  { level: 5, costNext: 5000, minGold: 2, maxGold: 6, multBonus: 1.00, headWeight: 0.30, successBonus: 2.5 },
+  { level: 6, costNext: 6000, minGold: 2, maxGold: 7, multBonus: 1.20, headWeight: 0.40, successBonus: 3.0 },
+  { level: 7, costNext: 7000, minGold: 2, maxGold: 8, multBonus: 1.50, headWeight: 0.50, successBonus: 3.5 },
+  { level: 8, costNext: 8000, minGold: 2, maxGold: 9, multBonus: 1.60, headWeight: 0.65, successBonus: 4.0 },
+  { level: 9, costNext: 9000, minGold: 2, maxGold: 10, multBonus: 1.80, headWeight: 0.80, successBonus: 4.5 },
   { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, headWeight: 1.00, successBonus: 5.0 }
 ];
 
@@ -354,8 +354,7 @@ const BATTLE_CHOICES = [
 
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
-  { label: '강화', action: '/강화' },
-  { label: '사냥하기', value: '사냥' }
+  { label: '강화', action: '/강화' }
 ];
 
 const ENHANCE_CHOICES = [
@@ -369,6 +368,10 @@ const AMPLIFY_CHOICES = [
 
 const REFINE_CHOICES = [
   { label: '제련 강화', action: '/제련강화' }
+];
+
+const IMPRINT_CHOICES = [
+  { label: '각인 변경', action: '/각인변경' }
 ];
 
 const JOB_CHOICES = [
@@ -492,6 +495,21 @@ function getImprintTotalBonus(profile, keyName) {
     }
   }
   return Number(total.toFixed(4));
+}
+
+function getLootMultiplier(profile) {
+  if (!profile || !profile.inventory || profile.inventory.length === 0) return 1.00;
+  let totalMultiplier = 0;
+  profile.inventory.forEach(item => {
+    let tierNum = 1;
+    if (item.tier === "T2") tierNum = 2;
+    else if (item.tier === "T3") tierNum = 3;
+    else if (item.tier === "T4") tierNum = 4;
+    else if (item.tier === "T5") tierNum = 5;
+    else if (item.tier === "T6") tierNum = 6;
+    totalMultiplier += 0.10 * tierNum;
+  });
+  return Number(totalMultiplier.toFixed(2));
 }
 
 function getGoldMultiplier(profile) {
@@ -694,8 +712,18 @@ function createProfile(existing = {}) {
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
     huntData: safeObj.huntData ?? { date: "", count: 0 },
-    speedMultiplier: safeObj.speedMultiplier ?? 1
+    speedMultiplier: safeObj.speedMultiplier ?? 1,
+    helpSeen: safeObj.helpSeen ?? {}
   };
+}
+
+function checkAndMarkHelp(profile, commandName) {
+  if (!profile.helpSeen) profile.helpSeen = {};
+  if (profile.helpSeen[commandName]) {
+    return false;
+  }
+  profile.helpSeen[commandName] = true;
+  return true;
 }
 
 function profileText(profile, detailed = false) {
@@ -721,7 +749,7 @@ function profileText(profile, detailed = false) {
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0})`,
     `🔘 배율 : x${totalMult}`,
-    `⚡ 배속 : x${p.speedMultiplier || 1}`
+    `⏩ 배속 : x${p.speedMultiplier || 1}`
   ];
 
   if (detailed) {
@@ -729,10 +757,28 @@ function profileText(profile, detailed = false) {
     const headRateBonus = getImprintTotalBonus(p, 'headRate');
     const headWeightBonus = getImprintTotalBonus(p, 'headWeight');
     const combatBoostBonus = getImprintTotalBonus(p, 'combatBoost');
+    const cashBoostBonus = getImprintTotalBonus(p, 'cashBoost');
+    const enhanceSuccessBonus = getImprintTotalBonus(p, 'enhanceSuccess');
+    const enhanceCostDownBonus = getImprintTotalBonus(p, 'enhanceCostDown');
+    const goldChanceBonus = getImprintTotalBonus(p, 'goldChance');
+    const multiMeetBonus = getImprintTotalBonus(p, 'multiMeet');
+    const expBoostBonus = getImprintTotalBonus(p, 'expBoost');
+    const keyChanceBonus = getImprintTotalBonus(p, 'keyChance');
+    const damageReduceBonus = getImprintTotalBonus(p, 'damageReduce');
 
     lines.push(`헤드샷 데미지 : +${headDmgBonus}%`);
     lines.push(`헤드샷 가중치 : +${headWeightBonus}%`);
     lines.push(`전투력 증가 : +${combatBoostBonus}%`);
+
+    if (headRateBonus !== 0) lines.push(`헤드샷 확률 증가 : +${headRateBonus}%`);
+    if (cashBoostBonus !== 0) lines.push(`현금 획득량 증가 : +${cashBoostBonus}%`);
+    if (enhanceSuccessBonus !== 0) lines.push(`강화 성공 확률 증가 : +${enhanceSuccessBonus}%`);
+    if (enhanceCostDownBonus !== 0) lines.push(`강화 비용 감소 : +${enhanceCostDownBonus}%`);
+    if (goldChanceBonus !== 0) lines.push(`추가 금괴 획득 확률 증가 : +${goldChanceBonus}%`);
+    if (multiMeetBonus !== 0) lines.push(`듀오, 스쿼드 매칭 확률 증가 : +${multiMeetBonus}%`);
+    if (expBoostBonus !== 0) lines.push(`경험치 획득량 증가 : +${expBoostBonus}%`);
+    if (keyChanceBonus !== 0) lines.push(`추가 비밀열쇠 획득 확률 증가 : +${keyChanceBonus}%`);
+    if (damageReduceBonus !== 0) lines.push(`피해량 감소 : +${damageReduceBonus}`);
 
     if (p.imprints && Object.keys(p.imprints).length > 0) {
       lines.push(``, `🔮 장착된 각인 목록 :`);
@@ -1083,7 +1129,7 @@ function resolveFarmFight(profile, battle) {
       let skillNote = "";
       if (profile.job === 'stinger' && Math.random() < triggerChance) {
         killCount = rand(4, 5);
-        skillNote += `\n⚡ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
+        skillNote += `\n⏩ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
       }
 
       let totalDamageVal = 0;
@@ -1147,7 +1193,7 @@ function resolveFarmFight(profile, battle) {
       let skillNote = "";
       if (profile.job === 'stinger' && Math.random() < triggerChance) {
         killCount = rand(4, 5);
-        skillNote += `\n⚡ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
+        skillNote += `\n⏩ [스팅거 스킬 발동!] 전투 성과가 급증하여 ${killCount} KILL을 달성했습니다!`;
       }
 
       let totalDamageVal = 0;
@@ -1623,7 +1669,7 @@ function processMultiEnhance(profile, count) {
   }
 
   let resultMsg = [
-    `⚡ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
+    `⏩ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
     `결과 : +${initialLevel} ➔ +${profile[currentEnhanceKey]}`,
     `📊 ${statSummary}`,
     `(총 소모 비용: ${won(totalCost)}${totalGemCost > 0 ? `, 보석 ${totalGemCost}개` : ''})`,
@@ -1762,8 +1808,8 @@ function showAmplifyInfo(profile) {
   const currentAmp = AMPLIFY_TABLE[currentLevel];
   
   let lines = [
-    `⚡ [현재 증폭 정보]`,
-    `현재 증폭 단계: Lv.${currentLevel} (최고 Lv.10)`,
+    `⏩ [현재 증폭 정보]`,
+    `⏩ 증폭 단계 : Lv.${currentLevel}`,
     `• 배율 가산 : x${currentAmp.multBonus.toFixed(2)}`,
     `• 헤드샷 가중치 : ${Math.round(currentAmp.headWeight * 100)}%`,
     `• 강화 성공 보정 : +${currentAmp.successBonus.toFixed(1)}%`,
@@ -1775,8 +1821,11 @@ function showAmplifyInfo(profile) {
     const goldRange = nextAmp.minGold === nextAmp.maxGold ? `${nextAmp.minGold.toLocaleString()}개` : `${nextAmp.minGold.toLocaleString()}~${nextAmp.maxGold.toLocaleString()}개`;
     lines.push(
       ``,
-      `다음 단계(Lv.${currentLevel + 1}) 업그레이드 정보:`,
+      `⏩ 증폭(Lv.${currentLevel + 1}) 업그레이드 정보:`,
       `• 필요 금괴 : ${nextAmp.costNext.toLocaleString()}개`,
+      `• 배율 가산 : x${nextAmp.multBonus.toFixed(2)}`,
+      `• 헤드샷 가중치 : ${Math.round(nextAmp.headWeight * 100)}%`,
+      `• 강화 성공 보정 : +${nextAmp.successBonus.toFixed(1)}%`,
       `• 획득 가능 금괴 수량 : ${goldRange}`,
       ``,
       `증폭 강화를 진행하시려면 [/증폭강화] 명령어를 입력해 주세요.`
@@ -1823,7 +1872,7 @@ function processAmplify(profile, targetLevels = 1) {
   const goldRangeNext = nextAmp.minGold === nextAmp.maxGold ? `${nextAmp.minGold.toLocaleString()}개` : `${nextAmp.minGold.toLocaleString()}~${nextAmp.maxGold.toLocaleString()}개`;
 
   const resultMsg = [
-    `⚡ 증폭 강화 성공!`,
+    `⏩ 증폭 강화 성공!`,
     `[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]`,
     `• 소모 금괴: ${totalGoldSpent.toLocaleString()}개`,
     `• 배율 가산 | x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
@@ -1886,7 +1935,7 @@ function processUseKey(profile, countArg) {
 function getJobInfoText(jobCode, skillLevel = 1) {
   const chance = skillLevel * 2; 
   if (jobCode === 'stinger') {
-    return `⚡ 스팅거 : 적 처치 및 파밍 시 ${chance}% 확률로 대량의 킬수(4~5 KILL)를 단번에 쓸어담습니다.`;
+    return `⏩ 스팅거 : 적 처치 및 파밍 시 ${chance}% 확률로 대량의 킬수(4~5 KILL)를 단번에 쓸어담습니다.`;
   } else if (jobCode === 'sentinel') {
     return `🛡️ 센티넬 : ${chance}% 확률로 정밀 사격 스킬이 발동하여 적의 헤드를 확정 타격합니다.`;
   } else if (jobCode === 'shadow') {
@@ -1910,7 +1959,7 @@ function processJobCommand(profile, targetJob) {
       `🎖️ [현재 전직 정보]`,
       `직업: ${currentJobName}`,
       ``,
-      `⚡ [전직 스킬]`,
+      `⏩ [전직 스킬]`,
       `${currentJobName} 스킬 레벨: Lv.${skillLevel}`,
       currentSkillInfo,
       `(비용 : 금괴 ${(skillLevel) * 500}개)`
@@ -1944,7 +1993,7 @@ function processJobCommand(profile, targetJob) {
         `• 최고 무기 '+20 싱귤래리티' 달성`,
         `• 전직 비용: ${won(REQUIRED_CASH)}, 금괴 ${REQUIRED_GOLD}개`,
         ``,
-        `1. ⚡ 스팅거 (/전직 스팅거)`,
+        `1. ⏩ 스팅거 (/전직 스팅거)`,
         `   - 처치 시 일정 확률로 대량의 킬수(4~5 KILL) 폭발 달성`,
         `2. 🛡️ 센티넬 (/전직 센티넬)`,
         `   - 처치 시 일정 확률로 헤드샷 확정 정밀 사격 발동`,
@@ -2049,7 +2098,7 @@ function processUpgradeJobSkill(profile) {
 
   return { 
     text: [
-      `⚡ [전직 스킬 승급 성공!]`,
+      `⏩ [전직 스킬 승급 성공!]`,
       `${jobNames[profile.job]} 스킬 레벨: Lv.${currentLevel} ➔ Lv.${profile.jobSkillLevel}`,
       `(소모: 금괴 ${goldCost.toLocaleString()}개)`,
       `🗡️ ${jobNames[profile.job]} : 적 처치 시 ${prevChance}% ➔ ${nextChance}% 확률로 은밀하게 추가 재화(현금/금괴/열쇠)를 훔쳐옵니다.`,
@@ -2100,13 +2149,16 @@ function processImprintCommand(profile) {
     }
   });
 
-  lines.push(`\n💡 사용 가능한 명령어:`);
-  lines.push(`• /각인해금 [1~5] - 조건 만족 시 해당 슬롯 해금`);
-  lines.push(`• /각인잠금 [1~5] - 해당 슬롯 옵션 잠금`);
-  lines.push(`• /각인해제 [1~5] - 잠긴 슬롯 해제`);
-  lines.push(`• /각인변경 - 각인 변경 (잠긴 슬롯당 비용 2배)`);
+  const showHelp = checkAndMarkHelp(profile, 'imprint');
+  if (showHelp) {
+    lines.push(`\n💡 사용 가능한 명령어:`);
+    lines.push(`• /각인해금 [1~5] - 조건 만족 시 해당 슬롯 해금`);
+    lines.push(`• /각인잠금 [1~5] - 해당 슬롯 옵션 잠금`);
+    lines.push(`• /각인해제 [1~5] - 잠긴 슬롯 해제`);
+    lines.push(`• /각인변경 - 각인 변경 (잠긴 슬롯당 비용 2배)`);
+  }
 
-  return { text: lines.join('\n') };
+  return { text: lines.join('\n'), choices: IMPRINT_CHOICES };
 }
 
 function processImprintUnlock(profile, tierArg) {
@@ -2310,7 +2362,7 @@ function processImprintReroll(profile) {
 
   resultLines.push(``);
   resultLines.push(resourceText(profile));
-  return { text: resultLines.join('\n' ) };
+  return { text: resultLines.join('\n' ), choices: IMPRINT_CHOICES };
 }
 
 function checkAndResetHuntLimit(playerState) {
@@ -2345,7 +2397,7 @@ function processHunt(playerState) {
   if (playerState.huntData.count >= MAX_HUNT_COUNT) {
     return {
       text: `[사냥 불가]\n오늘 사냥 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "사냥하기", value: "사냥" }],
+      choices: [{ label: "메인", action: "/메인" }],
       imageUrl: null,
       image: null,
       thumbnail: null
@@ -2356,7 +2408,7 @@ function processHunt(playerState) {
   if (!monster) {
     return {
       text: `사냥감을 찾지 못했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "사냥하기", value: "사냥" }],
+      choices: [{ label: "메인", action: "/메인" }],
       imageUrl: null,
       image: null,
       thumbnail: null
@@ -2364,8 +2416,15 @@ function processHunt(playerState) {
   }
 
   const speed = playerState.speedMultiplier || 1;
-  playerState.huntData.count += 1;
-  const earnedCash = monster.rewardMoney * speed;
+  
+  if (playerState.huntData.count + speed > MAX_HUNT_COUNT) {
+    playerState.huntData.count = MAX_HUNT_COUNT;
+  } else {
+    playerState.huntData.count += speed;
+  }
+
+  const lootMult = getLootMultiplier(playerState);
+  const earnedCash = Math.floor(monster.rewardMoney * speed * lootMult);
   playerState.cash = (playerState.cash || 0) + earnedCash;
   
   let earnedGem = (monster.rewardGem > 0 ? monster.rewardGem : 0) * speed;
@@ -2377,19 +2436,19 @@ function processHunt(playerState) {
   const count = playerState.huntData.count;
   const dice = rand(1, 6);
 
-  if (count === 100) {
+  if (count >= 100 && count - speed < 100) {
     const qCash = 10000 * dice * speed;
     playerState.cash += qCash;
     questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count === 250) {
+  } else if (count >= 250 && count - speed < 250) {
     const qCash = 20000 * dice * speed;
     playerState.cash += qCash;
     questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count === 500) {
+  } else if (count >= 500 && count - speed < 500) {
     const qGem = 1 * dice * speed;
     playerState.gem += qGem;
     questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
-  } else if (count === 1000) {
+  } else if (count >= 1000 && count - speed < 1000) {
     const qGem = 2 * dice * speed;
     playerState.gem += qGem;
     questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
@@ -2435,9 +2494,9 @@ function processHunt(playerState) {
     droppedLootText = `\n\n🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/창고에서 확인)`;
   }
 
-  let rewardLines = `현금 +${won(earnedCash)}`;
+  let rewardLines = `💵 현금 +${won(earnedCash)}`;
   if (earnedGem > 0) {
-    rewardLines += `\n보석 +${earnedGem}개`;
+    rewardLines += `\n💎 보석 +${earnedGem}개`;
   }
 
   const text = `[몬스터 발견!]
@@ -2447,13 +2506,15 @@ ${monster.grade}
 
 ${rewardLines}
 
-총 현금 : ${won(playerState.cash)}
-총 보석 : ${(playerState.gem || 0).toLocaleString()}개
-오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})${questRewardMsg}${droppedLootText}`;
+🔘 배율 x${lootMult.toFixed(2)}
+💵 현금 : ${won(playerState.cash)}
+💎 보석 : ${(playerState.gem || 0).toLocaleString()}개
+오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})${questRewardMsg}${droppedLootText}
+⏩ ${speed}배속`;
   
   const choices = [
-    { label: "계속 사냥하기", value: "사냥" },
-    { label: "메인으로", value: "메인" }
+    { label: "사냥", action: "/사냥" },
+    { label: "메인", action: "/메인" }
   ];
 
   return {
@@ -2481,7 +2542,7 @@ function processSpeedCommand(profile, arg) {
   }
 
   profile.speedMultiplier = speedVal;
-  return { text: `⚡ 배속이 [x${speedVal}](으)로 설정되었습니다! (/전투 및 /사냥 보상 적용)` };
+  return { text: `⏩ 배속이 [x${speedVal}](으)로 설정되었습니다! (/전투 및 /사냥 보상 적용)` };
 }
 
 function getRandomMonsterByProbability() {
@@ -2557,7 +2618,7 @@ function getMonstersByGrade(grade) {
 }
 
 function getRewardMoney(grade) {
-  const range = gradeRewards[grade] || { min: 10000, max: 50000 };
+  const range = gradeRewards[grade] || { min: 200, max: 500 };
   return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
 }
 
@@ -2571,7 +2632,7 @@ function startGame(existingProfile) {
   let battle = createBattle(profile);
 
   return {
-    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/전투', '사냥' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
+    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/전투', '/사냥' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
     imageUrl: null, 
     choices: BATTLE_CHOICES,
     category: 'start',
@@ -2595,7 +2656,7 @@ function processTurn(state, utterance) {
     return {
       text: startResult.text,
       choices: [
-        { label: "사냥하기", value: "사냥" },
+        { label: "사냥", action: "/사냥" },
         { label: "전투", action: '/전투' }
       ],
       category: "main",
@@ -2659,16 +2720,18 @@ function processTurn(state, utterance) {
   
   const isPlayingBattle = battle && battle.alive && !battle.finished;
 
-  if (!input.startsWith('/')) {
+  if (input === '/사냥') {
+    // allow direct /사냥
+  } else if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim().toLowerCase();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '사냥', '창고', '배속'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '창고', '배속'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
     } else {
       const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
       return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작하거나 '사냥'을 입력할 수 있습니다. (예: /전투, /프로필, 사냥)\n\n${currentBoard}`,
+        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /사냥)\n\n${currentBoard}`,
         imageUrl: null,
         choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
         state: { profile, battle }
@@ -2700,14 +2763,14 @@ function processTurn(state, utterance) {
       `• /각인 - 각인 정보 확인`,
       `• /창고 - 획득한 전리품 확인`,
       `• /프로필 - 내 정보 확인`,
-      `• 사냥 - 몬스터 사냥 및 현금 보상 획득`
+      `• /사냥 - 몬스터 사냥 및 현금 보상 획득`
     ].join('\n');
     return { text: helpText, imageUrl: null, state: { profile, battle } };
   }
 
   let cmdParts = input.split(' ');
   let command = cmdParts[0];
-  let arg = cmdParts[1];
+  let arg = cmdParts.slice(1).join(' ');
 
   let result = { text: '', imageUrl: null, choices: null, category: 'normal' };
 
@@ -2890,7 +2953,7 @@ function processTurn(state, utterance) {
       break;
     }
     case '/강화': {
-      if (arg !== undefined) {
+      if (arg !== undefined && arg !== '') {
         const targetLvl = parseInt(arg, 10);
         const guarRes = processGuaranteedEnhance(profile, targetLvl);
         result.text = guarRes.text;
@@ -2904,7 +2967,7 @@ function processTurn(state, utterance) {
       break;
     }
     case '/연속강화': {
-      const count = arg !== undefined ? (parseInt(arg, 10) || 1) : 1;
+      const count = arg !== undefined && arg !== '' ? (parseInt(arg, 10) || 1) : 1;
       const multiRes = processMultiEnhance(profile, count);
       result.text = multiRes.text;
       result.imageUrl = multiRes.imageUrl;
@@ -2980,35 +3043,34 @@ function processTurn(state, utterance) {
     case '/각인': {
       const imprintRes = processImprintCommand(profile);
       result.text = imprintRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = imprintRes.choices;
       break;
     }
     case '/각인해금': {
       const unlockRes = processImprintUnlock(profile, arg);
       result.text = unlockRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = IMPRINT_CHOICES;
       break;
     }
     case '/각인잠금': {
       const lockRes = processImprintLock(profile, arg);
       result.text = lockRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = IMPRINT_CHOICES;
       break;
     }
     case '/각인해제': {
       const unlockSlotRes = processImprintUnlockSlot(profile, arg);
       result.text = unlockSlotRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = IMPRINT_CHOICES;
       break;
     }
     case '/각인변경': {
       const rerollRes = processImprintReroll(profile);
       result.text = rerollRes.text;
-      result.choices = LOBBY_CHOICES;
+      result.choices = rerollRes.choices;
       break;
     }
-    case '/사냥':
-    case '사냥': {
+    case '/사냥': {
       const huntRes = processHunt(profile);
       result.text = huntRes.text;
       result.imageUrl = huntRes.imageUrl;
