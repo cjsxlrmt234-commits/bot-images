@@ -1,5 +1,5 @@
 // 
-// game.js
+// game.js - 이미지 출력 및 명령어 인식 완벽 호환 통합 파일
 //
 
 const MAX_TURN = 15;
@@ -10,6 +10,123 @@ const JOB_CHANGE_GOLD = 1000;
 const REFINE_BASE_CASH = 10000000;
 
 const BASE_URL = 'https://raw.githubusercontent.com/cjsxlrmt234-commits/bot-images/main'; 
+
+const prefixes = {
+  "D등급": ["초보", "약한", "지저분한", "배고픈", "겁먹은"],
+  "C등급": ["단단한", "날쌘", "거친", "사나운", "독이 묻은"],
+  "B등급": ["거대한", "흉포한", "타락한", "어둠의", "철갑"],
+  "A등급": ["광폭한", "고대의", "지옥의", "군주", "수호자"],
+  "S등급": ["파멸의", "절망의", "신들의", "혼돈의", "태초의"]
+};
+
+const monsters = [
+  // D등급 (1~10)
+  { name: "먼지 정령", grade: "D등급", description: "버려진 공간에서 자생하는 약한 마력의 작은 먼지 덩어리.", image: `${BASE_URL}/images/D_1.png` },
+  { name: "이슬 슬라임", grade: "D등급", description: "숲속의 맑은 물웅덩이에서 발견되는 투명하고 해가 없는 물컹한 생명체.", image: `${BASE_URL}/images/D_2.png` },
+  { name: "들쥐 포식자", grade: "D등급", description: "곡식 창고나 들판을 배회하며 농작물을 훔쳐 먹는 덩치 큰 일반 쥐.", image: `${BASE_URL}/images/D_3.png` },
+  { name: "삐쭉이 묘목", grade: "D등급", description: "마력에 의해 이동 능력을 얻었으나 공격력은 거의 없는 새싹 괴물.", image: `${BASE_URL}/images/D_4.png` },
+  { name: "청동 부스러기 곤충", grade: "D등급", description: "금속 파편을 갉아먹고 사는 장난감 크기의 기계성 곤충.", image: `${BASE_URL}/images/D_5.png` },
+  { name: "좀비 거머리", grade: "D등급", description: "축축한 동굴 바닥에 서식하며 다가오는 생물의 피부에 붙는 흡혈 괴물.", image: `${BASE_URL}/images/D_6.png` },
+  { name: "약초 도둑 토끼", grade: "D등급", description: "마력초의 냄새를 쫓아 모여드는 성가신 이빨의 야생 토끼.", image: `${BASE_URL}/images/D_7.png` },
+  { name: "푸른 파편 박쥐", grade: "D등급", description: "지하 초입에서 서식하며 초음파로 길을 찾는 소형 박쥐.", image: `${BASE_URL}/images/D_8.png` },
+  { name: "이끼 거북이", grade: "D등급", description: "등딱지에 두꺼운 이끼가 자라나 풀숲과 구분이 안 되는 소형 파충류.", image: `${BASE_URL}/images/D_9.png` },
+  { name: "썩은 짚인형", grade: "D등급", description: "폐가나 마법사의 공방 버려진 구석에서 움직이기 시작한 인형.", image: `${BASE_URL}/images/D_10.png` },
+
+  // C등급 (1~10)
+  { name: "들쇠 토끼", grade: "C등급", description: "튼튼한 뒷발로 강력한 돌려차기를 구사하는 전투용 거대 토끼.", image: `${BASE_URL}/images/C_1.png` },
+  { name: "돌멩이 골렘", grade: "C등급", description: "하급 마석의 힘으로 움직이는 거친 바위 조각들의 집합체.", image: `${BASE_URL}/images/C_2.png` },
+  { name: "독니 독사", grade: "C등급", description: "늪지대에 서식하며 물리면 마비 효과를 일으키는 초급 독사.", image: `${BASE_URL}/images/C_3.png` },
+  { name: "그림자 늑대", grade: "C등급", description: "어두운 숲에서 무리를 지어 사냥하며 야간에 은신 능력이 뛰어난 맹수.", image: `${BASE_URL}/images/C_4.png` },
+  { name: "고블린 투창병", grade: "C등급", description: "날카로운 뼈 창을 원거리에서 던져 사냥감을 괴롭히는 소형 휴머노이드.", image: `${BASE_URL}/images/C_5.png` },
+  { name: "가시멧돼지", grade: "C등급", description: "온몸이 단단한 강철 가시로 덮여 있어 돌진 공격이 특기인 야수.", image: `${BASE_URL}/images/C_6.png` },
+  { name: "부서진 해골 병사", grade: "C등급", description: "고대 전장의 잔해에서 마력에 의해 되살아난 하급 언데드 전사.", image: `${BASE_URL}/images/C_7.png` },
+  { name: "하급 샐러맨더", grade: "C등급", description: "불길이 약하게 감싸고 있는 도마뱀 형태로, 뜨거운 열기를 뿜어냄.", image: `${BASE_URL}/images/C_8.png` },
+  { name: "맹독 벌레떼", grade: "C등급", description: "떼 지어 날아다니며 상대의 시야를 가리고 피부를 갉아먹는 곤충형 몬스터.", image: `${BASE_URL}/images/C_9.png` },
+  { name: "늪지 요괴", grade: "C등급", description: "이끼와 진흙으로 위장하여 지나가는 나그네를 물속으로 끌어들이는 괴물.", image: `${BASE_URL}/images/C_10.png` },
+
+  // B등급 (1~10)
+  { name: "철갑 오크 장교", grade: "B등급", description: "두꺼운 철판 갑옷을 두르고 거대한 철퇴를 휘두르는 오크 지휘관.", image: `${BASE_URL}/images/B_1.png` },
+  { name: "서리 하피", grade: "B등급", description: "매서운 얼음 바람을 일으키며 높은 고도에서 급강하해 발톱으로 공격하는 괴물.", image: `${BASE_URL}/images/B_2.png` },
+  { name: "그림자 암살자", grade: "B등급", description: "빛을 흡수하는 은신 스킬을 사용해 단숨에 급소를 노리는 인간형 유령.", image: `${BASE_URL}/images/B_3.png` },
+  { name: "화염 사냥개", grade: "B등급", description: "지옥의 불길을 입은 채 맹렬하게 달리는 머리 두 개 달린 마수.", image: `${BASE_URL}/images/B_4.png` },
+  { name: "바위 거인", grade: "B등급", description: "산비탈의 돌무더기가 뭉쳐서 만들어진 거대한 체구의 골렘.", image: `${BASE_URL}/images/B_5.png` },
+  { name: "사이렌", grade: "B등급", description: "매혹적인 노랫소리로 항해사나 모험가의 정신을 빼놓고 물속으로 유인하는 정령.", image: `${BASE_URL}/images/B_6.png` },
+  { name: "맹독 아라크네", grade: "B등급", description: "온몸에서 강한 산성 독을 뿜어내며 벽과 천장을 자유롭게 기어 다니는 거미 괴물.", image: `${BASE_URL}/images/B_7.png` },
+  { name: "유령 기사", grade: "B등급", description: "찢어진 깃발을 들고 밤마다 옛 전장을 순찰하는 저주받은 기사 망령.", image: `${BASE_URL}/images/B_8.png` },
+  { name: "라이트닝 드레이크", grade: "B등급", description: "번개를 뿜어내기 시작하는 어린 단계의 용족 괴물.", image: `${BASE_URL}/images/B_9.png` },
+  { name: "피의 구울", grade: "B등급", description: "시체를 탐닉하며 인간의 이성을 잃고 육식 본능만 남은 흉포한 언데드.", image: `${BASE_URL}/images/B_10.png` },
+
+  // A등급 (1~10)
+  { name: "심연의 리치", grade: "A등급", description: "금지된 흑마술을 극도로 연마해 영혼의 힘으로 언데드 군단을 지휘하는 마법사.", image: `${BASE_URL}/images/A_1.png` },
+  { name: "서리 거룡", grade: "A등급", description: "입김만으로 주변 반경 수 킬로미터를 순식간에 얼어붙게 만드는 성숙한 용족.", image: `${BASE_URL}/images/A_2.png` },
+  { name: "지옥불 미노타우로스", grade: "A등급", description: "몸 전체가 용암처럼 이글거리는 도끼를 휘두르는 미궁의 지배자.", image: `${BASE_URL}/images/A_3.png` },
+  { name: "고대 뱀파이어 백작", grade: "A등급", description: "수백 년 동안 인간의 피를 흡수해 절대적인 속도와 최면 능력을 지닌 흡혈귀.", image: `${BASE_URL}/images/A_4.png` },
+  { name: "폭풍의 정령왕", grade: "A등급", description: "하늘에서 거대한 번개와 폭풍을 자유자재로 불러일으키는 재앙급 정령.", image: `${BASE_URL}/images/A_5.png` },
+  { name: "철혈의 와이번 킹", grade: "A등급", description: "수많은 와이번 무리를 이끄는 우두머리로, 강철 같은 비늘을 지님.", image: `${BASE_URL}/images/A_6.png` },
+  { name: "타락한 성기사 멜키르", grade: "A등급", description: "신성력을 잃고 어둠의 계약에 물들어 거대한 대검을 휘두르는 타락한 영웅.", image: `${BASE_URL}/images/A_7.png` },
+  { name: "거대 심해 크라켄", grade: "A등급", description: "바다 한가운데서 배를 통째로 집어삼키는 다리의 촉수를 가진 거대 수중 괴물.", image: `${BASE_URL}/images/A_8.png` },
+  { name: "혼돈의 나무", grade: "A등급", description: "숲 전체를 독성 안개로 물들이고 뿌리로 적을 포박하는 거대한 고대 식물.", image: `${BASE_URL}/images/A_9.png` },
+  { name: "공허의 마녀", grade: "A등급", description: "차원의 틈새를 열어 시공간을 왜곡하는 저주 마법을 구사하는 최상급 마법사.", image: `${BASE_URL}/images/A_10.png` },
+
+  // S등급 (1)
+  { name: "공허의 군주", grade: "S등급", description: "차원과 현실의 경계를 완전히 무너뜨리고 세계를 흡수하려는 외신(外神)적 존재", image: `${BASE_URL}/images/S_1.png` }
+];
+
+const gradeRewards = {
+  "D등급": { min: 10000, max: 50000 },
+  "D+등급": { min: 25000, max: 75000 },
+  "C등급": { min: 50000, max: 100000 },
+  "C+등급": { min: 75000, max: 150000 },
+  "B등급": { min: 100000, max: 200000 },
+  "B+등급": { min: 200000, max: 350000, gem: 1 },
+  "A등급": { min: 300000, max: 500000, gem: 1 },
+  "A+등급": { min: 500000, max: 800000, gem: 5 },
+  "S등급": { min: 500000, max: 5000000, gem: 10 },
+  "S+등급": { min: 2000000, max: 10000000, gem: 50 }
+};
+
+const LOOT_DATABASE = {
+  stock: [
+    { tier: "T1", name: "스탠다드 플라스틱 개머리판", desc: "투박하고 헐거운 사출 플라스틱 소재의 기본 개머리판 — 흔들거리고 어깨에 닿는 느낌이 엉성한 최하위 파츠입니다." },
+    { tier: "T2", name: "와이어 프레임 스톡", desc: "철제 와이어를 꺾어 만든 단순한 접이식 개머리판 — 가볍지만 뺨을 대고 조준할 때 안정감이 떨어지는 입문용 파츠입니다." },
+    { tier: "T3", name: "택티컬 카빈 스톡", desc: "현대 돌격소총에 널리 쓰이는 길이 조절식 모던 폴리머 개머리판 — 무난한 고정성과 깔끔한 실루엣을 제공합니다." },
+    { tier: "T4", name: "에르고노믹 컴뱃 스톡", desc: "고무 패드와 뺨이 닿는 칙패드가 보강된 전술형 개머리판 — 반동 흡수력이 뛰어나 실전파 유저들이 선호하는 중급형 파츠입니다." },
+    { tier: "T5", name: "스켈레톤 저격용 스톡", desc: "불필요한 무게를 덜어내고 다이얼로 치수를 정밀 조절할 수 있는 하이엔드 스톡 — 날렵하고 전문적인 저격수 감성을 뿜어냅니다." },
+    { tier: "T6", name: "테크니컬 스마트 하이퍼 스톡", desc: "충격 흡수 유압 댐퍼와 자세 교정 센서가 내장된 궁극의 개머리판 — 압도적인 비주얼과 완벽한 반동 제어 스펙을 자랑합니다." }
+  ],
+  silencer: [
+    { tier: "T1", name: "스탠다드 깡통 소음기", desc: "투박한 원통형 철관 — 소음 효과는 미미하지만 튜토리얼 초반에 겨우 얻는 가장 볼품없는 기본형입니다." },
+    { tier: "T2", name: "슬림 피스톨 소음기", desc: "가늘고 길쭉한 형태 — 권총이나 소형 기관단총에 장착해 은밀함을 살짝 더해주는 입문용 파츠입니다." },
+    { tier: "T3", name: "오퍼레이터 서프레서", desc: "다각 모따기 처리가 된 모던한 폴리머/스틸 혼합형 — 대중적이며 무난한 소음 및 화염 억제력을 보여줍니다." },
+    { tier: "T4", name: "플루티드 택티컬 소음기", desc: "총열 표면에 홈(Flute)이 파여 방열 성능을 높인 중급형 — 세련된 디자인과 안정적인 반동 제어를 제공합니다." },
+    { tier: "T5", name: "하이엔드 퀵디스커버리 소음기", desc: "티타늄 소재에 퀵 탈착 레버가 장착된 고급형 — 가볍고 날렵한 실루엣으로 하이테크 느낌을 줍니다." },
+    { tier: "T6", name: "마스터피스 사일런서", desc: "첨단 흡음 메커니즘과 카본 패턴이 적용된 궁극의 소음기 — 소음과 명중률을 동시에 극대화하는 최상위 파츠입니다." }
+  ],
+  scope: [
+    { tier: "T1", name: "오픈 아이언 사이트 / 플라스틱 도트", desc: "저가형 플라스틱 틀에 대충 박힌 조준기 — 시야가 답답하고 멋이 전혀 나지 않습니다." },
+    { tier: "T2", name: "오판 도트 시이트", desc: "투박한 직사각형 박스 형태의 입문용 도트 — 가까운 거리는 잘 보이지만 실내 전투 외에는 아쉬운 성능입니다." },
+    { tier: "T3", name: "홀로그래픽 컴팩트 스코프", desc: "원형 링 레티클이 선명하게 빛나는 모던한 1배율 광학기 — 반응 속도가 빠르고 챗봇 무기 디자인에 무난하게 어울립니다." },
+    { tier: "T4", name: "하이브리드 중거리 스코프 (3배율)", desc: "접이식 매그니파이어가 조합된 전술형 스코프 — 근거리와 중거리를 모두 커버하는 실전파 유저 선호형입니다." },
+    { tier: "T5", name: "샤프슈터 정밀 스코프 (6배율)", desc: "길쭉한 본체와 다이얼이 촘촘히 박힌 저격용 광학 장비 — 날렵하고 전문적인 저격수 감성을 뿜어냅니다." },
+    { tier: "T6", name: "테크니컬 스마트 스코프", desc: "열화상 및 탄도 계산 HUD가 연동되는 초고가 하이테크 스코프 — 압도적인 비주얼과 최고급 스펙을 자랑하는 궁극의 조준경입니다." }
+  ],
+  magazine: [
+    { tier: "T1", name: "싱글스택 철제 탄창", desc: "누렇게 바랜 철판 느낌의 얇고 긴 기본 탄창 — 장탄 수도 적고 잔고장이 많아 보이 는 촌스러운 형태입니다." },
+    { tier: "T2", name: "바나나형 스틸 탄창", desc: "꺾인 곡선이 들어간 표준형 탄창 — 군용 총기의 상징과도 같지만 다소 낡은 느낌을 줍니다." },
+    { tier: "T3", name: "폴리머 윈맥스 탄창", desc: "투명 창이 살짝 나 있어 잔탄 확인이 가능한 모던 폴리머 탄창 — 실용성과 깔끔한 디자인을 챙겼습니다." },
+    { tier: "T4", name: "듀얼 클립 패스트 탄창", desc: "탄창 두 개가 밴드로 결합되어 신속한 재장전이 가능한 택티컬형 — 전투 지속력을 높여주는 프로 튜닝 파츠입니다." },
+    { tier: "T5", name: "드럼 캔디 탄창", desc: "대용량 탄약을 원형으로 수납하는 드럼 탄창 — 화력 덕후들이 선호하는 거대하고 위압적인 실루엣입니다." },
+    { tier: "T6", name: "퀀텀 에너지/고강도 카본 드럼 탄창", desc: "초경량 신소재와 급탄 모터가 내장된 최첨단 하이엔드 탄창 — 미래지향적인 디자인과 무한에 가까운 연사력을 상징합니다." }
+  ],
+  grip: [
+    { tier: "T1", name: "플라스틱 민무늬 손잡이", desc: "총몸과 일체형인 밋밋하고 미끄러운 기본 그립 — 그립감이 떨어지고 장시간 파지 시 손이 아픕니다." },
+    { tier: "T2", name: "버티컬 포워드 그립", desc: "총열 하단에 수직으로 장착하는 단순한 손잡이 — 반동을 억제하기 시작하는 가장 기초적인 전술 그립입니다." },
+    { tier: "T3", name: "앵글드 택티컬 그립", desc: "비스듬한 각도로 손목 부담을 줄여주는 모던 폴리머 그립 — 현대 소총에서 가장 널리 쓰이는 무난한 파츠입니다." },
+    { tier: "T4", name: "러버ized 에르고노믹 그립", desc: "미끄럼 방지 고무 코팅과 손가락 홈이 정교하게 파인 프로 튜닝형 — 최상의 파지감을 제공합니다." },
+    { tier: "T5", name: "바이포드 겸용 스켈레톤 그립", desc: "평소에는 날렵한 수직 그립이지만 필요시 다리가 펼쳐지는 하이브리드 파츠 — 저격과 돌격을 모두 잡은 하이엔드 그립입니다." },
+    { tier: "T6", name: "스마트 홀로그래픽 컨트롤 그립", desc: "생체 인식 센서와 반동 제어 댐퍼가 내장된 궁극의 마스터피스 그립 — 화려한 LED 라인과 최고 스펙을 자랑합니다." }
+  ]
+};
 
 const WEAPON_TIERS = [
   ['맨손', '맨손'],
@@ -107,33 +224,50 @@ const SENTINEL_WEAPON_TIERS = [
   ['앱솔루트 오비탈', '센티넬 기술력의 궁극적인 정점']
 ];
 
-const JOB_WEAPONS = {
-  stinger: '스팅거 블래스터',
-  sentinel: '센티넬 라이플',
-  shadow: '섀도우 대거'
-};
-
 const ENHANCE_TABLE = [
-  { cost: 10000, success: 1.00, keep: 0.00, fail: 0.00 },
-  { cost: 20000, success: 0.95, keep: 0.05, fail: 0.00 },
-  { cost: 35000, success: 0.90, keep: 0.10, fail: 0.00 },
-  { cost: 55000, success: 0.85, keep: 0.14, fail: 0.01 },
-  { cost: 80000, success: 0.80, keep: 0.17, fail: 0.03 },
-  { cost: 110000, success: 0.70, keep: 0.25, fail: 0.05 },
-  { cost: 145000, success: 0.60, keep: 0.30, fail: 0.10 },
-  { cost: 185000, success: 0.50, keep: 0.40, fail: 0.10 },
-  { cost: 230000, success: 0.40, keep: 0.50, fail: 0.10 },
-  { cost: 280000, success: 0.35, keep: 0.55, fail: 0.10 },
-  { cost: 400000, success: 0.30, keep: 0.60, fail: 0.10 },
-  { cost: 500000, success: 0.25, keep: 0.65, fail: 0.10 },
-  { cost: 700000, success: 0.22, keep: 0.68, fail: 0.10 },
-  { cost: 1000000, success: 0.20, keep: 0.70, fail: 0.10 },
-  { cost: 1400000, success: 0.18, keep: 0.72, fail: 0.10 },
-  { cost: 1900000, success: 0.15, keep: 0.75, fail: 0.10 },
-  { cost: 2500000, success: 0.13, keep: 0.77, fail: 0.10 },
-  { cost: 3200000, success: 0.09, keep: 0.81, fail: 0.10 },
-  { cost: 4000000, success: 0.07, keep: 0.83, fail: 0.10 },
-  { cost: 5000000, success: 0.05, keep: 0.85, fail: 0.10 },
+  { cost: 1000, success: 1.00, keep: 0.00, destroy: 0.00 },
+  { cost: 2000, success: 0.95, keep: 0.05, destroy: 0.00 },
+  { cost: 3500, success: 0.90, keep: 0.10, destroy: 0.00 },
+  { cost: 5500, success: 0.85, keep: 0.14, destroy: 0.01 },
+  { cost: 8000, success: 0.80, keep: 0.17, destroy: 0.03 },
+  { cost: 11000, success: 0.70, keep: 0.25, destroy: 0.05 },
+  { cost: 14500, success: 0.60, keep: 0.30, destroy: 0.10 },
+  { cost: 18500, success: 0.50, keep: 0.40, destroy: 0.10 },
+  { cost: 23000, success: 0.40, keep: 0.50, destroy: 0.10 },
+  { cost: 28000, success: 0.35, keep: 0.55, destroy: 0.10 },
+  { cost: 40000, success: 0.30, keep: 0.60, destroy: 0.10 },
+  { cost: 50000, success: 0.25, keep: 0.65, destroy: 0.10 },
+  { cost: 70000, success: 0.22, keep: 0.68, destroy: 0.10 },
+  { cost: 100000, success: 0.20, keep: 0.70, destroy: 0.10 },
+  { cost: 140000, success: 0.18, keep: 0.72, destroy: 0.10 },
+  { cost: 190000, success: 0.15, keep: 0.75, destroy: 0.10 },
+  { cost: 250000, success: 0.13, keep: 0.77, destroy: 0.10 },
+  { cost: 320000, success: 0.09, keep: 0.81, destroy: 0.10 },
+  { cost: 400000, success: 0.07, keep: 0.83, destroy: 0.10 },
+  { cost: 500000, success: 0.05, keep: 0.85, destroy: 0.10 },
+];
+
+const JOB_ENHANCE_TABLE = [
+  { cost: 50000, success: 1.00, keep: 0.00, drop: 0.00, destroy: 0.00 },
+  { cost: 100000, success: 0.90, keep: 0.10, drop: 0.00, destroy: 0.00 },
+  { cost: 150000, success: 0.80, keep: 0.20, drop: 0.00, destroy: 0.00 },
+  { cost: 200000, success: 0.70, keep: 0.29, drop: 0.01, destroy: 0.00 },
+  { cost: 250000, success: 0.60, keep: 0.38, drop: 0.02, destroy: 0.00 },
+  { cost: 350000, success: 0.50, keep: 0.47, drop: 0.03, destroy: 0.00 },
+  { cost: 450000, success: 0.45, keep: 0.51, drop: 0.04, destroy: 0.00 },
+  { cost: 550000, success: 0.40, keep: 0.55, drop: 0.05, destroy: 0.00 },
+  { cost: 650000, success: 0.35, keep: 0.60, drop: 0.05, destroy: 0.00 },
+  { cost: 1000000, success: 0.30, keep: 0.60, drop: 0.10, destroy: 0.00, gemCost: 10 },
+  { cost: 1250000, success: 0.27, keep: 0.67, drop: 0.05, destroy: 0.01, gemCost: 11 },
+  { cost: 1500000, success: 0.24, keep: 0.69, drop: 0.05, destroy: 0.02, gemCost: 12 },
+  { cost: 1750000, success: 0.21, keep: 0.71, drop: 0.05, destroy: 0.03, gemCost: 13 },
+  { cost: 2000000, success: 0.18, keep: 0.73, drop: 0.05, destroy: 0.04, gemCost: 14 },
+  { cost: 2250000, success: 0.15, keep: 0.75, drop: 0.05, destroy: 0.05, gemCost: 15 },
+  { cost: 2500000, success: 0.12, keep: 0.77, drop: 0.05, destroy: 0.06, gemCost: 16 },
+  { cost: 2750000, success: 0.10, keep: 0.77, drop: 0.05, destroy: 0.08, gemCost: 17 },
+  { cost: 3000000, success: 0.08, keep: 0.77, drop: 0.05, destroy: 0.10, gemCost: 18 },
+  { cost: 3500000, success: 0.06, keep: 0.77, drop: 0.05, destroy: 0.12, gemCost: 19 },
+  { cost: 4000000, success: 0.05, keep: 0.75, drop: 0.05, destroy: 0.15, gemCost: 20 },
 ];
 
 const REFINE_STARS = [
@@ -220,7 +354,8 @@ const BATTLE_CHOICES = [
 
 const LOBBY_CHOICES = [
   { label: '전투', action: '/전투' },
-  { label: '강화', action: '/강화' }
+  { label: '강화', action: '/강화' },
+  { label: '사냥하기', value: '사냥' }
 ];
 
 const ENHANCE_CHOICES = [
@@ -243,7 +378,7 @@ const JOB_CHOICES = [
 ];
 
 const IMPRINT_OPTION_POOL = [
-  { name: '헤드샷 데미지 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headDmg' },
+  { name: '헤드샷 데미지 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headDmg' },
   { name: '현금 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'cashBoost' },
   { name: '헤드샷 확률 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headRate' },
   { name: '헤드샷 확률 가중치 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headWeight' },
@@ -254,7 +389,7 @@ const IMPRINT_OPTION_POOL = [
   { name: '경험치 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'expBoost' },
   { name: '추가 비밀열쇠 획득 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'keyChance' },
   { name: '피해량 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '', key: 'damageReduce' },
-  { name: '전투력 증가', values: [1, 1.5, 2, 2.5, 3], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
+  { name: '전투력 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
 ];
 
 function rand(min, max) {
@@ -307,7 +442,7 @@ function getRandomSurvivorName() {
 }
 
 function getEnhanceImage(statusType, enhanceLevel, job = null) {
-  if (statusType === 'fail' && enhanceLevel > 0) {
+  if (statusType === 'destroy' && enhanceLevel > 0) {
     return `${BASE_URL}/fail.png`; 
   }
   let level = 0;
@@ -538,6 +673,7 @@ function createProfile(existing = {}) {
   return {
     cash: safeObj.cash ?? 0,
     gold: safeObj.gold ?? 0,
+    gem: safeObj.gem ?? 0,
     keys: safeObj.keys ?? 0,
     enhance: safeObj.enhance ?? 0,
     jobEnhance: safeObj.jobEnhance ?? 0,
@@ -549,6 +685,7 @@ function createProfile(existing = {}) {
     jobSkillLevel: safeObj.jobSkillLevel ?? 1, 
     imprints: safeObj.imprints ?? {}, 
     imprintLocks: safeObj.imprintLocks ?? { I: false, II: false, III: false, IV: false, V: false }, 
+    inventory: safeObj.inventory ?? [],
     nickname: nickname,
     title: safeObj.title ?? '',
     monthItems: safeObj.monthItems ?? 0,
@@ -556,6 +693,7 @@ function createProfile(existing = {}) {
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
+    huntData: safeObj.huntData ?? { date: "", count: 0 }
   };
 }
 
@@ -610,6 +748,7 @@ function profileText(profile, detailed = false) {
     ``,
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
+    `💎 보석 : ${(p.gem || 0).toLocaleString()}개`,
     `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
     `📦 보급 : ${(p.monthItems || 0).toLocaleString()}개`
   );
@@ -622,6 +761,7 @@ function resourceText(profile) {
   return [
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
+    `💎 보석 : ${(p.gem || 0).toLocaleString()}개`,
     `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
     `📦 보급 : ${(p.monthItems || 0).toLocaleString()}개`
   ].join('\n');
@@ -658,10 +798,11 @@ function createBattle(profile) {
     vestDurability: 0,    
     accumulatedCash: 0,
     accumulatedGold: 0,  
+    accumulatedGem: 0,
     accumulatedKeys: 0,  
     accumulatedMonthItems: 0,
     accumulatedExp: 0,   
-    startSnapshot: { cash: profile?.cash || 0, gold: profile?.gold || 0, keys: profile?.keys || 0, monthItems: profile?.monthItems || 0 },
+    startSnapshot: { cash: profile?.cash || 0, gold: profile?.gold || 0, gem: profile?.gem || 0, keys: profile?.keys || 0, monthItems: profile?.monthItems || 0 },
   };
 }
 
@@ -725,6 +866,7 @@ function battleStatusBoard(profile, battle) {
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💵 현금 : ${won(p.cash)}`,
     `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
+    `💎 보석 : ${(p.gem || 0).toLocaleString()}개`,
     `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
     `📦 보급 : ${(p.monthItems || 0).toLocaleString()}개`
   );
@@ -871,6 +1013,11 @@ function resolveFarmFight(profile, battle) {
 
   switch (outcome) {
     case 'supply':
+      {
+        const expGained = 500;
+        const expRes = addExp(profile, expGained);
+        resultMessages.push(`(EXP +${expRes.gained.toLocaleString()})`);
+      }
       break;
     case 'gold': {
       let goldBonus = rand(ampInfo.minGold, ampInfo.maxGold);
@@ -895,10 +1042,14 @@ function resolveFarmFight(profile, battle) {
       break;
     }
     case 'jackpot': {
-      const jackpotAmt = rand(1000, 30000) * mult;
+      const jackpotAmt = rand(5000, 10000) * mult;
       earnedCash = jackpotAmt;
       battle.accumulatedCash += earnedCash;
-      mainText = `[소소한 잭팟!] 현금 ${won(jackpotAmt)} 획득!`;
+      
+      const expGained = 500;
+      const expRes = addExp(profile, expGained);
+
+      mainText = `[잭팟!] 현금 ${won(jackpotAmt)} 획득! (EXP +${expRes.gained.toLocaleString()})`;
       break;
     }
     case 'damage': {
@@ -952,7 +1103,7 @@ function resolveFarmFight(profile, battle) {
       checkDeath(battle);
 
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
-      const damageReward = Math.round((totalDamageVal * 100) * mult);
+      const damageReward = Math.round(totalDamageVal * mult);
       const finalReward = damageReward + killAssistReward;
       
       earnedCash = finalReward;
@@ -967,14 +1118,14 @@ function resolveFarmFight(profile, battle) {
       let notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      const expReward = Math.round(126 * 0.3);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expReward;
-      addExp(profile, 126);
+      const baseExp = Math.round(earnedCash / 10);
+      const expRes = addExp(profile, baseExp);
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained;
 
       mainText = `[${killCount} KILL] (+${won(killAssistReward)})${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${126 + expReward})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${expRes.gained.toLocaleString()})${notes}`;
       break;
     }
     case 'kill_multi': {
@@ -1016,7 +1167,7 @@ function resolveFarmFight(profile, battle) {
       checkDeath(battle);
 
       const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult);
-      const damageReward = Math.round((totalDamageVal * 100) * mult);
+      const damageReward = Math.round(totalDamageVal * mult);
       const finalReward = damageReward + killAssistReward;
       
       earnedCash = finalReward;
@@ -1036,21 +1187,24 @@ function resolveFarmFight(profile, battle) {
 
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
-      const expReward = Math.round(150 * 0.3);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expReward;
-      addExp(profile, 150);
+      const baseExp = Math.round(earnedCash / 10);
+      const expRes = addExp(profile, baseExp);
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained;
 
       mainText = `${killTextHeader}${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${150 + expReward})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${expRes.gained.toLocaleString()})${notes}`;
       break;
     }
     default: {
       const lootCash = rand(100, 500) * mult;
       earnedCash = lootCash;
       battle.accumulatedCash += earnedCash;
-      mainText = `현금 ${won(lootCash)} 획득!`;
+      
+      const baseExp = Math.round(earnedCash / 10);
+      const expRes = addExp(profile, baseExp);
+      mainText = `현금 ${won(lootCash)} 획득! (EXP +${expRes.gained.toLocaleString()})`;
       break;
     }
   }
@@ -1127,7 +1281,9 @@ function processenhance(profile) {
   const currentLevel = profile[currentEnhanceKey];
   const [wName] = getWeaponInfo(currentLevel, profile.job);
 
-  if (currentLevel >= ENHANCE_TABLE.length) {
+  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
+
+  if (currentLevel >= activeTable.length) {
     const stats = getEnhanceStats(currentLevel, profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(stats, stats);
 
@@ -1145,8 +1301,9 @@ function processenhance(profile) {
     return { text: maxText, imageUrl: getEnhanceImage('success', 20, profile.job), status: 'max' };
   }
 
-  const tableData = ENHANCE_TABLE[currentLevel];
-  let cost = isJob ? tableData.cost * 10 : tableData.cost;
+  const tableData = activeTable[currentLevel];
+  let cost = tableData.cost;
+  let gemCost = isJob ? (tableData.gemCost || 0) : 0;
   
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
   cost = Math.floor(cost * (1 - costDownPct / 100));
@@ -1154,8 +1311,15 @@ function processenhance(profile) {
   if (profile.cash < cost) {
     return { text: `현금이 부족합니다! (필요: ${won(cost)})`, imageUrl: null, status: 'nomoney' };
   }
+  if (gemCost > 0 && (profile.gem || 0) < gemCost) {
+    return { text: `보석이 부족합니다! (필요 보석: ${gemCost}개)`, imageUrl: null, status: 'nogem' };
+  }
 
   profile.cash -= cost;
+  if (gemCost > 0) {
+    profile.gem -= gemCost;
+  }
+
   const initialEnhance = currentLevel;
   const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0, profile);
 
@@ -1164,6 +1328,7 @@ function processenhance(profile) {
   
   const successRate = Math.min(1.0, tableData.success + ((ampInfo.successBonus + imprintSuccessBonus) / 100));
   const keepRate = Math.max(0, tableData.keep - ((ampInfo.successBonus + imprintSuccessBonus) / 100));
+  const dropRate = isJob ? (tableData.drop || 0) : 0;
 
   const roll = Math.random(); 
   let resultMsg = '';
@@ -1181,7 +1346,7 @@ function processenhance(profile) {
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
     const [newWName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
-    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile[currentEnhanceKey]}\n(소모 비용: ${won(cost)})\n` +
+    resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile[currentEnhanceKey]}\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +${profile[currentEnhanceKey]} ${newWName}` +
                 `\n${detailMsg}`;
   } else if (roll < successRate + keepRate) {
@@ -1190,17 +1355,27 @@ function processenhance(profile) {
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
     const [currWName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
-    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)})\n` +
+    resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +${profile[currentEnhanceKey]} ${currWName}` +
                 `\n${detailMsg}`;
+  } else if (isJob && roll < successRate + keepRate + dropRate) {
+    resultStatus = 'drop';
+    profile[currentEnhanceKey] = Math.max(0, profile[currentEnhanceKey] - 1);
+    const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
+    const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
+    const [dropWName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
+
+    resultMsg = `[강화 하락] +${initialEnhance} ➔ +${profile[currentEnhanceKey]} (단계 하락)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
+                `🎯 무기 : +${profile[currentEnhanceKey]} ${dropWName}` +
+                `\n${detailMsg}`;
   } else {
-    resultStatus = 'fail';
+    resultStatus = 'destroy';
     profile[currentEnhanceKey] = 0;
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
     const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
     const [zeroWName] = getWeaponInfo(0, profile.job);
 
-    resultMsg = `[강화 실패] +${initialEnhance} ➔ +0 (초기화)\n(소모 비용: ${won(cost)})\n` +
+    resultMsg = `[무기 파괴] +${initialEnhance} ➔ +0 (파괴 및 초기화)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +0 ${zeroWName}` +
                 `\n${detailMsg}`;
   }
@@ -1222,17 +1397,20 @@ function calculateExpectedCost(targetLevel, isJob, profile) {
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
+  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
 
   let totalExpectedCost = 0;
 
   for (let lvl = 0; lvl < targetLevel; lvl++) {
-    if (lvl >= ENHANCE_TABLE.length) break;
-    const tableData = ENHANCE_TABLE[lvl];
-    let cost = isJob ? tableData.cost * 10 : tableData.cost;
+    if (lvl >= activeTable.length) break;
+    const tableData = activeTable[lvl];
+    let cost = tableData.cost;
     cost = Math.floor(cost * (1 - costDownPct / 100));
 
     const successRate = Math.min(1.0, tableData.success + ((ampInfo.successBonus + imprintSuccessBonus) / 100));
     const keepRate = Math.max(0, tableData.keep - ((ampInfo.successBonus + imprintSuccessBonus) / 100));
+    const destroyRate = tableData.destroy || 0;
+    const dropRate = tableData.drop || 0;
     const failRateVal = Math.max(0, 1.0 - successRate - keepRate);
 
     let avgAttempts = 1.0;
@@ -1336,31 +1514,41 @@ function processMultiEnhance(profile, count) {
   const initialStats = getEnhanceStats(initialLevel, profile.combatLevel || 0, profile);
 
   let totalCost = 0;
+  let totalGemCost = 0;
   let successCount = 0;
   let keepCount = 0;
-  let failCount = 0;
+  let dropCount = 0;
+  let destroyCount = 0;
   let attempted = 0;
   let lastStatus = 'success';
 
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
+  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
 
   for (let i = 0; i < targetCount; i++) {
-    if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) break; 
+    if (profile[currentEnhanceKey] >= activeTable.length) break; 
 
-    const tableData = ENHANCE_TABLE[profile[currentEnhanceKey]];
-    let cost = isJob ? tableData.cost * 10 : tableData.cost;
+    const tableData = activeTable[profile[currentEnhanceKey]];
+    let cost = tableData.cost;
+    let gemCost = isJob ? (tableData.gemCost || 0) : 0;
     cost = Math.floor(cost * (1 - costDownPct / 100));
 
     if (profile.cash < cost) break; 
+    if (gemCost > 0 && (profile.gem || 0) < gemCost) break;
 
     profile.cash -= cost;
+    if (gemCost > 0) {
+      profile.gem -= gemCost;
+      totalGemCost += gemCost;
+    }
     totalCost += cost;
     attempted++;
 
     const successRate = Math.min(1.0, tableData.success + ((ampInfo.successBonus + imprintSuccessBonus) / 100));
     const keepRate = Math.max(0, tableData.keep - ((ampInfo.successBonus + imprintSuccessBonus) / 100));
+    const dropRate = isJob ? (tableData.drop || 0) : 0;
 
     const roll = Math.random();
     if (roll < successRate) {
@@ -1373,17 +1561,21 @@ function processMultiEnhance(profile, count) {
     } else if (roll < successRate + keepRate) {
       keepCount++;
       lastStatus = 'keep';
+    } else if (isJob && roll < successRate + keepRate + dropRate) {
+      profile[currentEnhanceKey] = Math.max(0, profile[currentEnhanceKey] - 1);
+      dropCount++;
+      lastStatus = 'drop';
     } else {
       profile[currentEnhanceKey] = 0;
-      failCount++;
-      lastStatus = 'fail';
+      destroyCount++;
+      lastStatus = 'destroy';
     }
   }
 
   const [wName] = getWeaponInfo(profile[currentEnhanceKey], profile.job);
 
   if (attempted === 0) {
-    if (profile[currentEnhanceKey] >= ENHANCE_TABLE.length) {
+    if (profile[currentEnhanceKey] >= activeTable.length) {
       const stats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
       const detailMsg = formatEnhanceStatDiff(stats, stats);
 
@@ -1404,12 +1596,11 @@ function processMultiEnhance(profile, count) {
         status: 'max' 
       };
     }
-    let baseCostNeeded = ENHANCE_TABLE[profile[currentEnhanceKey]].cost;
-    let costNeeded = isJob ? baseCostNeeded * 10 : baseCostNeeded;
-    costNeeded = Math.floor(costNeeded * (1 - costDownPct / 100));
+    let baseCostNeeded = activeTable[profile[currentEnhanceKey]].cost;
+    let costNeeded = Math.floor(baseCostNeeded * (1 - costDownPct / 100));
 
     return { 
-      text: `현금이 부족합니다! (필요: ${won(costNeeded)})`, 
+      text: `현금 또는 보석이 부족합니다! (필요 현금: ${won(costNeeded)})`, 
       imageUrl: null, 
       status: 'nomoney' 
     };
@@ -1420,11 +1611,18 @@ function processMultiEnhance(profile, count) {
 
   const weaponLine = `🎯 무기 : +${profile[currentEnhanceKey]} ${wName}`;
 
+  let statSummary = `성공: ${successCount.toLocaleString()}회 | 유지: ${keepCount.toLocaleString()}회`;
+  if (isJob) {
+    statSummary += ` | 하락: ${dropCount.toLocaleString()}회 | 파괴: ${destroyCount.toLocaleString()}회`;
+  } else {
+    statSummary += ` | 파괴: ${destroyCount.toLocaleString()}회`;
+  }
+
   let resultMsg = [
     `⚡ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
     `결과 : +${initialLevel} ➔ +${profile[currentEnhanceKey]}`,
-    `📊 성공: ${successCount.toLocaleString()}회 | 유지: ${keepCount.toLocaleString()}회 | 실패: ${failCount.toLocaleString()}회`,
-    `(총 소모 비용: ${won(totalCost)})`,
+    `📊 ${statSummary}`,
+    `(총 소모 비용: ${won(totalCost)}${totalGemCost > 0 ? `, 보석 ${totalGemCost}개` : ''})`,
     ``,
     weaponLine,
     detailMsg,
@@ -2098,10 +2296,6 @@ function processImprintReroll(profile) {
     } else {
       if (k === 'I') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : Lv.20 달성`);
-      } else if (k === 'II') {
-        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : 금괴 500개`);
-      } else if (k === 'III') {
-        resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : 금괴 1,000개`);
       } else if (k === 'IV') {
         resultLines.push(`🔒 * ${imprintNames[k]} * : 해금 조건 : +20 싱귤래리티 달성`);
       } else if (k === 'V') {
@@ -2115,12 +2309,213 @@ function processImprintReroll(profile) {
   return { text: resultLines.join('\n' ) };
 }
 
+function checkAndResetHuntLimit(playerState) {
+  const kstDate = new Date(new Date().getTime() + (9 * 60 * 60 * 1000));
+  const todayStr = kstDate.toISOString().slice(0, 10);
+  if (!playerState.huntData || playerState.huntData.date !== todayStr) {
+    playerState.huntData = { date: todayStr, count: 0 };
+  }
+}
+
+function processWarehouse(profile) {
+  if (!profile.inventory) profile.inventory = [];
+  if (profile.inventory.length === 0) {
+    return `🎒 [창고]\n현재 보유 중인 전리품이 없습니다. 사냥을 통해 전리품을 획득해 보세요!`;
+  }
+
+  let lines = [`🎒 [창고 - 전리품 목록]`];
+  profile.inventory.forEach((item, index) => {
+    lines.push(`${index + 1}. [${item.tier}] ${item.categoryName} - ${item.name}\n   └ ${item.desc}`);
+  });
+  return lines.join('\n');
+}
+
+function processHunt(playerState) {
+  if (!playerState.huntData) {
+    playerState.huntData = { date: "", count: 0 };
+  }
+
+  checkAndResetHuntLimit(playerState);
+  const MAX_HUNT_COUNT = 1000;
+
+  if (playerState.huntData.count >= MAX_HUNT_COUNT) {
+    return {
+      text: `[사냥 불가]\n오늘 사냥 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
+      choices: [{ label: "사냥하기", value: "사냥" }],
+      imageUrl: null,
+      image: null,
+      thumbnail: null
+    };
+  }
+
+  const monster = getRandomMonsterByProbability();
+  if (!monster) {
+    return {
+      text: `사냥감을 찾지 못했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
+      choices: [{ label: "사냥하기", value: "사냥" }],
+      imageUrl: null,
+      image: null,
+      thumbnail: null
+    };
+  }
+
+  playerState.huntData.count += 1;
+  playerState.cash = (playerState.cash || 0) + monster.rewardMoney;
+  if (monster.rewardGem > 0) {
+    playerState.gem = (playerState.gem || 0) + monster.rewardGem;
+  }
+
+  let droppedLootText = "";
+  let dropChance = 0.001; // 0.1%
+  let isLootDropped = false;
+  let targetTier = "";
+
+  const g = monster.grade;
+  if (g === "C등급" && Math.random() < dropChance) { targetTier = "T1"; isLootDropped = true; }
+  else if (g === "B등급" && Math.random() < dropChance) { targetTier = "T2"; isLootDropped = true; }
+  else if (g === "B+등급" && Math.random() < dropChance) { targetTier = "T3"; isLootDropped = true; }
+  else if (g === "A등급" && Math.random() < dropChance) { targetTier = "T4"; isLootDropped = true; }
+  else if (g === "A+등급" && Math.random() < dropChance) { targetTier = "T5"; isLootDropped = true; }
+  else if ((g === "S등급" || g === "S+등급") && Math.random() < dropChance) { targetTier = "T6"; isLootDropped = true; }
+
+  if (isLootDropped) {
+    const categories = ['stock', 'silencer', 'scope', 'magazine', 'grip'];
+    const chosenCategory = categories[rand(0, categories.length - 1)];
+    const tierList = LOOT_DATABASE[chosenCategory];
+    const itemData = tierList.find(i => i.tier === targetTier) || tierList[0];
+
+    const categoryNames = {
+      stock: '개머리판',
+      silencer: '소음기',
+      scope: '스코프',
+      magazine: '탄창',
+      grip: '그립'
+    };
+    const catName = categoryNames[chosenCategory];
+
+    if (!playerState.inventory) playerState.inventory = [];
+    playerState.inventory.push({
+      category: chosenCategory,
+      categoryName: catName,
+      tier: itemData.tier,
+      name: itemData.name,
+      desc: itemData.desc
+    });
+
+    droppedLootText = `\n\n🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/창고에서 확인)`;
+  }
+
+  let rewardStr = monster.formattedReward;
+  if (monster.rewardGem > 0) {
+    rewardStr += `, 보석 ${monster.rewardGem}개`;
+  }
+
+  const text = `[사냥 발견!] (${monster.grade})\n이름: ${monster.fullName}\n설명: ${monster.description}\n\n획득 보상: ${rewardStr} (지급 완료)${droppedLootText}\n오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})`;
+  
+  const choices = [
+    { label: "계속 사냥하기", value: "사냥" },
+    { label: "메인으로", value: "메인" }
+  ];
+
+  return {
+    text,
+    choices,
+    imageUrl: monster.image,
+    image: monster.image,
+    thumbnail: monster.image,
+    url: monster.image,
+    monster
+  };
+}
+
+function getRandomMonsterByProbability() {
+  const randVal = Math.random() * 100;
+  let selectedGrade = "D등급";
+
+  if (randVal < 0.001) {
+    selectedGrade = "S+등급";
+  } else if (randVal < 0.01) {
+    selectedGrade = "S등급";
+  } else if (randVal < 0.11) {
+    selectedGrade = "A+등급";
+  } else if (randVal < 0.5) {
+    selectedGrade = "A등급";
+  } else if (randVal < 1.5) {
+    selectedGrade = "B+등급";
+  } else if (randVal < 5.0) {
+    selectedGrade = "B등급";
+  } else if (randVal < 10.0) {
+    selectedGrade = "C+등급";
+  } else if (randVal < 30.0) {
+    selectedGrade = "C등급";
+  } else if (randVal < 40.0) {
+    selectedGrade = "D+등급";
+  } else {
+    selectedGrade = "D등급";
+  }
+
+  let baseLookupGrade = selectedGrade;
+  if (selectedGrade === "D+등급") baseLookupGrade = "D등급";
+  else if (selectedGrade === "C+등급") baseLookupGrade = "C등급";
+  else if (selectedGrade === "B+등급") baseLookupGrade = "B등급";
+  else if (selectedGrade === "A+등급") baseLookupGrade = "A등급";
+  else if (selectedGrade === "S+등급") baseLookupGrade = "S등급";
+
+  const targetMonsters = getMonstersByGrade(baseLookupGrade);
+  if (targetMonsters.length === 0) return null;
+
+  const randomIndex = Math.floor(Math.random() * targetMonsters.length);
+  const baseMonster = targetMonsters[randomIndex];
+
+  let prefix = "";
+  if (["B등급", "B+등급", "A등급", "A+등급", "S등급", "S+등급"].includes(selectedGrade)) {
+    const baseKey = baseLookupGrade;
+    const gradePrefixes = prefixes[baseKey];
+    if (gradePrefixes && gradePrefixes.length > 0) {
+      let p1 = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
+      if (selectedGrade.endsWith("+")) {
+        let p2 = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
+        prefix = `${p1} ${p2}`;
+      } else {
+        prefix = p1;
+      }
+    }
+  }
+
+  const rewardMoney = getRewardMoney(selectedGrade);
+  const rewardGem = getRewardGem(selectedGrade);
+
+  return {
+    ...baseMonster,
+    grade: selectedGrade,
+    prefix: prefix,
+    fullName: prefix ? `${prefix} ${baseMonster.name}` : baseMonster.name,
+    rewardMoney: rewardMoney,
+    rewardGem: rewardGem,
+    formattedReward: rewardMoney.toLocaleString() + "원"
+  };
+}
+
+function getMonstersByGrade(grade) {
+  return monsters.filter(m => m.grade === grade);
+}
+
+function getRewardMoney(grade) {
+  const range = gradeRewards[grade] || { min: 10000, max: 50000 };
+  return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+}
+
+function getRewardGem(grade) {
+  const range = gradeRewards[grade];
+  return range && range.gem ? range.gem : 0;
+}
+
 function startGame(existingProfile) {
   let profile = createProfile(existingProfile);
   let battle = createBattle(profile);
 
   return {
-    text: `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`,
+    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/전투', '사냥' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
     imageUrl: null, 
     choices: BATTLE_CHOICES,
     category: 'start',
@@ -2135,6 +2530,25 @@ function processTurn(state, utterance) {
   let battle = state.battle;
 
   let input = typeof utterance === 'string' ? utterance.trim().replace(/\s+/g, ' ') : '';
+  const cleanInput = input.toLowerCase();
+
+  if (cleanInput === "메인" || cleanInput === "/메인" || cleanInput === "시작" || cleanInput === "처음으로") {
+    const startResult = startGame(profile);
+    state.profile = startResult.state.profile;
+    state.battle = startResult.state.battle;
+    return {
+      text: startResult.text,
+      choices: [
+        { label: "사냥하기", value: "사냥" },
+        { label: "전투", action: '/전투' }
+      ],
+      category: "main",
+      imageUrl: startResult.imageUrl,
+      image: startResult.image,
+      thumbnail: startResult.thumbnail,
+      state: { profile: state.profile, battle: state.battle }
+    };
+  }
 
   if (input === '/4655') {
     profile.cash += 1000000000;
@@ -2152,6 +2566,17 @@ function processTurn(state, utterance) {
     state.profile = profile;
     return {
       text: `🎁 [시크릿 코드 입력 성공]\n금괴 10,000개가 지급되었습니다!\n\n${profileText(profile)}`,
+      imageUrl: null,
+      choices: LOBBY_CHOICES,
+      category: 'secret',
+      state: { profile, battle }
+    };
+  }
+  if (input === '/9523') {
+    profile.gem += 10000;
+    state.profile = profile;
+    return {
+      text: `🎁 [시크릿 코드 입력 성공]\n보석 10,000개가 지급되었습니다!\n\n${profileText(profile)}`,
       imageUrl: null,
       choices: LOBBY_CHOICES,
       category: 'secret',
@@ -2180,14 +2605,14 @@ function processTurn(state, utterance) {
 
   if (!input.startsWith('/')) {
     const rawClean = input.replace(/^\//, '').trim().toLowerCase();
-    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화'];
+    const validCommands = ['전투', '파밍', '도망', '강화', '제련강화', '제련', '열쇠', '프로필', '증폭', '증폭강화', '연속강화', '전직변경', '전직스킬', '전직', '각인', '각인해금', '각인잠금', '각인해제', '각인변경', '초기화', '사냥', '창고'];
     
     if (validCommands.some(cmd => rawClean.startsWith(cmd))) {
       input = '/' + rawClean;
     } else {
       const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
       return {
-        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작합니다. (예: /전투, /프로필, /강화 [목표수치], /증폭, /증폭강화, /각인, /초기화)\n\n${currentBoard}`,
+        text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 붙여야 동작하거나 '사냥'을 입력할 수 있습니다. (예: /전투, /프로필, 사냥)\n\n${currentBoard}`,
         imageUrl: null,
         choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
         state: { profile, battle }
@@ -2216,7 +2641,9 @@ function processTurn(state, utterance) {
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
       `• /전직변경 [직업변경]`,
       `• /각인 - 각인 정보 확인`,
-      `• /프로필 - 내 정보 확인`
+      `• /창고 - 획득한 전리품 확인`,
+      `• /프로필 - 내 정보 확인`,
+      `• 사냥 - 몬스터 사냥 및 현금 보상 획득`
     ].join('\n');
     return { text: helpText, imageUrl: null, state: { profile, battle } };
   }
@@ -2266,10 +2693,11 @@ function processTurn(state, utterance) {
         profile.cash += totalCashGained; 
 
         const totalGoldGained = battle.accumulatedGold || 0;
+        const totalGemGained = battle.accumulatedGem || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
-        const expGainedResult = addExp(profile, 300);
+        const expRes = addExp(profile, 300);
 
         let deathLines = [
           ...textLines,
@@ -2277,10 +2705,11 @@ function processTurn(state, utterance) {
           ``,
           `== [사망] 탈락 (${battle.turn}턴) ==`,
           `💵 현금 +${won(totalCashGained)}`,
-          `⭐ EXP +${expGainedResult.gained.toLocaleString()}`
+          `⭐ EXP +${expRes.gained.toLocaleString()}`
         ];
 
         if (totalGoldGained > 0) deathLines.push(`🧈 금괴 +${totalGoldGained}개`);
+        if (totalGemGained > 0) deathLines.push(`💎 보석 +${totalGemGained}개`);
         if (totalKeysGained > 0) deathLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
         if (totalMonthItemsGained > 0) deathLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         deathLines.push(``, profileText(profile));
@@ -2302,9 +2731,10 @@ function processTurn(state, utterance) {
 
         const baseExpReward = rand(100, 500);
         const victoryBonusExp = Math.round(baseExpReward * 0.3);
-        const expGainedResult = addExp(profile, baseExpReward + victoryBonusExp);
+        const expRes = addExp(profile, baseExpReward + victoryBonusExp);
 
         const totalGoldGained = battle.accumulatedGold || 0;
+        const totalGemGained = battle.accumulatedGem || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
@@ -2314,10 +2744,11 @@ function processTurn(state, utterance) {
           `== 🏆 [우승] 치킨 획득! ==`,
           `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${victoryBonusExp.toLocaleString()}`,
           `💵 현금 총 보상 : +${won(finalTotalCash)}`,
-          `⭐ EXP : +${expGainedResult.gained.toLocaleString()}`
+          `⭐ EXP : +${expRes.gained.toLocaleString()}`
         ];
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
+        if (totalGemGained > 0) victoryLines.push(`💎 보석 +${totalGemGained}개`);
         if (totalKeysGained > 0) victoryLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
         if (totalMonthItemsGained > 0) victoryLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         victoryLines.push(``, profileText(profile));
@@ -2368,9 +2799,10 @@ function processTurn(state, utterance) {
 
         const baseExpReward = rand(100, 500);
         const victoryBonusExp = Math.round(baseExpReward * 0.3);
-        const expGainedResult = addExp(profile, baseExpReward + victoryBonusExp);
+        const expRes = addExp(profile, baseExpReward + victoryBonusExp);
 
         const totalGoldGained = battle.accumulatedGold || 0;
+        const totalGemGained = battle.accumulatedGem || 0;
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
@@ -2380,10 +2812,11 @@ function processTurn(state, utterance) {
           `== 🏆 [우승] 치킨 획득! ==`,
           `💵 추가 현금 : ${won(victoryBonusCash)} | EXP +${victoryBonusExp.toLocaleString()}`,
           `💵 현금 총 보상 : +${won(finalTotalCash)}`,
-          `⭐ EXP : +${expGainedResult.gained.toLocaleString()}`
+          `⭐ EXP : +${expRes.gained.toLocaleString()}`
         ];
 
         if (totalGoldGained > 0) victoryLines.push(`🧈 금괴 +${totalGoldGained}개`);
+        if (totalGemGained > 0) victoryLines.push(`💎 보석 +${totalGemGained}개`);
         if (totalKeysGained > 0) victoryLines.push(`🔑 비밀열쇠 +${totalKeysGained}개`);
         if (totalMonthItemsGained > 0) victoryLines.push(`📦 보급 +${totalMonthItemsGained}개`);
         victoryLines.push(``, profileText(profile));
@@ -2414,7 +2847,7 @@ function processTurn(state, utterance) {
       break;
     }
     case '/연속강화': {
-      const count = parseInt(arg, 10) || 10;
+      const count = arg !== undefined ? (parseInt(arg, 10) || 1) : 1;
       const multiRes = processMultiEnhance(profile, count);
       result.text = multiRes.text;
       result.imageUrl = multiRes.imageUrl;
@@ -2451,6 +2884,11 @@ function processTurn(state, utterance) {
       const keyRes = processUseKey(profile, arg);
       result.text = keyRes.text;
       result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/창고': {
+      result.text = processWarehouse(profile);
+      result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
       break;
     }
     case '/프로필': {
@@ -2506,6 +2944,14 @@ function processTurn(state, utterance) {
       result.choices = LOBBY_CHOICES;
       break;
     }
+    case '/사냥':
+    case '사냥': {
+      const huntRes = processHunt(profile);
+      result.text = huntRes.text;
+      result.imageUrl = huntRes.imageUrl;
+      result.choices = huntRes.choices;
+      break;
+    }
     default: {
       result.text = `알 수 없는 명령어입니다. (명령어는 / 를 입력해 확인하세요)`;
       result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
@@ -2520,6 +2966,13 @@ function processTurn(state, utterance) {
 }
 
 module.exports = {
+  prefixes,
+  monsters,
+  gradeRewards,
+  getMonstersByGrade,
+  getRandomMonsterByProbability,
+  checkAndResetHuntLimit,
+  processHunt,
   startGame,
   processTurn,
   createProfile
