@@ -2498,12 +2498,12 @@ function processHunt(playerState) {
 
     spawnedMonsters.push(monster);
 
-    let dropChance = 0.001; 
+    let dropChance = 0.0001; 
     let isLootDropped = false;
     let targetTier = "";
     const g = monster.grade;
 
-    if (g === "C등급" && Math.random() < dropChance) { targetTier = "T1"; isLootDropped = true; }
+    if (g === "C+등급" && Math.random() < dropChance) { targetTier = "T1"; isLootDropped = true; }
     else if (g === "B등급" && Math.random() < dropChance) { targetTier = "T2"; isLootDropped = true; }
     else if (g === "B+등급" && Math.random() < dropChance) { targetTier = "T3"; isLootDropped = true; }
     else if (g === "A등급" && Math.random() < dropChance) { targetTier = "T4"; isLootDropped = true; }
