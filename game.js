@@ -6,7 +6,9 @@ const MAX_TURN = 15;
 const EXP_PER_LEVEL_BASE = 200;
 const JOB_UNLOCK_CASH = 50000000;
 const JOB_UNLOCK_GOLD = 500;
-const JOB_CHANGE_GOLD = 1000;
+const JOB_CHANGE_CASH = 100000000;
+const JOB_CHANGE_GOLD = 2000;
+const JOB_CHANGE_GEM = 2000;
 const REFINE_BASE_CASH = 10000000;
 
 const BASE_URL = 'https://raw.githubusercontent.com/cjsxlrmt234-commits/bot-images/main'; 
@@ -50,7 +52,7 @@ const monsters = [
   { name: "그림자 암살자", grade: "B등급", description: "빛을 흡수하는 은신 스킬을 사용해 단숨에 급소를 노리는 인간형 유령.", image: `${BASE_URL}/images/B_3.png` },
   { name: "화염 사냥개", grade: "B등급", description: "지옥의 불길을 입은 채 맹렬하게 달리는 머리 두 개 달린 마수.", image: `${BASE_URL}/images/B_4.png` },
   { name: "바위 거인", grade: "B등급", description: "산비탈의 돌무더기가 뭉쳐서 만들어진 거대한 체구의 골렘.", image: `${BASE_URL}/images/B_5.png` },
-  { name: "사이렌", grade: "B등급", description: "매혹적인 노랫소리로 항해사나 모험가의 정신을 빼놓고 물속으로 유인하는 정령.", image: `${BASE_URL}/images/B_6.png` },
+  { name: "세이렌", grade: "B등급", description: "매혹적인 노랫소리로 항해사나 모험가의 정신을 빼놓고 물속으로 유인하는 정령.", image: `${BASE_URL}/images/B_6.png` },
   { name: "맹독 아라크네", grade: "B등급", description: "온몸에서 강한 산성 독을 뿜어내며 벽과 천장을 자유롭게 기어 다니는 거미 괴물.", image: `${BASE_URL}/images/B_7.png` },
   { name: "유령 기사", grade: "B등급", description: "찢어진 깃발을 들고 밤마다 옛 전장을 순찰하는 저주받은 기사 망령.", image: `${BASE_URL}/images/B_8.png` },
   { name: "라이트닝 드레이크", grade: "B등급", description: "번개를 뿜어내기 시작하는 어린 단계의 용족 괴물.", image: `${BASE_URL}/images/B_9.png` },
@@ -73,8 +75,8 @@ const monsters = [
 ];
 
 const gradeRewards = {
-  "D등급": { min: 200, max: 500 },
-  "D+등급": { min: 550, max: 1000 },
+  "D등급": { min: 100, max: 300 },
+  "D+등급": { min: 400, max:1000  },
   "C등급": { min: 1100, max: 2000 },
   "C+등급": { min: 2200, max: 3000 },
   "B등급": { min: 3300, max: 4000 },
@@ -713,6 +715,7 @@ function createProfile(existing = {}) {
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
+    farmData: safeObj.farmData ?? { date: "", count: 0 },
     huntData: safeObj.huntData ?? { date: "", count: 0 },
     speedMultiplier: safeObj.speedMultiplier ?? 1,
     helpSeen: safeObj.helpSeen ?? {}
@@ -726,6 +729,19 @@ function checkAndMarkHelp(profile, commandName) {
   }
   profile.helpSeen[commandName] = true;
   return true;
+}
+
+function checkAndResetFarmLimit(playerState) {
+  const kstDate = new Date(new Date().getTime() + (9 * 60 * 60 * 1000));
+  const todayStr = kstDate.toISOString().slice(0, 10);
+  const dayOfWeek = kstDate.getDay();
+  const maxLimit = (dayOfWeek === 0 || dayOfWeek === 6) ? 200 : 100;
+
+  if (!playerState.farmData || playerState.farmData.date !== todayStr) {
+    playerState.farmData = { date: todayStr, count: 0, max: maxLimit };
+  } else {
+    playerState.farmData.max = maxLimit;
+  }
 }
 
 function profileText(profile, detailed = false) {
@@ -886,6 +902,10 @@ function battleStatusBoard(profile, battle) {
   const b = battle || { turn: 1, maxTurn: MAX_TURN, survivors: 100, hp: 100, mode: '솔로', helmetLevel: 0, helmetDurability: 0, vestLevel: 0, vestDurability: 0, buffs: [] };
   if (!b.buffs) b.buffs = [];
 
+  checkAndResetFarmLimit(p);
+  const currentFarmCount = p.farmData ? p.farmData.count : 0;
+  const maxFarmLimit = p.farmData ? p.farmData.max : 100;
+
   const currentEnhance = getCurrentEnhanceLevel(p);
   const wName = getWeaponInfo(currentEnhance, p.job)[0];
   const reqExp = getRequiredExp(p.level);
@@ -901,7 +921,8 @@ function battleStatusBoard(profile, battle) {
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
-    `배율 (x${totalMult}) | 배속 (x${p.speedMultiplier || 1})`
+    `배율 (x${totalMult}) | 배속 (x${p.speedMultiplier || 1})`,
+    `전투 횟수 : (${currentFarmCount}/${maxFarmLimit})`
   ];
 
   if (b.buffs.length > 0) {
@@ -1972,7 +1993,7 @@ function processJobCommand(profile, targetJob) {
 
     if (!profile.hasSeenJobGuide) {
       profile.hasSeenJobGuide = true;
-      msg.push(``, `💡 전직을 변경하시려면 [/전직변경 [직업명]] 명령어를 이용해 주세요. (비용: 금괴 1,000개, 스킬 레벨 유지)`);
+      msg.push(``, `💡 전직을 변경하시려면 [/전직변경 [직업명]] 명령어를 이용해 주세요. (비용: 현금 100,000,000원, 금괴 2,000개, 보석 2,000개, 스킬 레벨 유지)`);
     }
 
     if (targetJob) {
@@ -2065,17 +2086,24 @@ function processJobChange(profile, targetJob) {
     return { text: `⚠️ 이미 해당 직업(${targetJob})을 보유 중입니다.` };
   }
 
-  const CHANGE_COST = JOB_CHANGE_GOLD;
-  if ((profile.gold || 0) < CHANGE_COST) {
-    return { text: `금괴가 부족합니다!\n(전직변경 필요 비용: 금괴 ${CHANGE_COST}개 | 보유 금괴: ${(profile.gold || 0).toLocaleString()}개)` };
+  const CHANGE_CASH = JOB_CHANGE_CASH;
+  const CHANGE_GOLD = JOB_CHANGE_GOLD;
+  const CHANGE_GEM = JOB_CHANGE_GEM;
+
+  if (profile.cash < CHANGE_CASH || (profile.gold || 0) < CHANGE_GOLD || (profile.gem || 0) < CHANGE_GEM) {
+    return { 
+      text: `재화가 부족합니다!\n(전직변경 필요 비용: 현금 ${won(CHANGE_CASH)}, 금괴 ${CHANGE_GOLD}개, 보석 ${CHANGE_GEM}개)\n(보유: 현금 ${won(profile.cash)}, 금괴 ${(profile.gold || 0).toLocaleString()}개, 보석 ${(profile.gem || 0).toLocaleString()}개)` 
+    };
   }
 
-  profile.gold -= CHANGE_COST;
+  profile.cash -= CHANGE_CASH;
+  profile.gold -= CHANGE_GOLD;
+  profile.gem -= CHANGE_GEM;
   profile.job = jobCode;
 
   const currentSkillLvl = profile.jobSkillLevel || 1;
   return { 
-    text: `🔄 [전직 변경 완료] '${targetJob}'(으)로 직업을 변경했습니다! (소모: 금괴 ${CHANGE_COST}개)\n스킬 레벨(Lv.${currentSkillLvl})은 그대로 유지됩니다.\n${getJobInfoText(jobCode, currentSkillLvl)}` 
+    text: `🔄 [전직 변경 완료] '${targetJob}'(으)로 직업을 변경했습니다! (소모: 현금 ${won(CHANGE_CASH)}, 금괴 ${CHANGE_GOLD}개, 보석 ${CHANGE_GEM}개)\n스킬 레벨(Lv.${currentSkillLvl})은 그대로 유지됩니다.\n${getJobInfoText(jobCode, currentSkillLvl)}` 
   };
 }
 
@@ -2373,8 +2401,13 @@ function processImprintReroll(profile) {
 function checkAndResetHuntLimit(playerState) {
   const kstDate = new Date(new Date().getTime() + (9 * 60 * 60 * 1000));
   const todayStr = kstDate.toISOString().slice(0, 10);
+  const dayOfWeek = kstDate.getDay();
+  const maxLimit = (dayOfWeek === 0 || dayOfWeek === 6) ? 4000 : 100000;
+
   if (!playerState.huntData || playerState.huntData.date !== todayStr) {
-    playerState.huntData = { date: todayStr, count: 0 };
+    playerState.huntData = { date: todayStr, count: 0, max: maxLimit };
+  } else {
+    playerState.huntData.max = maxLimit;
   }
 }
 
@@ -2428,7 +2461,7 @@ function processHunt(playerState) {
   }
 
   checkAndResetHuntLimit(playerState);
-  const MAX_HUNT_COUNT = 2000;
+  const MAX_HUNT_COUNT = playerState.huntData.max || 4000;
 
   if (playerState.huntData.count >= MAX_HUNT_COUNT) {
     return {
@@ -2604,7 +2637,7 @@ function processHunt(playerState) {
     footerLines.push(`💎 보석 : ${(playerState.gem || 0).toLocaleString()}개`);
   }
   footerLines.push(
-    `오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})`,
+    `사냥 횟수 : (${playerState.huntData.count}/${MAX_HUNT_COUNT})`,
     `⏩ ${speed}배속`
   );
 
@@ -2612,7 +2645,7 @@ function processHunt(playerState) {
   
   const choices = [
     { label: "/사냥", action: "/사냥" },
-    { label: "/전투", action: "/전투" }
+    { label: "/파밍", action: "/파밍" }
   ];
 
   return {
@@ -2640,7 +2673,7 @@ function processSpeedCommand(profile, arg) {
   }
 
   profile.speedMultiplier = speedVal;
-  return { text: `⏩ 배속이 [x${speedVal}](으)로 설정되었습니다! (/전투 및 /사냥 보상 적용)` };
+  return { text: `⏩ 배속이 [x${speedVal}](으)로 설정되었습니다! (/사냥 및 /사냥 보상 적용)` };
 }
 
 function getRandomMonsterByProbability() {
@@ -2683,7 +2716,7 @@ function getRandomMonsterByProbability() {
   const baseMonster = targetMonsters[randomIndex];
 
   let prefix = "";
-  if (["B등급", "B+등급", "A등급", "A+등급", "S등급", "S+등급"].includes(selectedGrade)) {
+  if (["D등급", "D+등급", "C등급", "C+등급", "B등급", "B+등급", "A등급", "A+등급", "S등급", "S+등급"].includes(selectedGrade)) {
     const baseKey = baseLookupGrade;
     const gradePrefixes = prefixes[baseKey];
     if (gradePrefixes && gradePrefixes.length > 0) {
@@ -2863,6 +2896,15 @@ function processTurn(state, utterance) {
 
   switch (command) {
     case '/파밍': {
+      checkAndResetFarmLimit(profile);
+      const maxLimit = profile.farmData ? profile.farmData.max : 100;
+      if (profile.farmData.count >= maxLimit) {
+        result.text = `[파밍 불가]\n오늘 전투(파밍) 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${profile.farmData.count}/${maxLimit}))`;
+        result.choices = LOBBY_CHOICES;
+        break;
+      }
+      profile.farmData.count += 1;
+
       if (!isPlayingBattle) {
         battle = createBattle(profile);
         state.battle = battle;
