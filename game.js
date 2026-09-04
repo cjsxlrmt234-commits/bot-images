@@ -2441,12 +2441,10 @@ function processHunt(playerState) {
   }
 
   const speed = playerState.speedMultiplier || 1;
+  const remainingLimit = MAX_HUNT_COUNT - playerState.huntData.count;
+  const actualHunts = Math.min(speed, remainingLimit);
   
-  if (playerState.huntData.count + speed > MAX_HUNT_COUNT) {
-    playerState.huntData.count = MAX_HUNT_COUNT;
-  } else {
-    playerState.huntData.count += speed;
-  }
+  playerState.huntData.count += actualHunts;
 
   const lootMult = getLootMultiplier(playerState);
 
@@ -2455,7 +2453,7 @@ function processHunt(playerState) {
   let spawnedMonsters = [];
   let droppedLootTexts = [];
 
-  for (let i = 0; i < speed; i++) {
+  for (let i = 0; i < actualHunts; i++) {
     const monster = getRandomMonsterByProbability();
     if (!monster) continue;
 
@@ -2526,11 +2524,11 @@ function processHunt(playerState) {
   spawnedMonsters.forEach((m, idx) => {
     if (idx === 0) {
       monsterInfoBlocks.push(
-        `[몬스터 발견!]\n${m.grade} ${m.fullName}\n설명: ${m.description}`
+        `[몬스터 발견!]\n[${m.grade}] ${m.fullName}\n설명: ${m.description}`
       );
     } else {
       monsterInfoBlocks.push(
-        `${m.grade} ${m.fullName}`
+        `[${m.grade}] ${m.fullName}`
       );
     }
   });
@@ -2542,31 +2540,31 @@ function processHunt(playerState) {
   const count = playerState.huntData.count;
   const dice = rand(1, 6);
 
-  if (count >= 100 && count - speed < 100) {
-    const qCash = 5000 * dice * speed;
+  if (count >= 100 && count - actualHunts < 100) {
+    const qCash = 5000 * dice;
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 250 && count - speed < 250) {
-    const qCash = 10000 * dice * speed;
+  } else if (count >= 250 && count - actualHunts < 250) {
+    const qCash = 10000 * dice;
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 500 && count - speed < 500) {
-    const qGem = 1 * dice * speed;
+  } else if (count >= 500 && count - actualHunts < 500) {
+    const qGem = 1 * dice;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
-  } else if (count >= 1000 && count - speed < 1000) {
-    const qGem = 2 * dice * speed;
+  } else if (count >= 1000 && count - actualHunts < 1000) {
+    const qGem = 2 * dice;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
-  } else if (count >= 1500 && count - speed < 1500) {
-    const qCash = 15000 * dice * speed;
-    const qGem = 1 * dice * speed;
+  } else if (count >= 1500 && count - actualHunts < 1500) {
+    const qCash = 15000 * dice;
+    const qGem = 1 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
-  } else if (count >= 2000 && count - speed < 2000) {
-    const qCash = 20000 * dice * speed;
-    const qGem = 2 * dice * speed;
+  } else if (count >= 2000 && count - actualHunts < 2000) {
+    const qCash = 20000 * dice;
+    const qGem = 2 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
@@ -3183,3 +3181,4 @@ module.exports = {
   processTurn,
   createProfile
 };
+```[cite: 4]
