@@ -2524,19 +2524,13 @@ function processHunt(playerState) {
 
   let monsterInfoBlocks = [];
   spawnedMonsters.forEach((m, idx) => {
-    let earnedCashForMonster = Math.floor(m.rewardMoney * lootMult);
-    let rewardStr = `💵 현금 +${won(earnedCashForMonster)}`;
-    if (m.rewardGem > 0) {
-      rewardStr += `\n💎 보석 +${m.rewardGem}개`;
-    }
-
     if (idx === 0) {
       monsterInfoBlocks.push(
-        `[몬스터 발견!]\n${m.grade} ${m.fullName}\n설명: ${m.description}\n${rewardStr}`
+        `[몬스터 발견!]\n${m.grade} ${m.fullName}\n설명: ${m.description}`
       );
     } else {
       monsterInfoBlocks.push(
-        `${m.grade} ${m.fullName}\n${rewardStr}`
+        `${m.grade} ${m.fullName}`
       );
     }
   });
@@ -2549,11 +2543,11 @@ function processHunt(playerState) {
   const dice = rand(1, 6);
 
   if (count >= 100 && count - speed < 100) {
-    const qCash = 10000 * dice * speed;
+    const qCash = 5000 * dice * speed;
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
   } else if (count >= 250 && count - speed < 250) {
-    const qCash = 20000 * dice * speed;
+    const qCash = 10000 * dice * speed;
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
   } else if (count >= 500 && count - speed < 500) {
@@ -2564,6 +2558,18 @@ function processHunt(playerState) {
     const qGem = 2 * dice * speed;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
+  } else if (count >= 1500 && count - speed < 1500) {
+    const qCash = 15000 * dice * speed;
+    const qGem = 1 * dice * speed;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
+  } else if (count >= 2000 && count - speed < 2000) {
+    const qCash = 20000 * dice * speed;
+    const qGem = 2 * dice * speed;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
   }
 
   let finalRewardLines = [];
@@ -2574,20 +2580,26 @@ function processHunt(playerState) {
     finalRewardLines.push(droppedLootTexts.join('\n'));
   }
 
-  let monstersJoined = monsterInfoBlocks.join('\n\n');
+  let monstersJoined = monsterInfoBlocks.join('\n');
   
   let summaryLines = [`💵 총 현금 +${won(totalCashSum)}`];
   if (totalGemSum > 0) {
     summaryLines.push(`💎 총 보석 : ${totalGemSum}개`);
   }
 
-  let middleContent = `${monstersJoined}\n\n${summaryLines.join('\n')}`;
+  let middleContent = `${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
   if (finalRewardLines.length > 0) {
     middleContent = middleContent + '\n' + finalRewardLines.join('\n');
   }
 
+  const questThresholds = [100, 250, 500, 1000, 1500, 2000];
+  let nextThreshold = questThresholds.find(t => t > count) || 2000;
+  let remainingCount = nextThreshold - count;
+  let questLeftText = `📜 퀘스트 보상까지 ${remainingCount}회`;
+
   let footerLines = [
-    `🔘 배율 x${lootMult.toFixed(2)}`,
+    questLeftText,
+    `🔘 배율 x${lootMult.toFixed(2)} (사냥 전용)`,
     `💵 현금 : ${won(playerState.cash)}`
   ];
   if (totalGemSum > 0 || (playerState.gem || 0) > 0) {
