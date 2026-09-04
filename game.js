@@ -353,13 +353,13 @@ const BATTLE_CHOICES = [
 ];
 
 const LOBBY_CHOICES = [
-  { label: '/전투', action: '/전투' },
+  { label: '/파밍', action: '/파밍' },
   { label: '/강화', action: '/강화' }
 ];
 
 const ENHANCE_CHOICES = [
   { label: '/강화', action: '/강화' },
-  { label: '/전투', action: '/전투' }
+  { label: '/파밍', action: '/파밍' }
 ];
 
 const AMPLIFY_CHOICES = [
@@ -499,7 +499,7 @@ function getImprintTotalBonus(profile, keyName) {
 
 function getLootMultiplier(profile) {
   if (!profile || !profile.inventory || profile.inventory.length === 0) return 1.00;
-  let totalMultiplier = 0;
+  let totalMultiplier = 1.00;
   profile.inventory.forEach(item => {
     let tierNum = 1;
     if (item.tier === "T2") tierNum = 2;
@@ -976,12 +976,10 @@ function triggerShadowLoot(profile, battle) {
   } else if (randVal < 80) {
     const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
     const goldAmt = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
-    profile.gold += goldAmt;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldAmt;
     return `🧈 금괴 +${goldAmt}개`;
   } else {
     let keyAdd = 1 * speed;
-    profile.keys += keyAdd;
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyAdd;
     return `🔑 비밀열쇠 +${keyAdd}개`;
   }
@@ -990,6 +988,10 @@ function triggerShadowLoot(profile, battle) {
 function resolveFarmFight(profile, battle) {
   let resultMessages = [];
   let earnedCash = 0;
+  let earnedExp = 0;
+  let earnedGold = 0;
+  let earnedKeys = 0;
+  let earnedMonthItems = 0;
   const targetName = getRandomSurvivorName(); 
   const combatLv = profile.combatLevel || 0;
   const mult = getGoldMultiplier(profile);
@@ -1004,36 +1006,34 @@ function resolveFarmFight(profile, battle) {
     earnedCash = combatPower * 10 * speed;
     
     const goldBonus = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
-    profile.gold += goldBonus;
+    earnedGold += goldBonus;
     
     let keyBonus = 1 * speed;
     const keyChanceBonus = getImprintTotalBonus(profile, 'keyChance');
     if (Math.random() < keyChanceBonus) {
       keyBonus += 1;
     }
-    profile.keys += keyBonus;
+    earnedKeys += keyBonus;
     
-    let monthItemBonus = 0;
     if (Math.random() < 0.005) {
-      monthItemBonus = 1 * speed;
-      profile.monthItems = (profile.monthItems || 0) + monthItemBonus;
-      battle.accumulatedMonthItems = (battle.accumulatedMonthItems || 0) + monthItemBonus;
+      earnedMonthItems = 1 * speed;
+      profile.monthItems = (profile.monthItems || 0) + earnedMonthItems;
     }
 
     battle.accumulatedCash += earnedCash;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + goldBonus;
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyBonus;
+    battle.accumulatedMonthItems = (battle.accumulatedMonthItems || 0) + earnedMonthItems;
 
     battle.helmetLevel = 3;
     battle.helmetDurability = 100;
     battle.vestLevel = 3;
     battle.vestDurability = 100;
     
-    let supplyMsg = `[황금 보급품 획득!]📦 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n(현금 ${won(earnedCash)}, 금괴 ${goldBonus.toLocaleString()}개, 열쇠 ${keyBonus}개`;
-    if (monthItemBonus > 0) {
-      supplyMsg += `, 보급 ${monthItemBonus}개`;
+    let supplyMsg = `[📦 보급 1개 획득!] 최고급 Lv.3 헬멧 & Lv.3 조끼 장착 완료! (내구도 100%)\n현금 +${won(earnedCash)}\n금괴 +${goldBonus}개\n비밀열쇠 +${keyBonus}개`;
+    if (earnedMonthItems > 0) {
+      supplyMsg += `\n보급 +${earnedMonthItems}개`;
     }
-    supplyMsg += `)`;
     resultMessages.push(supplyMsg);
   } else {
     if (battle.turn >= 2 && Math.random() < 0.20) {
@@ -1066,9 +1066,10 @@ function resolveFarmFight(profile, battle) {
   switch (outcome) {
     case 'supply':
       {
-        const expGained = 500 * speed;
-        const expRes = addExp(profile, expGained);
-        resultMessages.push(`(EXP +${expRes.gained.toLocaleString()})`);
+        const expGained = Math.round(500 * speed);
+        earnedExp += expGained;
+        battle.accumulatedExp = (battle.accumulatedExp || 0) + expGained;
+        resultMessages.push(`(EXP +${expGained.toLocaleString()})`);
       }
       break;
     case 'gold': {
@@ -1077,7 +1078,7 @@ function resolveFarmFight(profile, battle) {
       if (Math.random() < goldChanceBonus) {
         goldBonus += 1;
       }
-      profile.gold += goldBonus;
+      earnedGold += goldBonus;
       battle.accumulatedGold = (battle.accumulatedGold || 0) + goldBonus;
       mainText = `금괴 ${goldBonus.toLocaleString()}개 획득!`;
       break;
@@ -1088,20 +1089,21 @@ function resolveFarmFight(profile, battle) {
       if (Math.random() < keyChanceBonus) {
         keyAdd += 1;
       }
-      profile.keys += keyAdd;
+      earnedKeys += keyAdd;
       battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keyAdd;
       mainText = `비밀열쇠 ${keyAdd}개 획득!`;
       break;
     }
     case 'jackpot': {
-      const jackpotAmt = rand(5000, 10000) * mult * speed;
+      const jackpotAmt = Math.round((10393 / 10) * mult * speed);
       earnedCash = jackpotAmt;
       battle.accumulatedCash += earnedCash;
       
-      const expGained = 500 * speed;
-      const expRes = addExp(profile, expGained);
+      const expGained = Math.round((jackpotAmt / 100));
+      earnedExp += expGained;
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + expGained;
 
-      mainText = `[잭팟!] 현금 ${won(jackpotAmt)} 획득! (EXP +${expRes.gained.toLocaleString()})`;
+      mainText = `[잭팟!] 현금 ${won(jackpotAmt)} 획득! (EXP +${expGained.toLocaleString()})`;
       break;
     }
     case 'damage': {
@@ -1154,7 +1156,7 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult * speed);
+      const killAssistReward = Math.round(((killCount * 100) + (assistCount * 50)) * mult * speed);
       const damageReward = Math.round(totalDamageVal * mult * speed);
       const finalReward = damageReward + killAssistReward;
       
@@ -1171,13 +1173,13 @@ function resolveFarmFight(profile, battle) {
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
       const baseExp = Math.round(earnedCash / 10);
-      const expRes = addExp(profile, baseExp);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained;
+      earnedExp += baseExp;
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + baseExp;
 
       mainText = `[${killCount} KILL] (+${won(killAssistReward)})${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${expRes.gained.toLocaleString()})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${baseExp.toLocaleString()})${notes}`;
       break;
     }
     case 'kill_multi': {
@@ -1218,7 +1220,7 @@ function resolveFarmFight(profile, battle) {
       battle.hp = Math.max(0, battle.hp - finalDamage);
       checkDeath(battle);
 
-      const killAssistReward = Math.round(((killCount * 500) + (assistCount * 250)) * mult * speed);
+      const killAssistReward = Math.round(((killCount * 100) + (assistCount * 50)) * mult * speed);
       const damageReward = Math.round(totalDamageVal * mult * speed);
       const finalReward = damageReward + killAssistReward;
       
@@ -1240,13 +1242,13 @@ function resolveFarmFight(profile, battle) {
       let killDetailText = `당신이 적 부위(${partsText})에 명중시켜 서바이버가 사망했습니다.`;
 
       const baseExp = Math.round(earnedCash / 10);
-      const expRes = addExp(profile, baseExp);
-      battle.accumulatedExp = (battle.accumulatedExp || 0) + expRes.gained;
+      earnedExp += baseExp;
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + baseExp;
 
       mainText = `${killTextHeader}${skillNote}\n` +
                  `${killDetailText}\n` +
                  `[데미지 ${totalDamageVal.toLocaleString()}] (+${won(damageReward)})\n` +
-                 `HP -${finalDamage}${reduceMsg} (EXP +${expRes.gained.toLocaleString()})${notes}`;
+                 `HP -${finalDamage}${reduceMsg} (EXP +${baseExp.toLocaleString()})${notes}`;
       break;
     }
     default: {
@@ -1255,15 +1257,16 @@ function resolveFarmFight(profile, battle) {
       battle.accumulatedCash += earnedCash;
       
       const baseExp = Math.round(earnedCash / 10);
-      const expRes = addExp(profile, baseExp);
-      mainText = `현금 ${won(lootCash)} 획득! (EXP +${expRes.gained.toLocaleString()})`;
+      earnedExp += baseExp;
+      battle.accumulatedExp = (battle.accumulatedExp || 0) + baseExp;
+      mainText = `현금 ${won(lootCash)} 획득! (EXP +${baseExp.toLocaleString()})`;
       break;
     }
   }
 
   if (mainText) resultMessages.push(mainText);
 
-  return { text: resultMessages.join('\n'), category: outcome, earnedCash };
+  return { text: resultMessages.join('\n'), category: outcome, earnedCash, earnedExp, earnedGold, earnedKeys, earnedMonthItems };
 }
 
 function resolveEscapeEvent(profile, battle) {
@@ -2378,12 +2381,36 @@ function checkAndResetHuntLimit(playerState) {
 function processWarehouse(profile) {
   if (!profile.inventory) profile.inventory = [];
   if (profile.inventory.length === 0) {
-    return `🎒 [창고]\n현재 보유 중인 전리품이 없습니다. 사냥을 통해 전리품을 획득해 보세요!`;
+    return `🎒 [전리품]\n현재 보유 중인 전리품이 없습니다. 사냥을 통해 전리품을 획득해 보세요!`;
   }
 
-  let lines = [`🎒 [창고 - 전리품 목록]`];
-  profile.inventory.forEach((item, index) => {
-    lines.push(`${index + 1}. [${item.tier}] ${item.categoryName} - ${item.name}\n   └ ${item.desc}`);
+  // T1~T6 순서 정의
+  const tierOrder = { "T1": 1, "T2": 2, "T3": 3, "T4": 4, "T5": 5, "T6": 6 };
+
+  // 카테고리별/아이템별 그룹화 및 개수 집계
+  const grouped = {};
+  profile.inventory.forEach(item => {
+    const key = `${item.tier}_${item.category}_${item.name}`;
+    if (!grouped[key]) {
+      grouped[key] = {
+        tier: item.tier,
+        categoryName: item.categoryName,
+        name: item.name,
+        desc: item.desc,
+        count: 0
+      };
+    }
+    grouped[key].count += 1;
+  });
+
+  const sortedItems = Object.values(grouped).sort((a, b) => {
+    return (tierOrder[a.tier] || 99) - (tierOrder[b.tier] || 99);
+  });
+
+  let lines = [`🎒 [전리품 목록]`];
+  sortedItems.forEach((item, index) => {
+    const countStr = item.count > 1 ? ` (${item.count}개)` : '';
+    lines.push(`${index + 1}. [${item.tier}] ${item.name}${countStr}`);
   });
   return lines.join('\n');
 }
@@ -2394,22 +2421,11 @@ function processHunt(playerState) {
   }
 
   checkAndResetHuntLimit(playerState);
-  const MAX_HUNT_COUNT = 1000;
+  const MAX_HUNT_COUNT = 2000;
 
   if (playerState.huntData.count >= MAX_HUNT_COUNT) {
     return {
       text: `[사냥 불가]\n오늘 사냥 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
-      choices: [{ label: "/메인", action: "/메인" }],
-      imageUrl: null,
-      image: null,
-      thumbnail: null
-    };
-  }
-
-  const monster = getRandomMonsterByProbability();
-  if (!monster) {
-    return {
-      text: `사냥감을 찾지 못했습니다.\n(현재 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT}))`,
       choices: [{ label: "/메인", action: "/메인" }],
       imageUrl: null,
       image: null,
@@ -2426,13 +2442,99 @@ function processHunt(playerState) {
   }
 
   const lootMult = getLootMultiplier(playerState);
-  const earnedCash = Math.floor(monster.rewardMoney * speed * lootMult);
-  playerState.cash = (playerState.cash || 0) + earnedCash;
-  
-  let earnedGem = (monster.rewardGem > 0 ? monster.rewardGem : 0) * speed;
-  if (earnedGem > 0) {
-    playerState.gem = (playerState.gem || 0) + earnedGem;
+
+  // 독립 시행으로 배속만큼 몬스터 생성 및 보상 계산
+  let totalEarnedCash = 0;
+  let totalEarnedGem = 0;
+  let spawnedMonsters = [];
+  let droppedLootTexts = [];
+
+  for (let i = 0; i < speed; i++) {
+    const monster = getRandomMonsterByProbability();
+    if (!monster) continue;
+
+    const earnedCash = Math.floor(monster.rewardMoney * lootMult);
+    const earnedGem = monster.rewardGem > 0 ? monster.rewardGem : 0;
+
+    totalEarnedCash += earnedCash;
+    totalEarnedGem += earnedGem;
+
+    spawnedMonsters.push(monster);
+
+    // 전리품 드랍 체크
+    let dropChance = 0.001; // 0.1%
+    let isLootDropped = false;
+    let targetTier = "";
+    const g = monster.grade;
+
+    if (g === "C등급" && Math.random() < dropChance) { targetTier = "T1"; isLootDropped = true; }
+    else if (g === "B등급" && Math.random() < dropChance) { targetTier = "T2"; isLootDropped = true; }
+    else if (g === "B+등급" && Math.random() < dropChance) { targetTier = "T3"; isLootDropped = true; }
+    else if (g === "A등급" && Math.random() < dropChance) { targetTier = "T4"; isLootDropped = true; }
+    else if (g === "A+등급" && Math.random() < dropChance) { targetTier = "T5"; isLootDropped = true; }
+    else if ((g === "S등급" || g === "S+등급") && Math.random() < dropChance) { targetTier = "T6"; isLootDropped = true; }
+
+    if (isLootDropped) {
+      const categories = ['stock', 'silencer', 'scope', 'magazine', 'grip'];
+      const chosenCategory = categories[rand(0, categories.length - 1)];
+      const tierList = LOOT_DATABASE[chosenCategory];
+      const itemData = tierList.find(i => i.tier === targetTier) || tierList[0];
+
+      const categoryNames = {
+        stock: '개머리판',
+        silencer: '소음기',
+        scope: '스코프',
+        magazine: '탄창',
+        grip: '그립'
+      };
+      const catName = categoryNames[chosenCategory];
+
+      if (!playerState.inventory) playerState.inventory = [];
+      playerState.inventory.push({
+        category: chosenCategory,
+        categoryName: catName,
+        tier: itemData.tier,
+        name: itemData.name,
+        desc: itemData.desc
+      });
+
+      droppedLootTexts.push(`🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/전리품에서 확인)`);
+    }
   }
+
+  playerState.cash = (playerState.cash || 0) + totalEarnedCash;
+  if (totalEarnedGem > 0) {
+    playerState.gem = (playerState.gem || 0) + totalEarnedGem;
+  }
+
+  // 등급 순서 매핑 (높은 등급이 위로)
+  const gradeRank = {
+    "S+등급": 10, "S등급": 9, "A+등급": 8, "A등급": 7,
+    "B+등급": 6, "B등급": 5, "C+등급": 4, "C등급": 3,
+    "D+등급": 2, "D등급": 1
+  };
+
+  spawnedMonsters.sort((a, b) => {
+    return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
+  });
+
+  let monsterInfoBlocks = [];
+  spawnedMonsters.forEach((m, idx) => {
+    let rewardStr = `💵 현금 +${won(Math.floor(m.rewardMoney * lootMult))}`;
+    if (m.rewardGem > 0) {
+      rewardStr += `\n💎 보석 +${m.rewardGem}개`;
+    }
+
+    if (idx === 0) {
+      monsterInfoBlocks.push(
+        `${m.grade}\n이름: ${m.fullName}\n설명: ${m.description}\n\n${rewardStr}`
+      );
+    } else {
+      monsterInfoBlocks.push(
+        `${rewardStr}`
+      );
+    }
+  });
 
   let questRewardMsg = "";
   const count = playerState.huntData.count;
@@ -2441,77 +2543,41 @@ function processHunt(playerState) {
   if (count >= 100 && count - speed < 100) {
     const qCash = 10000 * dice * speed;
     playerState.cash += qCash;
-    questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
   } else if (count >= 250 && count - speed < 250) {
     const qCash = 20000 * dice * speed;
     playerState.cash += qCash;
-    questRewardMsg = `\n\n퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
   } else if (count >= 500 && count - speed < 500) {
     const qGem = 1 * dice * speed;
     playerState.gem += qGem;
-    questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
+    questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
   } else if (count >= 1000 && count - speed < 1000) {
     const qGem = 2 * dice * speed;
     playerState.gem += qGem;
-    questRewardMsg = `\n\n퀘스트 달성 보상 : 보석 +${qGem}개`;
+    questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
   }
 
-  let droppedLootText = "";
-  let dropChance = 0.001; // 0.1%
-  let isLootDropped = false;
-  let targetTier = "";
-
-  const g = monster.grade;
-  if (g === "C등급" && Math.random() < dropChance) { targetTier = "T1"; isLootDropped = true; }
-  else if (g === "B등급" && Math.random() < dropChance) { targetTier = "T2"; isLootDropped = true; }
-  else if (g === "B+등급" && Math.random() < dropChance) { targetTier = "T3"; isLootDropped = true; }
-  else if (g === "A등급" && Math.random() < dropChance) { targetTier = "T4"; isLootDropped = true; }
-  else if (g === "A+등급" && Math.random() < dropChance) { targetTier = "T5"; isLootDropped = true; }
-  else if ((g === "S등급" || g === "S+등급") && Math.random() < dropChance) { targetTier = "T6"; isLootDropped = true; }
-
-  if (isLootDropped) {
-    const categories = ['stock', 'silencer', 'scope', 'magazine', 'grip'];
-    const chosenCategory = categories[rand(0, categories.length - 1)];
-    const tierList = LOOT_DATABASE[chosenCategory];
-    const itemData = tierList.find(i => i.tier === targetTier) || tierList[0];
-
-    const categoryNames = {
-      stock: '개머리판',
-      silencer: '소음기',
-      scope: '스코프',
-      magazine: '탄창',
-      grip: '그립'
-    };
-    const catName = categoryNames[chosenCategory];
-
-    if (!playerState.inventory) playerState.inventory = [];
-    playerState.inventory.push({
-      category: chosenCategory,
-      categoryName: catName,
-      tier: itemData.tier,
-      name: itemData.name,
-      desc: itemData.desc
-    });
-
-    droppedLootText = `\n\n🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/창고에서 확인)`;
+  let finalRewardLines = [];
+  if (questRewardMsg) {
+    finalRewardLines.push(questRewardMsg);
+  }
+  if (droppedLootTexts.length > 0) {
+    finalRewardLines.push(droppedLootTexts.join('\n'));
   }
 
-  let rewardLines = `💵 현금 +${won(earnedCash)}`;
-  if (earnedGem > 0) {
-    rewardLines += `\n💎 보석 +${earnedGem}개`;
+  let monstersJoined = monsterInfoBlocks.join('\n\n');
+  if (finalRewardLines.length > 0) {
+    monstersJoined = monstersJoined + '\n\n' + finalRewardLines.join('\n\n');
   }
 
   const text = `[몬스터 발견!]
-${monster.grade}
-이름: ${monster.fullName}
-설명: ${monster.description}
-
-${rewardLines}
+${monstersJoined}
 
 🔘 배율 x${lootMult.toFixed(2)}
 💵 현금 : ${won(playerState.cash)}
 💎 보석 : ${(playerState.gem || 0).toLocaleString()}개
-오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})${questRewardMsg}${droppedLootText}
+오늘 사냥 횟수: (${playerState.huntData.count}/${MAX_HUNT_COUNT})
 ⏩ ${speed}배속`;
   
   const choices = [
@@ -2522,11 +2588,11 @@ ${rewardLines}
   return {
     text,
     choices,
-    imageUrl: monster.image,
-    image: monster.image,
-    thumbnail: monster.image,
-    url: monster.image,
-    monster
+    imageUrl: spawnedMonsters[0]?.image || null,
+    image: spawnedMonsters[0]?.image || null,
+    thumbnail: spawnedMonsters[0]?.image || null,
+    url: spawnedMonsters[0]?.image || null,
+    monster: spawnedMonsters[0]
   };
 }
 
@@ -2634,7 +2700,7 @@ function startGame(existingProfile) {
   let battle = createBattle(profile);
 
   return {
-    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/전투', '/사냥' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
+    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/파밍' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
     imageUrl: null, 
     choices: BATTLE_CHOICES,
     category: 'start',
@@ -2658,8 +2724,7 @@ function processTurn(state, utterance) {
     return {
       text: startResult.text,
       choices: [
-        { label: "/사냥", action: "/사냥" },
-        { label: "/전투", action: '/전투' }
+        { label: "/파밍", action: "/파밍" }
       ],
       category: "main",
       imageUrl: startResult.imageUrl,
@@ -2726,7 +2791,7 @@ function processTurn(state, utterance) {
   if (!input.startsWith('/')) {
     const currentBoard = isPlayingBattle ? battleStatusBoard(profile, battle) : profileText(profile);
     return {
-      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 반드시 붙여야 동작합니다. (예: /전투, /프로필, /사냥)\n\n${currentBoard}`,
+      text: `⚠️ 모든 명령어는 명령어 앞에 '/'를 반드시 붙여야 동작합니다. (예: /파밍, /프로필, /사냥)\n\n${currentBoard}`,
       imageUrl: null,
       choices: isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES,
       state: { profile, battle }
@@ -2740,8 +2805,7 @@ function processTurn(state, utterance) {
   if (input === '/') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
-      `• /전투 - 배틀로얄 시작`,
-      `• /파밍 - 전투 중 파밍 진행`,
+      `• /파밍 - 파밍 시작 (기존 전투 기능 대체)`,
       `• /도망 - 전투 중 도망 및 HP 회복`,
       `• /강화 - 무기 강화`,
       `• /강화 [목표수치] - 조건 달성 시 기댓값x2.5배로 즉시 강화 (일반 무기 전용)`,
@@ -2755,7 +2819,7 @@ function processTurn(state, utterance) {
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
       `• /전직변경 [직업변경]`,
       `• /각인 - 각인 정보 확인`,
-      `• /창고 - 획득한 전리품 확인`,
+      `• /전리품 - 획득한 전리품 확인`,
       `• /프로필 - 내 정보 확인`,
       `• /사냥 - 몬스터 사냥 및 현금 보상 획득`
     ].join('\n');
@@ -2769,24 +2833,10 @@ function processTurn(state, utterance) {
   let result = { text: '', imageUrl: null, choices: null, category: 'normal' };
 
   switch (command) {
-    case '/전투': {
-      if (isPlayingBattle) {
-        result.text = `이미 배틀로얄 진행 중입니다!\n\n${battleStatusBoard(profile, battle)}`;
-        result.choices = BATTLE_CHOICES;
-      } else {
-        battle = createBattle(profile);
-        state.battle = battle;
-        result.text = `배틀로얄 시작!\n\n${battleStatusBoard(profile, battle)}`;
-        result.choices = BATTLE_CHOICES;
-        result.category = 'start';
-      }
-      break;
-    }
     case '/파밍': {
       if (!isPlayingBattle) {
-        result.text = `현재 전투 중이 아닙니다. [/전투]를 입력해 배틀로얄을 시작하세요.\n\n${profileText(profile)}`;
-        result.choices = LOBBY_CHOICES;
-        break;
+        battle = createBattle(profile);
+        state.battle = battle;
       }
 
       battle.turn += 1;
@@ -2811,7 +2861,8 @@ function processTurn(state, utterance) {
         const totalKeysGained = battle.accumulatedKeys || 0;
         const totalMonthItemsGained = battle.accumulatedMonthItems || 0;
 
-        const expRes = addExp(profile, 300);
+        const totalExpGained = battle.accumulatedExp || 0;
+        const expRes = addExp(profile, totalExpGained);
 
         let deathLines = [
           ...textLines,
@@ -2843,7 +2894,7 @@ function processTurn(state, utterance) {
         const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
         profile.cash += finalTotalCash;
 
-        const baseExpReward = rand(100, 500);
+        const baseExpReward = battle.accumulatedExp || rand(100, 500);
         const victoryBonusExp = Math.round(baseExpReward * 0.3);
         const expRes = addExp(profile, baseExpReward + victoryBonusExp);
 
@@ -2880,7 +2931,7 @@ function processTurn(state, utterance) {
     }
     case '/도망': {
       if (!isPlayingBattle) {
-        result.text = `현재 전투 중이 아닙니다. [/전투]를 입력해 배틀로얄을 시작하세요.\n\n${profileText(profile)}`;
+        result.text = `현재 전투 중이 아닙니다. [/파밍]을 입력해 파밍을 시작하세요.\n\n${profileText(profile)}`;
         result.choices = LOBBY_CHOICES;
         break;
       }
@@ -2911,7 +2962,7 @@ function processTurn(state, utterance) {
         const finalTotalCash = battle.accumulatedCash + victoryBonusCash;
         profile.cash += finalTotalCash;
 
-        const baseExpReward = rand(100, 500);
+        const baseExpReward = battle.accumulatedExp || rand(100, 500);
         const victoryBonusExp = Math.round(baseExpReward * 0.3);
         const expRes = addExp(profile, baseExpReward + victoryBonusExp);
 
@@ -3004,6 +3055,11 @@ function processTurn(state, utterance) {
       const keyRes = processUseKey(profile, arg);
       result.text = keyRes.text;
       result.choices = LOBBY_CHOICES;
+      break;
+    }
+    case '/전리품': {
+      result.text = processWarehouse(profile);
+      result.choices = isPlayingBattle ? BATTLE_CHOICES : LOBBY_CHOICES;
       break;
     }
     case '/창고': {
