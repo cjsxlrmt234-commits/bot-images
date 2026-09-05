@@ -715,8 +715,8 @@ function createProfile(existing = {}) {
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
     maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
-    farmData: safeObj.farmData ?? { date: "", count: 0 },
-    huntData: safeObj.huntData ?? { date: "", count: 0 },
+    farmData: safeObj.farmData ?? { date: "", count: 0, lastClaimedFarmQuest: 0 },
+    huntData: safeObj.huntData ?? { date: "", count: 0, lastClaimedHuntQuest: 0 },
     speedMultiplier: safeObj.speedMultiplier ?? 1,
     helpSeen: safeObj.helpSeen ?? {}
   };
@@ -738,9 +738,12 @@ function checkAndResetFarmLimit(playerState) {
   const maxLimit = (dayOfWeek === 0 || dayOfWeek === 6) ? 200 : 100;
 
   if (!playerState.farmData || playerState.farmData.date !== todayStr) {
-    playerState.farmData = { date: todayStr, count: 0, max: maxLimit };
+    playerState.farmData = { date: todayStr, count: 0, max: maxLimit, lastClaimedFarmQuest: 0 };
   } else {
     playerState.farmData.max = maxLimit;
+    if (playerState.farmData.lastClaimedFarmQuest === undefined) {
+      playerState.farmData.lastClaimedFarmQuest = 0;
+    }
   }
 }
 
@@ -906,6 +909,11 @@ function battleStatusBoard(profile, battle) {
   const currentFarmCount = p.farmData ? p.farmData.count : 0;
   const maxFarmLimit = p.farmData ? p.farmData.max : 100;
 
+  const farmThresholds = [10, 25, 50, 100, 150, 200];
+  const nextFarmTarget = farmThresholds.find(t => t > currentFarmCount) || 200;
+  const remainingFarmCount = Math.max(0, nextFarmTarget - currentFarmCount);
+  const questLeftText = `📜 퀘스트 보상까지 ${remainingFarmCount}회`;
+
   const currentEnhance = getCurrentEnhanceLevel(p);
   const wName = getWeaponInfo(currentEnhance, p.job)[0];
   const reqExp = getRequiredExp(p.level);
@@ -922,8 +930,8 @@ function battleStatusBoard(profile, battle) {
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
     `배율 (x${totalMult}) | 배속 (x${p.speedMultiplier || 1})`,
-    `전투 횟수 : (${currentFarmCount}/200)`,
-    `📜 퀘스트 보상까지 (숫자)회`
+    `전투 횟수 : (${currentFarmCount}/${maxFarmLimit})`,
+    questLeftText
   ];
 
   if (b.buffs.length > 0) {
@@ -1282,6 +1290,56 @@ function resolveFarmFight(profile, battle) {
   }
 
   if (mainText) resultMessages.push(mainText);
+
+  // 파밍 퀘스트 보상 처리 (매 사냥마다 들어가는 오류 수정 및 지정 횟수별 보상 적용)
+  const count = profile.farmData.count;
+  const lastClaimed = profile.farmData.lastClaimedFarmQuest || 0;
+  const dice = rand(1, 6);
+  let farmQuestRewardMsg = "";
+
+  if (count >= 10 && lastClaimed < 10 && count - 1 < 10) {
+    const qCash = 5000 * dice;
+    profile.cash += qCash;
+    profile.farmData.lastClaimedFarmQuest = 10;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+  } else if (count >= 25 && lastClaimed < 25 && count - 1 < 25) {
+    const qCash = 10000 * dice;
+    profile.cash += qCash;
+    profile.farmData.lastClaimedFarmQuest = 25;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
+  } else if (count >= 50 && lastClaimed < 50 && count - 1 < 50) {
+    const qCash = 15000 * dice;
+    const qGold = 1 * dice;
+    profile.cash += qCash;
+    profile.gold += qGold;
+    profile.farmData.lastClaimedFarmQuest = 50;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 100 && lastClaimed < 100 && count - 1 < 100) {
+    const qCash = 20000 * dice;
+    const qGold = 1 * dice;
+    profile.cash += qCash;
+    profile.gold += qGold;
+    profile.farmData.lastClaimedFarmQuest = 100;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 150 && lastClaimed < 150 && count - 1 < 150) {
+    const qCash = 25000 * dice;
+    const qGold = 1 * dice;
+    profile.cash += qCash;
+    profile.gold += qGold;
+    profile.farmData.lastClaimedFarmQuest = 150;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 200 && lastClaimed < 200 && count - 1 < 200) {
+    const qCash = 30000 * dice;
+    const qGold = 2 * dice;
+    profile.cash += qCash;
+    profile.gold += qGold;
+    profile.farmData.lastClaimedFarmQuest = 200;
+    farmQuestRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  }
+
+  if (farmQuestRewardMsg) {
+    resultMessages.push(farmQuestRewardMsg);
+  }
 
   return { text: resultMessages.join('\n'), category: outcome, earnedCash, earnedExp, earnedGold, earnedKeys, earnedSupplyItem };
 }
@@ -2407,9 +2465,12 @@ function checkAndResetHuntLimit(playerState) {
   const maxLimit = (dayOfWeek === 0 || dayOfWeek === 6) ? 4000 : 100000;
 
   if (!playerState.huntData || playerState.huntData.date !== todayStr) {
-    playerState.huntData = { date: todayStr, count: 0, max: maxLimit };
+    playerState.huntData = { date: todayStr, count: 0, max: maxLimit, lastClaimedHuntQuest: 0 };
   } else {
     playerState.huntData.max = maxLimit;
+    if (playerState.huntData.lastClaimedHuntQuest === undefined) {
+      playerState.huntData.lastClaimedHuntQuest = 0;
+    }
   }
 }
 
@@ -2459,7 +2520,7 @@ function processWarehouse(profile) {
 
 function processHunt(playerState) {
   if (!playerState.huntData) {
-    playerState.huntData = { date: "", count: 0 };
+    playerState.huntData = { date: "", count: 0, lastClaimedHuntQuest: 0 };
   }
 
   checkAndResetHuntLimit(playerState);
@@ -2582,46 +2643,60 @@ function processHunt(playerState) {
 
   let questRewardMsg = "";
   const count = playerState.huntData.count;
+  const lastClaimed = playerState.huntData.lastClaimedHuntQuest || 0;
   const dice = rand(1, 6);
 
-  // 수정사항 2 반영: 3000회 및 4000회 퀘스트 보상 추가
-  if (count >= 10 && count - actualHunts < 10) {
+  if (count >= 100 && lastClaimed < 100 && count - actualHunts < 100) {
     const qCash = 5000 * dice;
     playerState.cash += qCash;
+    playerState.huntData.lastClaimedHuntQuest = 100;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 50 && count - actualHunts < 50) {
-    const qCash = 1000 * dice; // 수정사항 3 반영: 50회 보상은 1000원*(1~6 주사위)
+  } else if (count >= 250 && lastClaimed < 250 && count - actualHunts < 250) {
+    const qCash = 10000 * dice;
     playerState.cash += qCash;
+    playerState.huntData.lastClaimedHuntQuest = 250;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 100 && count - actualHunts < 100) {
-    const qCash = 15000 * dice; // 수정사항 3 반영: 100회 보상은 15000원*(1~6 주사위)+금괴1개*(1~6 주사위)
-    const qGold = 1 * dice;
-    playerState.cash += qCash;
-    playerState.gold += qGold;
-    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
-  } else if (count >= 150 && count - actualHunts < 1500) { // 수정사항 3 반영: 150회 보상
-    const qCash = 20000 * dice;
-    const qGold = 2 * dice;
-    playerState.cash += qCash;
-    playerState.gold += qGold;
-    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
-  } else if (count >= 200 && count - actualHunts < 2000) { // 수정사항 3 반영: 200회 보상
-    const qCash = 25000 * dice;
-    const qGold = 3 * dice;
-    playerState.cash += qCash;
-    playerState.gold += qGold;
-    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
-  } else if (count >= 3000 && count - actualHunts < 3000) {
-    const qCash = 25000 * dice;
+  } else if (count >= 500 && lastClaimed < 500 && count - actualHunts < 500) {
+    const qCash = 15000 * dice;
     const qGem = 1 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 500;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
-  } else if (count >= 4000 && count - actualHunts < 4000) {
-    const qCash = 30000 * dice;
+  } else if (count >= 1000 && lastClaimed < 1000 && count - actualHunts < 1000) {
+    const qCash = 20000 * dice;
     const qGem = 2 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 1000;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
+  } else if (count >= 1500 && lastClaimed < 1500 && count - actualHunts < 1500) {
+    const qCash = 25000 * dice;
+    const qGem = 3 * dice;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 1500;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
+  } else if (count >= 2000 && lastClaimed < 2000 && count - actualHunts < 2000) {
+    const qCash = 25000 * dice;
+    const qGem = 3 * dice;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 2000;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
+  } else if (count >= 3000 && lastClaimed < 3000 && count - actualHunts < 3000) {
+    const qCash = 30000 * dice;
+    const qGem = 4 * dice;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 3000;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
+  } else if (count >= 4000 && lastClaimed < 4000 && count - actualHunts < 4000) {
+    const qCash = 50000 * dice;
+    const qGem = 5 * dice;
+    playerState.cash += qCash;
+    playerState.gem += qGem;
+    playerState.huntData.lastClaimedHuntQuest = 4000;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
   }
 
@@ -2645,7 +2720,7 @@ function processHunt(playerState) {
     middleContent = middleContent + '\n' + finalRewardLines.join('\n');
   }
 
-  const questThresholds = [10, 50, 100, 150, 200, 3000, 4000];
+  const questThresholds = [100, 250, 500, 1000, 1500, 2000, 3000, 4000];
   let nextThreshold = questThresholds.find(t => t > count) || 4000;
   let remainingCount = nextThreshold - count;
   let questLeftText = `📜 퀘스트 보상까지 ${remainingCount}회`;
@@ -2653,15 +2728,11 @@ function processHunt(playerState) {
   let footerLines = [
     questLeftText,
     `🔘 배율 x${lootMult.toFixed(2)} (사냥 전용)`,
-    `💵 현금 : ${won(playerState.cash)}`
-  ];
-  if (totalGemSum > 0 || (playerState.gem || 0) > 0) {
-    footerLines.push(`💎 보석 : ${(playerState.gem || 0).toLocaleString()}개`);
-  }
-  footerLines.push(
+    `💵 현금 : ${won(playerState.cash)}`,
+    `💎 보석 : ${(playerState.gem || 0).toLocaleString()}개`,
     `사냥 횟수 : (${playerState.huntData.count}/${MAX_HUNT_COUNT})`,
     `⏩ ${speed}배속`
-  );
+  ];
 
   const text = `${middleContent}\n\n${footerLines.join('\n')}`;
   
@@ -2996,18 +3067,14 @@ function processTurn(state, utterance) {
     case '/파밍': {
       checkAndResetFarmLimit(profile);
       const maxLimit = profile.farmData ? profile.farmData.max : 100;
-      if (profile.farmData.count >= maxLimit) {
-        result.text = `[파밍 불가]\n오늘 전투(파밍) 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${profile.farmData.count}/${maxLimit}))`;
-        result.choices = LOBBY_CHOICES;
-        break;
-      }
-      
-      // 수정사항 1 반영: 턴이 오를 때마다(파밍을 진행할 때마다) 전투 횟수 1 차감 (잔여 횟수에서 1 차감되도록 구현)
-      if (profile.farmData.count > 0) {
-        profile.farmData.count -= 1;
-      }
 
       if (!isPlayingBattle) {
+        if (profile.farmData.count >= maxLimit) {
+          result.text = `[파밍 불가]\n오늘 전투(파밍) 가능 횟수를 모두 소모했습니다.\n(현재 횟수: (${profile.farmData.count}/${maxLimit}))`;
+          result.choices = LOBBY_CHOICES;
+          break;
+        }
+        profile.farmData.count += 1;
         battle = createBattle(profile);
         state.battle = battle;
       }
