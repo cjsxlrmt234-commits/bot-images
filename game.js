@@ -922,7 +922,8 @@ function battleStatusBoard(profile, battle) {
     `🛡️ 헬멧: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 조끼: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
     `배율 (x${totalMult}) | 배속 (x${p.speedMultiplier || 1})`,
-    `전투 횟수 : (${currentFarmCount}/${maxFarmLimit})`
+    `전투 횟수 : (${currentFarmCount}/200)`,
+    `📜 퀘스트 보상까지 (숫자)회`
   ];
 
   if (b.buffs.length > 0) {
@@ -1391,7 +1392,6 @@ function processenhance(profile) {
     profile.gem -= gemCost;
   }
 
-  // 누적 강화 비용 기록
   profile.totalEnhanceCost = (profile.totalEnhanceCost || 0) + cost;
 
   const initialEnhance = currentLevel;
@@ -2584,30 +2584,41 @@ function processHunt(playerState) {
   const count = playerState.huntData.count;
   const dice = rand(1, 6);
 
-  if (count >= 100 && count - actualHunts < 100) {
+  // 수정사항 2 반영: 3000회 및 4000회 퀘스트 보상 추가
+  if (count >= 10 && count - actualHunts < 10) {
     const qCash = 5000 * dice;
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 250 && count - actualHunts < 250) {
-    const qCash = 10000 * dice;
+  } else if (count >= 50 && count - actualHunts < 50) {
+    const qCash = 1000 * dice; // 수정사항 3 반영: 50회 보상은 1000원*(1~6 주사위)
     playerState.cash += qCash;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)}`;
-  } else if (count >= 500 && count - actualHunts < 500) {
-    const qGem = 1 * dice;
-    playerState.gem += qGem;
-    questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
-  } else if (count >= 1000 && count - actualHunts < 1000) {
-    const qGem = 2 * dice;
-    playerState.gem += qGem;
-    questRewardMsg = `퀘스트 달성 보상 : 보석 +${qGem}개`;
-  } else if (count >= 1500 && count - actualHunts < 1500) {
-    const qCash = 15000 * dice;
+  } else if (count >= 100 && count - actualHunts < 100) {
+    const qCash = 15000 * dice; // 수정사항 3 반영: 100회 보상은 15000원*(1~6 주사위)+금괴1개*(1~6 주사위)
+    const qGold = 1 * dice;
+    playerState.cash += qCash;
+    playerState.gold += qGold;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 150 && count - actualHunts < 1500) { // 수정사항 3 반영: 150회 보상
+    const qCash = 20000 * dice;
+    const qGold = 2 * dice;
+    playerState.cash += qCash;
+    playerState.gold += qGold;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 200 && count - actualHunts < 2000) { // 수정사항 3 반영: 200회 보상
+    const qCash = 25000 * dice;
+    const qGold = 3 * dice;
+    playerState.cash += qCash;
+    playerState.gold += qGold;
+    questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 금괴 +${qGold}개`;
+  } else if (count >= 3000 && count - actualHunts < 3000) {
+    const qCash = 25000 * dice;
     const qGem = 1 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
     questRewardMsg = `퀘스트 달성 보상 : 현금 +${won(qCash)} 및 보석 +${qGem}개`;
-  } else if (count >= 2000 && count - actualHunts < 2000) {
-    const qCash = 20000 * dice;
+  } else if (count >= 4000 && count - actualHunts < 4000) {
+    const qCash = 30000 * dice;
     const qGem = 2 * dice;
     playerState.cash += qCash;
     playerState.gem += qGem;
@@ -2634,8 +2645,8 @@ function processHunt(playerState) {
     middleContent = middleContent + '\n' + finalRewardLines.join('\n');
   }
 
-  const questThresholds = [100, 250, 500, 1000, 1500, 2000];
-  let nextThreshold = questThresholds.find(t => t > count) || 2000;
+  const questThresholds = [10, 50, 100, 150, 200, 3000, 4000];
+  let nextThreshold = questThresholds.find(t => t > count) || 4000;
   let remainingCount = nextThreshold - count;
   let questLeftText = `📜 퀘스트 보상까지 ${remainingCount}회`;
 
@@ -2990,7 +3001,11 @@ function processTurn(state, utterance) {
         result.choices = LOBBY_CHOICES;
         break;
       }
-      profile.farmData.count += 1;
+      
+      // 수정사항 1 반영: 턴이 오를 때마다(파밍을 진행할 때마다) 전투 횟수 1 차감 (잔여 횟수에서 1 차감되도록 구현)
+      if (profile.farmData.count > 0) {
+        profile.farmData.count -= 1;
+      }
 
       if (!isPlayingBattle) {
         battle = createBattle(profile);
