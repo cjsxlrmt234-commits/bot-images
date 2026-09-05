@@ -41,7 +41,7 @@ const monsters = [
 
   // C등급 (1~15)
   { name: "들쇠 토끼", grade: "C등급", description: "튼튼한 뒷발로 강력한 돌려차기를 구사하는 전투용 거대 토끼.", image: `${BASE_URL}/images/C_1.png` },
-  { name: "돌멩이 골렘", grade: "C등급", description: "하급 마석의 힘으로 움직이는 거친 바위 조각들의 집합체.", image: `${BASE_URL}/images/C_2.png` },
+  { name: "바위산 뿔산양", grade: "C등급", description: "기이할 정도로 길고 단단한 나선형 뿔을 휘둘러 바위벽을 부수며 달리는 산악 짐승.", image: `${BASE_URL}/images/C_2.png` },
   { name: "독니 독사", grade: "C등급", description: "늪지대에 서식하며 물리면 마비 효과를 일으키는 초급 독사.", image: `${BASE_URL}/images/C_3.png` },
   { name: "그림자 늑대", grade: "C등급", description: "어두운 숲에서 무리를 지어 사냥하며 야간에 은신 능력이 뛰어난 맹수.", image: `${BASE_URL}/images/C_4.png` },
   { name: "고블린 투창병", grade: "C등급", description: "날카로운 뼈 창을 원거리에서 던져 사냥감을 괴롭히는 소형 휴머노이드.", image: `${BASE_URL}/images/C_5.png` },
@@ -2652,10 +2652,10 @@ function processHunt(playerState) {
 
   let monsterInfoBlocks = [];
   spawnedMonsters.forEach((m, idx) => {
-    const displayGradeHeader = m.grade.includes("+") ? `[${m.grade}] ` : "";
+    const displayGradeHeader = `[${m.grade}] `;
     if (idx === 0) {
       monsterInfoBlocks.push(
-        `[몬스터 발견!]\n${displayGradeHeader}${m.fullName}\n설명: ${m.description}`
+        `${displayGradeHeader}${m.fullName}\n설명: ${m.description}`
       );
     } else {
       monsterInfoBlocks.push(
