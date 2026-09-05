@@ -14,15 +14,15 @@ const REFINE_BASE_CASH = 10000000;
 const BASE_URL = 'https://raw.githubusercontent.com/cjsxlrmt234-commits/bot-images/main'; 
 
 const prefixes = {
-  "D등급": ["초보", "약한", "지저분한", "배고픈", "겁먹은"],
-  "C등급": ["단단한", "날쌘", "거친", "사나운", "독이 묻은"],
-  "B등급": ["거대한", "흉포한", "타락한", "어둠의", "철갑"],
-  "A등급": ["광폭한", "고대의", "지옥의", "군주", "수호자"],
-  "S등급": ["파멸의", "절망의", "신들의", "혼돈의", "태초의"]
+  "D+등급": ["초보", "약한", "지저분한", "배고픈", "겁먹은"],
+  "C+등급": ["단단한", "날쌘", "거친", "사나운", "독이 묻은"],
+  "B+등급": ["거대한", "흉포한", "타락한", "어둠의", "철갑"],
+  "A+등급": ["광폭한", "고대의", "지옥의", "군주", "수호자"],
+  "S+등급": ["파멸의", "절망의", "신들의", "혼돈의", "태초의"]
 };
 
 const monsters = [
-  // D등급 (1~10)
+  // D등급 (1~15)
   { name: "먼지 정령", grade: "D등급", description: "버려진 공간에서 자생하는 약한 마력의 작은 먼지 덩어리.", image: `${BASE_URL}/images/D_1.png` },
   { name: "이슬 슬라임", grade: "D등급", description: "숲속의 맑은 물웅덩이에서 발견되는 투명하고 해가 없는 물컹한 생명체.", image: `${BASE_URL}/images/D_2.png` },
   { name: "들쥐 포식자", grade: "D등급", description: "곡식 창고나 들판을 배회하며 농작물을 훔쳐 먹는 덩치 큰 일반 쥐.", image: `${BASE_URL}/images/D_3.png` },
@@ -33,8 +33,13 @@ const monsters = [
   { name: "푸른 파편 박쥐", grade: "D등급", description: "지하 초입에서 서식하며 초음파로 길을 찾는 소형 박쥐.", image: `${BASE_URL}/images/D_8.png` },
   { name: "이끼 거북이", grade: "D등급", description: "등딱지에 두꺼운 이끼가 자라나 풀숲과 구분이 안 되는 소형 파충류.", image: `${BASE_URL}/images/D_9.png` },
   { name: "썩은 짚인형", grade: "D등급", description: "폐가나 마법사의 공방 버려진 구석에서 움직이기 시작한 인형.", image: `${BASE_URL}/images/D_10.png` },
+  { name: "투명 꼬마 유령", grade: "D등급", description: "빛을 통과시키는 반투명한 체질로 사람의 물건을 훔쳐 도망치는 하급 영체.", image: `${BASE_URL}/images/D_11.png` },
+  { name: "찰흙 요정", grade: "D등급", description: "진흙과 마력이 엉겨 붙어 사람 손 모양으로 기어 다니는 장난꾸러기 토우.", image: `${BASE_URL}/images/D_12.png` },
+  { name: "날개 달린 쥐", grade: "D등급", description: "어두운 하수구를 누비며 작은 박쥐 날개로 푸드득 날아오르는 설치류.", image: `${BASE_URL}/images/D_13.png` },
+  { name: "가시 버섯", grade: "D등급", description: "건드리면 터지면서 따가운 미세 포자를 공중으로 흩뿌리는 유독성 균류.", image: `${BASE_URL}/images/D_14.png` },
+  { name: "녹슨 자석 괴물", grade: "D등급", description: "주변의 작은 쇳가루를 끌어모으며 바닥을 데굴데굴 굴러다니는 마력 광물.", image: `${BASE_URL}/images/D_15.png` },
 
-  // C등급 (1~10)
+  // C등급 (1~15)
   { name: "들쇠 토끼", grade: "C등급", description: "튼튼한 뒷발로 강력한 돌려차기를 구사하는 전투용 거대 토끼.", image: `${BASE_URL}/images/C_1.png` },
   { name: "돌멩이 골렘", grade: "C등급", description: "하급 마석의 힘으로 움직이는 거친 바위 조각들의 집합체.", image: `${BASE_URL}/images/C_2.png` },
   { name: "독니 독사", grade: "C등급", description: "늪지대에 서식하며 물리면 마비 효과를 일으키는 초급 독사.", image: `${BASE_URL}/images/C_3.png` },
@@ -45,8 +50,13 @@ const monsters = [
   { name: "하급 샐러맨더", grade: "C등급", description: "불길이 약하게 감싸고 있는 도마뱀 형태로, 뜨거운 열기를 뿜어냄.", image: `${BASE_URL}/images/C_8.png` },
   { name: "맹독 벌레떼", grade: "C등급", description: "떼 지어 날아다니며 상대의 시야를 가리고 피부를 갉아먹는 곤충형 몬스터.", image: `${BASE_URL}/images/C_9.png` },
   { name: "늪지 요괴", grade: "C등급", description: "이끼와 진흙으로 위장하여 지나가는 나그네를 물속으로 끌어들이는 괴물.", image: `${BASE_URL}/images/C_10.png` },
+  { name: "구리빛 모래 여우", grade: "C등급", description: "사막의 열기를 견디며 날카로운 발톱으로 모래를 파헤쳐 기습하는 소형 야수.", image: `${BASE_URL}/images/C_11.png` },
+  { name: "덩굴 채찍 식물", grade: "C등급", description: "긴 줄기를 채찍처럼 휘둘러 접근하는 생명체의 움직임을 묶어버리는 식인 식물.", image: `${BASE_URL}/images/C_12.png` },
+  { name: "유령 불꽃 도깨비", grade: "C등급", description: "푸른 도깨비불을 몸에 두르고 공중을 낮게 떠다니며 시야를 교란하는 요괴.", image: `${BASE_URL}/images/C_13.png` },
+  { name: "지하 수로 꼬마 악어", grade: "C등급", description: "어둡고 축축한 하수도 환경에 적응해 백색 피부와 예리한 이빨을 가진 소형 파충류.", image: `${BASE_URL}/images/C_14.png` },
+  { name: "산호초 껍질 게", grade: "C등급", description: "화려한 산호가 등껍질에 자라나 독성 거품을 뿜어내는 해안가 갑각류.", image: `${BASE_URL}/images/C_15.png` },
 
-  // B등급 (1~10)
+  // B등급 (1~15)
   { name: "철갑 오크 장교", grade: "B등급", description: "두꺼운 철판 갑옷을 두르고 거대한 철퇴를 휘두르는 오크 지휘관.", image: `${BASE_URL}/images/B_1.png` },
   { name: "서리 하피", grade: "B등급", description: "매서운 얼음 바람을 일으키며 높은 고도에서 급강하해 발톱으로 공격하는 괴물.", image: `${BASE_URL}/images/B_2.png` },
   { name: "그림자 암살자", grade: "B등급", description: "빛을 흡수하는 은신 스킬을 사용해 단숨에 급소를 노리는 인간형 유령.", image: `${BASE_URL}/images/B_3.png` },
@@ -56,22 +66,37 @@ const monsters = [
   { name: "맹독 아라크네", grade: "B등급", description: "온몸에서 강한 산성 독을 뿜어내며 벽과 천장을 자유롭게 기어 다니는 거미 괴물.", image: `${BASE_URL}/images/B_7.png` },
   { name: "유령 기사", grade: "B등급", description: "찢어진 깃발을 들고 밤마다 옛 전장을 순찰하는 저주받은 기사 망령.", image: `${BASE_URL}/images/B_8.png` },
   { name: "라이트닝 드레이크", grade: "B등급", description: "번개를 뿜어내기 시작하는 어린 단계의 용족 괴물.", image: `${BASE_URL}/images/B_9.png` },
-  { name: "피의 구울", grade: "B등급", description: "시체를 탐닉하며 인간의 이성을 잃고 육식 본능만 남은 흉포한 언데드.", image: `${BASE_URL}/images/B_10.png` },
+  { name: "베로니카", grade: "B등급", description: "거대한 대검과 성스러운 빛의 방패를 동시에 다루며, 전방에서 적의 공격을 완벽하게 틀어막는 동시에 강력한 신성 일격으로 전장을 지배하는 최정예 철갑 전사.", image: `${BASE_URL}/images/B_10.png` },
+  { name: "철갑 산양", grade: "B등급", description: "강철처럼 단단하고 거대한 뿔로 절벽을 박차며 돌진하는 고산지대 맹수.", image: `${BASE_URL}/images/B_11.png` },
+  { name: "그림자 표범", grade: "B등급", description: "어두운 지형이나 그늘 속에 완벽하게 동화되어 소리 없이 사냥감을 채가는 야수.", image: `${BASE_URL}/images/B_12.png` },
+  { name: "맹독 가시 고슴도치", grade: "B등급", description: "몸을 둥글게 말아 고속으로 회전하며 주변에 독성 가시를 난사하는 마수.", image: `${BASE_URL}/images/B_13.png` },
+  { name: "얼음 조각사 요정", grade: "B등급", description: "주변의 수증기를 급속 냉각시켜 날카로운 얼음 칼날을 만들어 날리는 정령종.", image: `${BASE_URL}/images/B_14.png` },
+  { name: "낡은 갑옷 투사", grade: "B등급", description: "주인이 사라진 채 마력으로 움직이며 거대한 대검을 무자비하게 휘두르는 언데드.", image: `${BASE_URL}/images/B_15.png` },
 
-  // A등급 (1~10)
+  // A등급 (1~15)
   { name: "심연의 리치", grade: "A등급", description: "금지된 흑마술을 극도로 연마해 영혼의 힘으로 언데드 군단을 지휘하는 마법사.", image: `${BASE_URL}/images/A_1.png` },
   { name: "서리 거룡", grade: "A등급", description: "입김만으로 주변 반경 수 킬로미터를 순식간에 얼어붙게 만드는 성숙한 용족.", image: `${BASE_URL}/images/A_2.png` },
   { name: "지옥불 미노타우로스", grade: "A등급", description: "몸 전체가 용암처럼 이글거리는 도끼를 휘두르는 미궁의 지배자.", image: `${BASE_URL}/images/A_3.png` },
   { name: "고대 뱀파이어 백작", grade: "A등급", description: "수백 년 동안 인간의 피를 흡수해 절대적인 속도와 최면 능력을 지닌 흡혈귀.", image: `${BASE_URL}/images/A_4.png` },
   { name: "폭풍의 정령왕", grade: "A등급", description: "하늘에서 거대한 번개와 폭풍을 자유자재로 불러일으키는 재앙급 정령.", image: `${BASE_URL}/images/A_5.png` },
   { name: "철혈의 와이번 킹", grade: "A등급", description: "수많은 와이번 무리를 이끄는 우두머리로, 강철 같은 비늘을 지님.", image: `${BASE_URL}/images/A_6.png` },
-  { name: "타락한 성기사 멜키르", grade: "A등급", description: "신성력을 잃고 어둠의 계약에 물들어 거대한 대검을 휘두르는 타락한 영웅.", image: `${BASE_URL}/images/A_7.png` },
+  { name: "성기사 멜키르", grade: "A등급", description: "신성력을 얻어 빛의 계약에 물들어 거대한 대검을 휘두르는 타락한 영웅.", image: `${BASE_URL}/images/A_7.png` },
   { name: "거대 심해 크라켄", grade: "A등급", description: "바다 한가운데서 배를 통째로 집어삼키는 다리의 촉수를 가진 거대 수중 괴물.", image: `${BASE_URL}/images/A_8.png` },
   { name: "혼돈의 나무", grade: "A등급", description: "숲 전체를 독성 안개로 물들이고 뿌리로 적을 포박하는 거대한 고대 식물.", image: `${BASE_URL}/images/A_9.png` },
   { name: "공허의 마녀", grade: "A등급", description: "차원의 틈새를 열어 시공간을 왜곡하는 저주 마법을 구사하는 최상급 마법사.", image: `${BASE_URL}/images/A_10.png` },
+  { name: "혹한의 서리 표범", grade: "A등급", description: "숨을 내쉴 때마다 주변을 순식간에 영하로 떨어뜨려 행동을 봉쇄하는 설원의 포식자.", image: `${BASE_URL}/images/A_11.png` },
+  { name: "암흑의 수호 기사", grade: "A등급", description: "칠흑 같은 갑옷을 두르고 영혼을 베어내는 저주받은 마법 검을 사용하는 타락한 기사.", image: `${BASE_URL}/images/A_12.png` },
+  { name: "바다의 지배자 거대 가오리", grade: "A등급", description: "해저 수면을 유영하며 거대한 날갯짓으로 소용돌이를 일으켜 선박을 침몰시키는 마수.", image: `${BASE_URL}/images/A_13.png` },
+  { name: "폭풍을 부르는 마녀", grade: "A등급", description: "먹구름을 몰고 다니며 벼락을 자유자재로 내리꽂아 대지를 황폐화하는 상급 마법사.", image: `${BASE_URL}/images/A_14.png` },
+  { name: "공간을 삼키는 공허의 수호자", grade: "A등급", description: "뒤틀린 차원의 틈새에서 소환되어 지나가는 자의 마력과 신체 일부를 현실에서 지워버리는 거대한 영체 괴수.", image: `${BASE_URL}/images/A_15.png` },
 
-  // S등급 (1)
-  { name: "공허의 군주", grade: "S등급", description: "차원과 현실의 경계를 완전히 무너뜨리고 세계를 흡수하려는 외신(外神)적 존재", image: `${BASE_URL}/images/S_1.png` }
+  // S등급 (1~6)
+  { name: "적하랑", grade: "S등급", description: "수천 년간 봉인되어 있던 아홉 개의 꼬리를 개방하여, 스치는 모든 것의 정신을 붕괴시키고 여우불로 도시 하나를 통째로 태워버리는 요마의 여왕.", image: `${BASE_URL}/images/S_1.png` },
+  { name: "대지의 근원 베히모스", grade: "S등급", description: "발을 내딛는 곳마다 거대한 지진이 발생하며 산맥을 무너뜨리는 전설의 거대 야수.", image: `${BASE_URL}/images/S_2.png` },
+  { name: "심연의 고대 크라켄", grade: "S등급", description: "빛이 닿지 않는 바다 밑바닥에서 거대한 촉수로 대륙의 해안선 전체를 옥죄는 심해의 재앙.", image: `${BASE_URL}/images/S_3.png` },
+  { name: "황혼의 불멸신룡", grade: "S등급", description: "하늘을 뒤덮는 거대한 날개와 모든 마법을 무효화하는 숨결을 지닌 드래곤의 왕.", image: `${BASE_URL}/images/S_4.png` },
+  { name: "시간을 멈추는 공허의 군주", grade: "S등급", description: "우주의 끝에서 날아와 주변 공간의 물리 법칙과 시간의 흐름을 완전히 정지시키는 절대자.", image: `${BASE_URL}/images/S_5.png` },
+  { name: "혼돈의 마신왕", grade: "S등급", description: "차원의 장벽을 부수고 나타나 만물을 무로 되돌리며 세계를 종말로 인도하는 어둠의 정점.", image: `${BASE_URL}/images/S_6.png` }
 ];
 
 const gradeRewards = {
@@ -2627,13 +2652,14 @@ function processHunt(playerState) {
 
   let monsterInfoBlocks = [];
   spawnedMonsters.forEach((m, idx) => {
+    const displayGradeHeader = m.grade.includes("+") ? `[${m.grade}] ` : "";
     if (idx === 0) {
       monsterInfoBlocks.push(
-        `[몬스터 발견!]\n[${m.grade}] ${m.fullName}\n설명: ${m.description}`
+        `[몬스터 발견!]\n${displayGradeHeader}${m.fullName}\n설명: ${m.description}`
       );
     } else {
       monsterInfoBlocks.push(
-        `[${m.grade}] ${m.fullName}`
+        `${displayGradeHeader}${m.fullName}`
       );
     }
   });
@@ -2782,12 +2808,12 @@ function processExchange(profile, arg) {
     return {
       text: [
         `💱 [교환 목록 안내]`,
-        `1. 현금 → 금괴 (현금 500,000원당 금괴 1개)`,
+        `1. 현금 → 금괴 (현금 1,000,000원당 금괴 1개)`,
         `2. 현금 → 보석 (현금 1,000,000원당 보석 1개)`,
         `3. 금괴 → 현금 (금괴 1개당 50,000원)`,
-        `4. 보석 → 현금 (보석 1개당 100,000원)`,
+        `4. 보석 → 현금 (보석 1개당 50,000원)`,
         ``,
-        `💡 사용 예시: [/교환 1 10] (1번 품목으로 10개 교환)`
+        `💡예시: [/교환 1 10] (1번 품목으로 10개 교환)`
       ].join('\n')
     };
   }
@@ -2801,7 +2827,7 @@ function processExchange(profile, arg) {
 
   switch (type) {
     case 1: {
-      const costCash = 500000 * amount;
+      const costCash = 1000000 * amount;
       if (profile.cash < costCash) {
         return { text: `⚠️ 현금이 부족합니다! (필요 현금: ${won(costCash)})` };
       }
@@ -2834,7 +2860,7 @@ function processExchange(profile, arg) {
         return { text: `⚠️ 보석이 부족합니다! (필요 보석: ${costGem}개)` };
       }
       profile.gem -= costGem;
-      const rewardCash = 100000 * amount;
+      const rewardCash = 50000 * amount;
       profile.cash += rewardCash;
       return { text: `💱 [교환 완료]\n보석 ${amount}개로 현금 ${won(rewardCash)}을(를) 교환했습니다!\n\n${resourceText(profile)}` };
     }
@@ -2883,17 +2909,13 @@ function getRandomMonsterByProbability() {
   const baseMonster = targetMonsters[randomIndex];
 
   let prefix = "";
-  if (["D등급", "D+등급", "C등급", "C+등급", "B등급", "B+등급", "A등급", "A+등급", "S등급", "S+등급"].includes(selectedGrade)) {
-    const baseKey = baseLookupGrade;
+  if (selectedGrade.endsWith("+")) {
+    const baseKey = selectedGrade;
     const gradePrefixes = prefixes[baseKey];
     if (gradePrefixes && gradePrefixes.length > 0) {
       let p1 = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
-      if (selectedGrade.endsWith("+")) {
-        let p2 = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
-        prefix = `${p1} ${p2}`;
-      } else {
-        prefix = p1;
-      }
+      let p2 = gradePrefixes[Math.floor(Math.random() * gradePrefixes.length)];
+      prefix = `${p1} ${p2}`;
     }
   }
 
