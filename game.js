@@ -2792,7 +2792,7 @@ function processSpeedCommand(profile, arg) {
   }
 
   profile.speedMultiplier = speedVal;
-  return { text: `⏩ 배속이 [x${speedVal}](으)로 설정되었습니다! (/사냥 및 /사냥 보상 적용)` };
+  return { text: `⏩ 배속이 [x${speedVal}](으)로 설정되었습니다! (/파밍 및 /사냥 보상 적용)` };
 }
 
 function processAccumulated(profile) {
