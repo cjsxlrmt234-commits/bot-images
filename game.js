@@ -364,17 +364,17 @@ const REFINE_TABLE = [
 ];
 
 const AMPLIFY_TABLE = [
-  { level: 0, costNext: 1000, minGold: 1, maxGold: 1, multBonus: 0.00, headWeight: 0.00, successBonus: 0.0 },
-  { level: 1, costNext: 1000, minGold: 1, maxGold: 2, multBonus: 0.20, headWeight: 0.05, successBonus: 0.5 },
-  { level: 2, costNext: 2000, minGold: 1, maxGold: 3, multBonus: 0.40, headWeight: 0.10, successBonus: 1.0 },
-  { level: 3, costNext: 3000, minGold: 1, maxGold: 4, multBonus: 0.60, headWeight: 0.15, successBonus: 1.5 },
-  { level: 4, costNext: 4000, minGold: 1, maxGold: 5, multBonus: 0.80, headWeight: 0.20, successBonus: 2.0 },
-  { level: 5, costNext: 5000, minGold: 2, maxGold: 6, multBonus: 1.00, headWeight: 0.30, successBonus: 2.5 },
-  { level: 6, costNext: 6000, minGold: 2, maxGold: 7, multBonus: 1.20, headWeight: 0.40, successBonus: 3.0 },
-  { level: 7, costNext: 7000, minGold: 2, maxGold: 8, multBonus: 1.50, headWeight: 0.50, successBonus: 3.5 },
-  { level: 8, costNext: 8000, minGold: 2, maxGold: 9, multBonus: 1.60, headWeight: 0.65, successBonus: 4.0 },
-  { level: 9, costNext: 9000, minGold: 2, maxGold: 10, multBonus: 1.80, headWeight: 0.80, successBonus: 4.5 },
-  { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, headWeight: 1.00, successBonus: 5.0 }
+  { level: 0, costNext: 1000, minGold: 1, maxGold: 1, multBonus: 0.00, critWeight: 0.00, successBonus: 0.0 },
+  { level: 1, costNext: 1000, minGold: 1, maxGold: 2, multBonus: 0.20, critWeight: 0.05, successBonus: 0.5 },
+  { level: 2, costNext: 2000, minGold: 1, maxGold: 3, multBonus: 0.40, critWeight: 0.10, successBonus: 1.0 },
+  { level: 3, costNext: 3000, minGold: 1, maxGold: 4, multBonus: 0.60, critWeight: 0.15, successBonus: 1.5 },
+  { level: 4, costNext: 4000, minGold: 1, maxGold: 5, multBonus: 0.80, critWeight: 0.20, successBonus: 2.0 },
+  { level: 5, costNext: 5000, minGold: 2, maxGold: 6, multBonus: 1.00, critWeight: 0.30, successBonus: 2.5 },
+  { level: 6, costNext: 6000, minGold: 2, maxGold: 7, multBonus: 1.20, critWeight: 0.40, successBonus: 3.0 },
+  { level: 7, costNext: 7000, minGold: 2, maxGold: 8, multBonus: 1.50, critWeight: 0.50, successBonus: 3.5 },
+  { level: 8, costNext: 8000, minGold: 2, maxGold: 9, multBonus: 1.60, critWeight: 0.65, successBonus: 4.0 },
+  { level: 9, costNext: 9000, minGold: 2, maxGold: 10, multBonus: 1.80, critWeight: 0.80, successBonus: 4.5 },
+  { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, critWeight: 1.00, successBonus: 5.0 }
 ];
 
 const FARM_TABLE = {
@@ -452,10 +452,10 @@ const CREATURE_CHOICES = [
 ];
 
 const IMPRINT_OPTION_POOL = [
-  { name: '헤드샷 데미지 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headDmg' },
+  { name: '치명타 데미지 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'critDmg' },
   { name: '현금 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'cashBoost' },
-  { name: '헤드샷 확률 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headRate' },
-  { name: '헤드샷 확률 가중치 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'headWeight' },
+  { name: '치명타 확률 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'critRate' },
+  { name: '치명타 확률 가중치 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'critWeight' },
   { name: '강화 성공 확률 증가', values: [0.1, 0.2, 0.3, 0.4, 0.5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'enhanceSuccess' },
   { name: '강화 비용 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'enhanceCostDown' },
   { name: '추가 금괴 획득 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'goldChance' },
@@ -666,36 +666,36 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
   const isJob = profile && Boolean(profile.job);
   const lvl = Math.max(0, Math.min(20, enhanceLevel || 0));
 
-  let baseMult, baseHead, baseBody, baseLeg;
+  let baseMult, baseCrit, baseBody, baseLeg;
 
   if (isJob) {
     baseMult = (2.00 + (lvl * 0.05)).toFixed(2);
-    baseHead = 20.00 + (lvl * 1.00);
+    baseCrit = 20.00 + (lvl * 1.00);
     baseBody = Math.max(0, 40.00 - (lvl * 0.50));
     baseLeg = Math.max(0, 40.00 - (lvl * 0.50));
   } else {
     baseMult = (1.00 + (lvl * 0.05)).toFixed(2);
-    baseHead = lvl * 1.00;
+    baseCrit = lvl * 1.00;
     baseBody = Math.max(0, 50.00 - (lvl * 0.50));
     baseLeg = Math.max(0, 50.00 - (lvl * 0.50));
   }
 
   const ampInfo = getAmplifyInfo(combatLevel);
-  const imprintHeadRate = getImprintTotalBonus(profile, 'headRate');
-  const imprintHeadWeight = getImprintTotalBonus(profile, 'headWeight');
+  const imprintCritRate = getImprintTotalBonus(profile, 'critRate');
+  const imprintCritWeight = getImprintTotalBonus(profile, 'critWeight');
 
-  const rawHead = (baseHead + imprintHeadRate) * (1 + ampInfo.headWeight + (imprintHeadWeight / 100));
-  const remainingBodyLeg = Math.max(0, 100 - rawHead);
-  const numHead = rawHead;
+  const rawCrit = (baseCrit + imprintCritRate) * (1 + ampInfo.critWeight + (imprintCritWeight / 100));
+  const remainingBodyLeg = Math.max(0, 100 - rawCrit);
+  const numCrit = rawCrit;
   const numBody = remainingBodyLeg / 2;
   const numLeg = remainingBodyLeg / 2;
 
   return {
     mult: `x${baseMult}`,
-    head: `${numHead.toFixed(2)}%`,
+    crit: `${numCrit.toFixed(2)}%`,
     body: `${numBody.toFixed(2)}%`,
     leg: `${numLeg.toFixed(2)}%`,
-    numHead: numHead,
+    numCrit: numCrit,
     numBody: numBody,
     numLeg: numLeg
   };
@@ -704,7 +704,7 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
 function formatEnhanceStatDiff(oldStats, newStats) {
   return [
     `    배율 | ${oldStats.mult} ➔ ${newStats.mult}`,
-    `헤드 확률 | ${oldStats.head} ➔ ${newStats.head}`,
+    `치명타 확률 | ${oldStats.crit} ➔ ${newStats.crit}`,
     ` 몸 확률 | ${oldStats.body} ➔ ${newStats.body}`,
     `다리 확률 | ${oldStats.leg} ➔ ${newStats.leg}`
   ].join('\n');
@@ -714,12 +714,12 @@ function formatRefineStatDiff(oldRefine, newRefine) {
   const oldMult = (oldRefine * 0.10).toFixed(2);
   const newMult = (newRefine * 0.10).toFixed(2);
   
-  const oldHead = oldRefine * 1;
-  const newHead = newRefine * 1;
+  const oldCrit = oldRefine * 1;
+  const newCrit = newRefine * 1;
 
   return [
     `배율 | x${oldMult} ➔ x${newMult}`,
-    `헤드샷 데미지 증가 | ${oldHead}% ➔ ${newHead}%`,
+    `치명타 데미지 증가 | ${oldCrit}% ➔ ${newCrit}%`,
     `전투력 증가 | ${oldRefine * 2}% ➔ ${newRefine * 2}%`
   ].join('\n');
 }
@@ -738,7 +738,7 @@ function getCombatPower(profile) {
   return Math.floor(basePower * refineBonusMult * (1 + imprintCombatBoost));
 }
 
-function calculatePartDamage(profile, forceHead = false) {
+function calculatePartDamage(profile, forceCrit = false) {
   const enhanceLevel = getCurrentEnhanceLevel(profile);
   const combatLevel = profile ? (profile.combatLevel || 0) : 0;
   const refineLevel = profile ? (profile.refine || 0) : 0;
@@ -749,16 +749,16 @@ function calculatePartDamage(profile, forceHead = false) {
   let hitPartName = '다리';
   let damageVal = 0;
 
-  if (forceHead || roll < stats.numHead) {
-    hitPartName = '헤드';
+  if (forceCrit || roll < stats.numCrit) {
+    hitPartName = '치명타';
     const combatPower = getCombatPower(profile);
     const powerDamage = Math.floor(combatPower * 0.1);
     const baseDamage = Math.max(100, powerDamage) + (enhanceLevel * 15);
     
-    const refineHeadMultiplier = 1 + (refineLevel * 0.01);
-    const imprintHeadDmgBonus = getImprintTotalBonus(profile, 'headDmg') / 100;
-    damageVal = Math.floor(baseDamage * refineHeadMultiplier * (1 + imprintHeadDmgBonus));
-  } else if (roll < stats.numHead + stats.numBody) {
+    const refineCritMultiplier = 1 + (refineLevel * 0.01);
+    const imprintCritDmgBonus = getImprintTotalBonus(profile, 'critDmg') / 100;
+    damageVal = Math.floor(baseDamage * refineCritMultiplier * (1 + imprintCritDmgBonus));
+  } else if (roll < stats.numCrit + stats.numBody) {
     hitPartName = '몸';
     damageVal = rand(31, 99);
   } else {
@@ -882,9 +882,9 @@ function profileText(profile, detailed = false) {
   ];
 
   if (detailed) {
-    const headDmgBonus = getImprintTotalBonus(p, 'headDmg');
-    const headRateBonus = getImprintTotalBonus(p, 'headRate');
-    const headWeightBonus = getImprintTotalBonus(p, 'headWeight');
+    const critDmgBonus = getImprintTotalBonus(p, 'critDmg');
+    const critRateBonus = getImprintTotalBonus(p, 'critRate');
+    const critWeightBonus = getImprintTotalBonus(p, 'critWeight');
     const combatBoostBonus = getImprintTotalBonus(p, 'combatBoost');
     const cashBoostBonus = getImprintTotalBonus(p, 'cashBoost');
     const enhanceSuccessBonus = getImprintTotalBonus(p, 'enhanceSuccess');
@@ -895,11 +895,11 @@ function profileText(profile, detailed = false) {
     const keyChanceBonus = getImprintTotalBonus(p, 'keyChance');
     const damageReduceBonus = getImprintTotalBonus(p, 'damageReduce');
 
-    if (headDmgBonus !== 0) lines.push(`헤드샷 데미지 : +${headDmgBonus}%`);
-    if (headWeightBonus !== 0) lines.push(`헤드샷 가중치 : +${headWeightBonus}%`);
+    if (critDmgBonus !== 0) lines.push(`치명타 데미지 : +${critDmgBonus}%`);
+    if (critWeightBonus !== 0) lines.push(`치명타 가중치 : +${critWeightBonus}%`);
     if (combatBoostBonus !== 0) lines.push(`전투력 증가 : +${combatBoostBonus}%`);
 
-    if (headRateBonus !== 0) lines.push(`헤드샷 확률 증가 : +${headRateBonus}%`);
+    if (critRateBonus !== 0) lines.push(`치명타 확률 증가 : +${critRateBonus}%`);
     if (cashBoostBonus !== 0) lines.push(`현금 획득량 증가 : +${cashBoostBonus}%`);
     if (enhanceSuccessBonus !== 0) lines.push(`강화 성공 확률 증가 : +${enhanceSuccessBonus}%`);
     if (enhanceCostDownBonus !== 0) lines.push(`강화 비용 감소 : +${enhanceCostDownBonus}%`);
@@ -1483,11 +1483,11 @@ function resolveFarmFight(profile, battle) {
       for (let i = 0; i < killCount; i++) {
         const { hitPartName, damageVal } = calculatePartDamage(profile, sentinelTriggered);
         totalDamageVal += damageVal;
-        hitPartsList.push(sentinelTriggered ? '헤드' : hitPartName);
+        hitPartsList.push(sentinelTriggered ? '치명타' : hitPartName);
       }
 
       if (sentinelTriggered) {
-        skillNote += `\n🛡️ [센티넬 스킬 발동!] 정밀 사격으로 적의 헤드를 정확히 타격했습니다!`;
+        skillNote += `\n🛡️ [센티넬 스킬 발동!] 정밀 사격으로 적의 치명타를 정확히 타격했습니다!`;
       }
 
       const partsText = hitPartsList.join(', ');
@@ -1548,11 +1548,11 @@ function resolveFarmFight(profile, battle) {
       for (let i = 0; i < killCount; i++) {
         const { hitPartName, damageVal } = calculatePartDamage(profile, sentinelTriggered);
         totalDamageVal += damageVal;
-        hitPartsList.push(sentinelTriggered ? '헤드' : hitPartName);
+        hitPartsList.push(sentinelTriggered ? '치명타' : hitPartName);
       }
 
       if (sentinelTriggered) {
-        skillNote += `\n🛡️ [센티넬 스킬 발동!] 정밀 사격으로 적의 헤드를 정확히 타격했습니다!`;
+        skillNote += `\n🛡️ [센티넬 스킬 발동!] 정밀 사격으로 적의 치명타를 정확히 타격했습니다!`;
       }
 
       const partsText = hitPartsList.join(', ');
@@ -2097,7 +2097,7 @@ function showRefineInfo(profile) {
   const starStr = REFINE_STARS[currentRefine] || ' ';
 
   const currentMult = (currentRefine * 0.10).toFixed(2);
-  const currentHead = currentRefine * 1;
+  const currentCrit = currentRefine * 1;
   const currentCp = currentRefine * 2;
 
   if (currentRefine >= 10) {
@@ -2106,7 +2106,7 @@ function showRefineInfo(profile) {
         `🔥 [현재 제련 정보]`,
         `현재 제련 단계: ${currentRefine}성 (${starStr})`,
         `배율 | x${currentMult}`,
-        `헤드샷 데미지 증가 | ${currentHead}%`,
+        `치명타 데미지 증가 | ${currentCrit}%`,
         `전투력 증가 | ${currentCp}%`,
         `✨ 최고 제련 단계(10성 ★★★★★)에 도달했습니다!`
       ].join('\n')
@@ -2128,7 +2128,7 @@ function showRefineInfo(profile) {
       `현재 단계: ${currentRefine}성 (${starStr}) ➔ 다음: ${currentRefine + 1}성 (${REFINE_STARS[currentRefine + 1] || '★'})`,
       `💰 제련 필요 재화: ${won(cashCost)}, 금괴 ${goldCost}개`,
       `배율 | x${currentMult}`,
-      `헤드샷 데미지 증가 | ${currentHead}%`,
+      `치명타 데미지 증가 | ${currentCrit}%`,
       `전투력 증가 | ${currentCp}%`,
       `📊 성공: ${succP}%`,
       `📊 유지: ${keepP}%`,
@@ -2217,7 +2217,7 @@ function showAmplifyInfo(profile) {
     `⏩ [현재 증폭 정보]`,
     `⏩ 증폭 단계 : Lv.${currentLevel}`,
     `• 배율 가산 : x${currentAmp.multBonus.toFixed(2)}`,
-    `• 헤드샷 가중치 : ${Math.round(currentAmp.headWeight * 100)}%`,
+    `• 치명타 가중치 : ${Math.round(currentAmp.critWeight * 100)}%`,
     `• 강화 성공 보정 : +${currentAmp.successBonus.toFixed(1)}%`,
     `• 획득 가능 금괴 수량 : ${currentGoldRange}`
   ];
@@ -2230,7 +2230,7 @@ function showAmplifyInfo(profile) {
       `⏩ 증폭(Lv.${currentLevel + 1}) 업그레이드 정보:`,
       `• 필요 금괴 : ${nextAmp.costNext.toLocaleString()}개`,
       `• 배율 가산 : x${nextAmp.multBonus.toFixed(2)}`,
-      `• 헤드샷 가중치 : ${Math.round(nextAmp.headWeight * 100)}%`,
+      `• 치명타 가중치 : ${Math.round(nextAmp.critWeight * 100)}%`,
       `• 강화 성공 보정 : +${nextAmp.successBonus.toFixed(1)}%`,
       `• 획득 가능 금괴 수량 : ${goldRange}`,
       ``,
@@ -2282,7 +2282,7 @@ function processAmplify(profile, targetLevels = 1) {
     `[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]`,
     `• 소모 금괴: ${totalGoldSpent.toLocaleString()}개`,
     `• 배율 가산 | x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
-    `• 헤드샷 가중치 | ${Math.round(prevAmp.headWeight * 100)}% ➔ ${Math.round(nextAmp.headWeight * 100)}%`,
+    `• 치명타 가중치 | ${Math.round(prevAmp.critWeight * 100)}% ➔ ${Math.round(nextAmp.critWeight * 100)}%`,
     `• 강화 성공 보정: +${prevAmp.successBonus.toFixed(1)}% ➔ +${nextAmp.successBonus.toFixed(1)}%`,
     `• 금괴 획득 수량 | ${goldRangePrev} ➔ ${goldRangeNext}`
   ].join('\n');
@@ -2356,7 +2356,7 @@ function getJobInfoText(jobCode, skillLevel = 1) {
   if (jobCode === 'stinger') {
     return `⏩ 스팅거 : 적 처치 및 파밍 시 ${chance}% 확률로 대량의 킬수(4~5 KILL)를 단번에 쓸어담습니다.`;
   } else if (jobCode === 'sentinel') {
-    return `🛡️ 센티넬 : ${chance}% 확률로 정밀 사격 스킬이 발동하여 적의 헤드를 확정 타격합니다.`;
+    return `🛡️ 센티넬 : ${chance}% 확률로 정밀 사격 스킬이 발동하여 적의 치명타를 확정 타격합니다.`;
   } else if (jobCode === 'shadow') {
     return `🗡️ 섀도우 : 적 처치 시 ${chance}% 확률로 은밀하게 추가 재화(현금/금괴/열쇠)를 훔쳐옵니다.`;
   }
@@ -2415,7 +2415,7 @@ function processJobCommand(profile, targetJob) {
         `1. ⏩ 스팅거 (/전직 스팅거)`,
         `   - 처치 시 일정 확률로 대량의 킬수(4~5 KILL) 폭발 달성`,
         `2. 🛡️ 센티넬 (/전직 센티넬)`,
-        `   - 처치 시 일정 확률로 헤드샷 확정 정밀 사격 발동`,
+        `   - 처치 시 일정 확률로 치명타 확정 정밀 사격 발동`,
         `3. 🗡️ 섀도우 (/전직 섀도우)`,
         `   - 적 처치 시 일정 확률로 추가 재화(현금/금괴/열쇠) 은밀 획득`,
         ``,
@@ -3325,7 +3325,7 @@ function processTurn(state, utterance) {
       state: { profile, battle }
     };
   }
-  if (input === '/7485') {
+  if (input === '/7586') {
     profile.keys = (profile.keys || 0) + 10000;
     state.profile = profile;
     return {
