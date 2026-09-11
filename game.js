@@ -1143,7 +1143,11 @@ function createProfile(existing = {}) {
     seasonPass: safeObj.seasonPass && typeof safeObj.seasonPass === 'object' ? { ...safeObj.seasonPass } : { month: "", level: 1, exp: 0, claimedRewards: [], lastAttendanceDate: "", lastDailyDate: "", dailyFarmExpClaimed: false, dailyHuntExpClaimed: false },
     raidData: safeObj.raidData && typeof safeObj.raidData === 'object' ? { ...safeObj.raidData } : { hp: 100000000 },
     lastSmSkillDate: typeof safeObj.lastSmSkillDate === 'string' ? safeObj.lastSmSkillDate : '',
-    mgsDungeonData: safeObj.mgsDungeonData && typeof safeObj.mgsDungeonData === 'object' ? { ...safeObj.mgsDungeonData } : { date: '', count: 0 }
+    mgsDungeonData: safeObj.mgsDungeonData && typeof safeObj.mgsDungeonData === 'object' ? { ...safeObj.mgsDungeonData } : { date: '', count: 0 },
+    // 웹/챗봇 연동에서 state.battle이 누락되어도 진행 중 파밍을 복구하기 위한 백업
+    activeFarmBattle: safeObj.activeFarmBattle && typeof safeObj.activeFarmBattle === 'object'
+      ? JSON.parse(JSON.stringify(safeObj.activeFarmBattle))
+      : null
   };
 
   return migrateProfileData(profile);
@@ -1688,10 +1692,7 @@ function processSupply(profile, countArg = "1") {
 }
 
 function createBattle(profile) {
-  if (profile) {
-    profile.gamesPlayed = (profile.gamesPlayed || 0) + 1;
-  }
-
+  // 전투 횟수는 전투 생성 시점이 아니라 파밍이 실제 종료된 시점에 1회만 증가시킨다.
   return {
     turn: 0,
     maxTurn: MAX_TURN,
@@ -4652,6 +4653,18 @@ function processTurn(state, utterance) {
   let profile = createProfile(state.profile);
   let battle = state.battle;
 
+  // 홈페이지/외부 연동에서 battle 객체가 빠지거나 한 턴 이전 값으로 돌아오는 경우를 방지한다.
+  // 프로필에 저장한 activeFarmBattle과 비교해 더 최신 진행 상태를 복구한다.
+  const backedUpBattle = profile.activeFarmBattle && typeof profile.activeFarmBattle === 'object'
+    ? profile.activeFarmBattle
+    : null;
+  const stateBattleTurn = battle && Number.isFinite(Number(battle.turn)) ? Number(battle.turn) : -1;
+  const backupBattleTurn = backedUpBattle && Number.isFinite(Number(backedUpBattle.turn)) ? Number(backedUpBattle.turn) : -1;
+  if (backedUpBattle && !backedUpBattle.finished && backedUpBattle.alive !== false &&
+      (!battle || battle.finished || battle.alive === false || backupBattleTurn > stateBattleTurn)) {
+    battle = JSON.parse(JSON.stringify(backedUpBattle));
+  }
+
   let input = typeof utterance === 'string' ? utterance.trim().replace(/\s+/g, ' ') : '';
   const cleanInput = input.toLowerCase();
 
@@ -4848,9 +4861,10 @@ function processTurn(state, utterance) {
 
   // 1. /파밍 명령어
   if (command === '/파밍') {
-    {
     checkAndResetFarmLimit(profile);
     const maxFarmLimit = profile.farmData ? profile.farmData.max : 200;
+
+    // 전투 횟수는 '완료된 파밍 게임 수' 기준이다. 진행 중 턴마다 증가시키지 않는다.
     if (profile.farmData.count >= maxFarmLimit) {
       return {
         text: `⚠️ 오늘의 파밍 가능 횟수를 모두 소모했습니다. (일일 가능 횟수: ${profile.farmData.count}/${maxFarmLimit})`,
@@ -4859,9 +4873,12 @@ function processTurn(state, utterance) {
       };
     }
 
-    if (!battle || !battle.alive || battle.finished) battle = createBattle(profile);
-    battle.turn += 1;
-    profile.farmData.count += 1;
+    // 진행 중인 전투가 없을 때만 새 게임을 만든다.
+    if (!battle || !battle.alive || battle.finished || battle.mode !== '파밍') {
+      battle = createBattle(profile);
+    }
+
+    battle.turn = (battle.turn || 0) + 1;
 
     const fightResult = resolveProgressionFarmTurn(profile, battle);
     const isLastTurn = battle.turn >= battle.maxTurn;
@@ -4870,6 +4887,8 @@ function processTurn(state, utterance) {
 
     if (hasEnded) {
       battle.finished = true;
+
+      // 누적 보상은 한 게임이 종료될 때 한 번만 지급한다.
       profile.cash += battle.accumulatedCash || 0;
       profile.gold = (profile.gold || 0) + (battle.accumulatedGold || 0);
       profile.gem = (profile.gem || 0) + (battle.accumulatedGem || 0);
@@ -4890,6 +4909,11 @@ function processTurn(state, utterance) {
         displayMsgs.push(`☠️ [파밍 종료] HP가 모두 소진되어 파밍이 종료되었습니다.`);
       }
 
+      // 핵심: 전투 횟수/게임 횟수는 턴마다가 아니라 게임 종료 시 딱 1회만 증가한다.
+      profile.farmData.count = (profile.farmData.count || 0) + 1;
+      profile.gamesPlayed = (profile.gamesPlayed || 0) + 1;
+      profile.activeFarmBattle = null;
+
       displayMsgs.push(
         `• 획득 현금 : +${won(battle.accumulatedCash || 0)}`,
         `• 획득 금괴 : +${(battle.accumulatedGold || 0).toLocaleString()}개`,
@@ -4897,84 +4921,15 @@ function processTurn(state, utterance) {
         `• 획득 비밀열쇠 : +${(battle.accumulatedKeys || 0).toLocaleString()}개`,
         `• 획득 보급 : +${(battle.accumulatedSupplyItem || 0).toLocaleString()}개`
       );
+    } else {
+      // 다음 요청에서 state.battle이 누락되더라도 턴/등급이 이어지도록 진행 상태를 프로필에도 저장한다.
+      profile.activeFarmBattle = JSON.parse(JSON.stringify(battle));
     }
 
     return {
       text: [displayMsgs.join('\n\n'), '', battleStatusBoard(profile, battle)].join('\n'),
       imageUrl: fightResult.imageUrl,
       choices: hasEnded ? END_BATTLE_CHOICES : BATTLE_CHOICES,
-      category: 'farm',
-      state: { profile, battle }
-    };
-    }
-
-    checkAndResetFarmLimit(profile);
-    const maxFarmLimit = profile.farmData ? profile.farmData.max : 200;
-
-    if (profile.farmData.count >= maxFarmLimit) {
-      return {
-        text: `⚠️ 오늘의 파밍 가능 횟수를 모두 소모했습니다. (일일 가능 횟수: ${profile.farmData.count}/${maxFarmLimit})`,
-        choices: END_BATTLE_CHOICES,
-        state: { profile, battle }
-      };
-    }
-
-    if (!battle || !battle.alive || battle.finished) {
-      battle = createBattle(profile);
-    }
-
-    battle.turn += 1;
-    profile.farmData.count += 1;
-
-    const buffMsgs = processBuffs(battle);
-    const fightResult = resolveFarmFight(profile, battle);
-
-    applyZoneAttrition(battle);
-
-    let displayMsgs = [];
-    if (buffMsgs.length > 0) displayMsgs.push(buffMsgs.join('\n'));
-    if (fightResult.text) displayMsgs.push(fightResult.text);
-
-    let currentChoices = BATTLE_CHOICES;
-
-    if (!battle.alive || battle.turn >= battle.maxTurn || battle.survivors <= 1) {
-      battle.finished = true;
-      currentChoices = END_BATTLE_CHOICES;
-
-      let finalRankText = "🏆 [생존] ";
-      if (!battle.alive) {
-        finalRankText = "☠️ [사망] ";
-      }
-
-      displayMsgs.push(
-        ``,
-        finalRankText,
-        `• 획득 현금 : +${won(battle.accumulatedCash)}`,
-        `• 획득 금괴 : +${(battle.accumulatedGold || 0).toLocaleString()}개`,
-        `• 획득 보석 : +${(battle.accumulatedGem || 0).toLocaleString()}개`,
-        `• 획득 비밀열쇠 : +${(battle.accumulatedKeys || 0).toLocaleString()}개`,
-        `• 획득 보급 : +${(battle.accumulatedSupplyItem || 0).toLocaleString()}개`
-      );
-
-      profile.cash += battle.accumulatedCash;
-      profile.gold = (profile.gold || 0) + (battle.accumulatedGold || 0);
-      profile.gem = (profile.gem || 0) + (battle.accumulatedGem || 0);
-      profile.keys = (profile.keys || 0) + (battle.accumulatedKeys || 0);
-      profile.supplyItem = (profile.supplyItem || 0) + (battle.accumulatedSupplyItem || 0);
-
-      if (battle.accumulatedExp > 0) {
-        const expResult = addExp(profile, battle.accumulatedExp);
-        if (expResult.msg) displayMsgs.push(expResult.msg);
-      }
-    }
-
-    const board = battleStatusBoard(profile, battle);
-    const fullText = [displayMsgs.join('\n\n'), '', board].join('\n');
-
-    return {
-      text: fullText,
-      imageUrl: fightResult.imageUrl,
-      choices: currentChoices,
       category: 'farm',
       state: { profile, battle }
     };
