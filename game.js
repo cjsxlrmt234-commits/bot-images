@@ -2,7 +2,7 @@
 // game.js - 카카오 챗봇 호환 전체 통합 스크립트
 //
 
-const MAX_TURN = 5;
+const VAULT_CAPACITY_PER_LEVEL = 2000000;
 const EXP_PER_LEVEL_BASE = 200;
 const JOB_UNLOCK_CASH = 50000000;
 const JOB_UNLOCK_GOLD = 500;
@@ -192,7 +192,7 @@ const gradeRewards = {
   "EX++등급": { min: 300000000, max: 500000000, gem: 20000 }
 };
 
-// /파밍 5턴 완료 보상 전용 상자. /사냥 상자와 이름과 보상 테이블을 분리한다.
+// /파밍 종료 보상 전용 상자. /사냥 상자와 이름과 보상 테이블을 분리한다.
 const FARM_BOX_INFO = {
   "D": { name: "D등급 상자", minCash: 100, maxCash: 1000, minGold: 0, maxGold: 0, minGem: 0, maxGem: 0 },
   "C": { name: "C등급 상자", minCash: 1000, maxCash: 5000, minGold: 1, maxGold: 1, minGem: 0, maxGem: 0 },
@@ -224,7 +224,7 @@ const MONTHLY_AVATARS = {
   10: "낙엽의 추적자 아바타", 11: "서릿발 척살자 아바타", 12: "종말의 인도자 아바타"
 };
 
-// 5턴 파밍에서 처치할수록 다음 등급으로 도전한다. D→D+→D++→C 순으로 이어진다.
+// 파밍에서 처치할수록 다음 등급으로 도전한다. D→D+→D++→C 순으로 이어진다.
 const FARM_GRADE_STEPS = [
   "D등급", "D+등급", "D++등급", "C등급", "C+등급", "C++등급",
   "B등급", "B+등급", "B++등급", "A등급", "A+등급", "A++등급",
@@ -1153,6 +1153,10 @@ function createProfile(existing = {}) {
   return migrateProfileData(profile);
 }
 
+function getVaultCapacity(vault) {
+  return Math.max(0, Math.floor(Number(vault && vault.level) || 0)) * VAULT_CAPACITY_PER_LEVEL;
+}
+
 function calculateVaultInterest(vault) {
   if (!vault || vault.level === 0 || vault.amount <= 0 || !vault.lastTime) {
     return { currentAmount: vault ? vault.amount : 0, interest: 0, elapsedHours: 0 };
@@ -1195,7 +1199,7 @@ function processVaultCommand(profile, subCommand, arg) {
 
     profile.gold -= requiredGold;
     profile.vault.level = curLevel + 1;
-    const maxLimit = profile.vault.level * 1000000;
+    const maxLimit = getVaultCapacity(profile.vault);
 
     return {
       text: [
@@ -1216,7 +1220,7 @@ function processVaultCommand(profile, subCommand, arg) {
         `현재 금고를 보유하고 있지 않습니다.`,
         ``,
         `• 해금 비용 : 금괴 1,000개 (1레벨 해금)`,
-        `• 1레벨 보관 한도 : 1,000,000원`,
+        `• 1레벨 보관 한도 : 2,000,000원`,
         `• 이자 혜택 : 1시간당 1% (최대 12시간, 단리 적용)`,
         ``,
         `💡 [/금고 구매] 명령어로 금고를 해금할 수 있습니다.`
@@ -1251,7 +1255,7 @@ function processVaultCommand(profile, subCommand, arg) {
 
   let inputAmount = parseInt(subCommand, 10);
   if (!isNaN(inputAmount) && inputAmount > 0) {
-    const maxLimit = profile.vault.level * 1000000;
+    const maxLimit = getVaultCapacity(profile.vault);
     
     let vaultInfo = calculateVaultInterest(profile.vault);
     let currentVaultBase = vaultInfo.currentAmount; 
@@ -1286,7 +1290,7 @@ function processVaultCommand(profile, subCommand, arg) {
     };
   }
 
-  const maxLimit = profile.vault.level * 1000000;
+  const maxLimit = getVaultCapacity(profile.vault);
   const nextUpgradeCost = 1000 + (profile.vault.level - 1) * 500;
   const vaultInfo = calculateVaultInterest(profile.vault);
 
@@ -1302,7 +1306,7 @@ function processVaultCommand(profile, subCommand, arg) {
       `💡 명령어 사용법:`,
       `• [/금고 (금액)] : 금액 입금`,
       `• [/금고 출금] : 원금 및 이자 전액 출금`,
-      `• [/금고 구매] : 금고 레벨업 (한도 +1,000,000원 증가)`
+      `• [/금고 구매] : 금고 레벨업 (한도 +2,000,000원 증가)`
     ].join('\n')
   };
 }
@@ -1694,15 +1698,14 @@ function processSupply(profile, countArg = "1") {
 function createBattle(profile) {
   // 전투 횟수는 전투 생성 시점이 아니라 파밍이 실제 종료된 시점에 1회만 증가시킨다.
   return {
-    turn: 0,
-    maxTurn: MAX_TURN,
+    progressVersion: 0, // 상태 백업의 최신 여부를 비교하는 내부 번호 (턴 제한 없음)
     hp: 100,
     alive: true,
     finished: false,
     result: null,
     mode: '파밍',
     currentGradeIndex: 0,
-    highestGradeIndex: 0,
+    highestGradeIndex: -1,
     helmetLevel: 0, 
     helmetDurability: 0, 
     vestLevel: 0,    
@@ -1743,7 +1746,7 @@ function processBuffs(battle) {
 
 function battleStatusBoard(profile, battle) {
   const p = createProfile(profile);
-  const b = battle || { turn: 0, maxTurn: MAX_TURN, hp: 100, currentGradeIndex: 0, helmetLevel: 0, helmetDurability: 0, vestLevel: 0, vestDurability: 0 };
+  const b = battle || { hp: 100, currentGradeIndex: 0, helmetLevel: 0, helmetDurability: 0, vestLevel: 0, vestDurability: 0 };
 
   checkAndResetFarmLimit(p);
   const currentFarmCount = p.farmData ? p.farmData.count : 0;
@@ -1764,7 +1767,7 @@ function battleStatusBoard(profile, battle) {
   const currentGrade = FARM_GRADE_STEPS[Math.min(b.currentGradeIndex || 0, FARM_GRADE_STEPS.length - 1)];
 
   let boardLines = [
-    `[${b.turn || 0} / ${b.maxTurn || MAX_TURN}턴] 현재 몬스터 : ${currentGrade}`,
+    `현재 몬스터 : ${currentGrade}(${getFarmSuccessChance(b.currentGradeIndex)}%)`,
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 투구: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 갑옷: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
@@ -1906,6 +1909,11 @@ function createFarmMonster(grade) {
   };
 }
 
+function getFarmSuccessChance(gradeIndex) {
+  const index = Math.max(0, Math.min(Number(gradeIndex) || 0, FARM_GRADE_STEPS.length - 1));
+  return Math.max(10, 80 - index * 10);
+}
+
 function resolveProgressionFarmTurn(profile, battle) {
   const speed = profile.speedMultiplier || 1;
   const eventRoll = Math.random() * 100;
@@ -1935,7 +1943,7 @@ function resolveProgressionFarmTurn(profile, battle) {
   const gradeIndex = Math.min(battle.currentGradeIndex || 0, FARM_GRADE_STEPS.length - 1);
   const grade = FARM_GRADE_STEPS[gradeIndex];
   const monster = createFarmMonster(grade);
-  const successChance = Math.max(10, 80 - (gradeIndex * 10));
+  const successChance = getFarmSuccessChance(gradeIndex);
 
   if (Math.random() * 100 < successChance) {
     let cash = Math.floor(monster.rewardMoney * getLootMultiplier(profile) * 0.5 * speed);
@@ -4636,7 +4644,9 @@ function getRewardGem(grade) {
 
 function startGame(existingProfile) {
   let profile = createProfile(existingProfile);
-  let battle = createBattle(profile);
+  let battle = profile.activeFarmBattle && !profile.activeFarmBattle.finished && profile.activeFarmBattle.hp > 0
+    ? JSON.parse(JSON.stringify(profile.activeFarmBattle))
+    : createBattle(profile);
 
   return {
     text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/파밍' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
@@ -4653,15 +4663,16 @@ function processTurn(state, utterance) {
   let profile = createProfile(state.profile);
   let battle = state.battle;
 
-  // 홈페이지/외부 연동에서 battle 객체가 빠지거나 한 턴 이전 값으로 돌아오는 경우를 방지한다.
+  // 홈페이지/외부 연동에서 battle 객체가 빠지거나 이전 값으로 돌아오는 경우를 방지한다.
   // 프로필에 저장한 activeFarmBattle과 비교해 더 최신 진행 상태를 복구한다.
   const backedUpBattle = profile.activeFarmBattle && typeof profile.activeFarmBattle === 'object'
     ? profile.activeFarmBattle
     : null;
-  const stateBattleTurn = battle && Number.isFinite(Number(battle.turn)) ? Number(battle.turn) : -1;
-  const backupBattleTurn = backedUpBattle && Number.isFinite(Number(backedUpBattle.turn)) ? Number(backedUpBattle.turn) : -1;
+  // 구형 저장 데이터의 turn도 읽어 진행 중인 파밍을 이어받는다.
+  const stateBattleVersion = battle ? Number(battle.progressVersion ?? battle.turn ?? 0) : -1;
+  const backupBattleVersion = backedUpBattle ? Number(backedUpBattle.progressVersion ?? backedUpBattle.turn ?? 0) : -1;
   if (backedUpBattle && !backedUpBattle.finished && backedUpBattle.alive !== false &&
-      (!battle || battle.finished || battle.alive === false || backupBattleTurn > stateBattleTurn)) {
+      (!battle || battle.mode !== '파밍' || battle.finished || battle.alive === false || backupBattleVersion > stateBattleVersion)) {
     battle = JSON.parse(JSON.stringify(backedUpBattle));
   }
 
@@ -4878,11 +4889,12 @@ function processTurn(state, utterance) {
       battle = createBattle(profile);
     }
 
-    battle.turn = (battle.turn || 0) + 1;
+    battle.progressVersion = (Number(battle.progressVersion ?? battle.turn) || 0) + 1;
+    delete battle.turn;
+    delete battle.maxTurn;
 
     const fightResult = resolveProgressionFarmTurn(profile, battle);
-    const isLastTurn = battle.turn >= battle.maxTurn;
-    const hasEnded = !battle.alive || isLastTurn;
+    const hasEnded = battle.hp <= 0;
     const displayMsgs = [fightResult.text];
 
     if (hasEnded) {
@@ -4900,29 +4912,34 @@ function processTurn(state, utterance) {
         if (expResult.msg) displayMsgs.push(expResult.msg);
       }
 
-      if (isLastTurn) {
-        const highestGrade = FARM_GRADE_STEPS[Math.min(battle.highestGradeIndex || 0, FARM_GRADE_STEPS.length - 1)];
-        const boxKey = getFarmBoxKey(highestGrade);
-        const boxName = addBoxToInventory(profile, boxKey);
-        displayMsgs.push(`🎁 [5턴 파밍 완료!] 최고 처치 등급: ${highestGrade}\n보상 상자: ${boxName} 1개를 획득했습니다. (/상자에서 개봉 가능)`);
-      } else {
-        displayMsgs.push(`☠️ [파밍 종료] HP가 모두 소진되어 파밍이 종료되었습니다.`);
-      }
+      const highestIndex = Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1;
+      const highestGrade = highestIndex >= 0
+        ? FARM_GRADE_STEPS[Math.min(highestIndex, FARM_GRADE_STEPS.length - 1)]
+        : '없음';
+      // 기존 등급별 상자 매핑을 유지한다. 처치가 없는 경우에도 기본 D 상자를 지급한다.
+      const boxKey = getFarmBoxKey(highestIndex >= 0 ? highestGrade : 'D등급');
+      const boxName = addBoxToInventory(profile, boxKey);
 
-      // 핵심: 전투 횟수/게임 횟수는 턴마다가 아니라 게임 종료 시 딱 1회만 증가한다.
+      // 전투 횟수/게임 횟수는 사망으로 게임이 종료될 때 딱 1회만 증가한다.
       profile.farmData.count = (profile.farmData.count || 0) + 1;
       profile.gamesPlayed = (profile.gamesPlayed || 0) + 1;
       profile.activeFarmBattle = null;
 
-      displayMsgs.push(
-        `• 획득 현금 : +${won(battle.accumulatedCash || 0)}`,
-        `• 획득 금괴 : +${(battle.accumulatedGold || 0).toLocaleString()}개`,
-        `• 획득 보석 : +${(battle.accumulatedGem || 0).toLocaleString()}개`,
-        `• 획득 비밀열쇠 : +${(battle.accumulatedKeys || 0).toLocaleString()}개`,
-        `• 획득 보급 : +${(battle.accumulatedSupplyItem || 0).toLocaleString()}개`
-      );
+      const rewardLines = [];
+      if (battle.accumulatedCash >= 1) rewardLines.push(`획득 현금 : +${won(battle.accumulatedCash)}`);
+      if (battle.accumulatedGold >= 1) rewardLines.push(`획득 금괴 : +${battle.accumulatedGold.toLocaleString()}개`);
+      if (battle.accumulatedGem >= 1) rewardLines.push(`획득 보석 : +${battle.accumulatedGem.toLocaleString()}개`);
+      if (battle.accumulatedKeys >= 1) rewardLines.push(`획득 비밀열쇠 : +${battle.accumulatedKeys.toLocaleString()}개`);
+      if (battle.accumulatedSupplyItem >= 1) rewardLines.push(`획득 보급 : +${battle.accumulatedSupplyItem.toLocaleString()}개`);
+      displayMsgs.push([
+        '====☠️[사망]====',
+        `최고 처치 등급: ${highestGrade}`,
+        '획득 재화 :',
+        ...rewardLines,
+        `보상 상자: ${boxName} 1개를 획득했습니다. (/상자에서 개봉 가능)`
+      ].join('\n'));
     } else {
-      // 다음 요청에서 state.battle이 누락되더라도 턴/등급이 이어지도록 진행 상태를 프로필에도 저장한다.
+      // 다음 요청에서 state.battle이 누락되더라도 HP/등급/누적 보상이 이어지도록 진행 상태를 프로필에도 저장한다.
       profile.activeFarmBattle = JSON.parse(JSON.stringify(battle));
     }
 
