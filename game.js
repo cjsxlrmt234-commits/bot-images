@@ -1807,6 +1807,34 @@ function battleStatusBoard(profile, battle) {
   return boardLines.join('\n');
 }
 
+
+function farmResponseHeader(profile, battle, encounter) {
+  const i = encounter ? encounter.gradeIndex : getFarmGradeIndex(battle.currentGradeIndex);
+  const grade = encounter ? encounter.grade : FARM_GRADE_STEPS[i];
+  const name = encounter ? encounter.fullName : (battle.farmMonster ? battle.farmMonster.fullName : '');
+  return [('[' + grade + '] ' + name).trim(),
+    '처치 확률 : ' + formatFarmChance(getFarmSuccessChance(i, profile)) + '%',
+    'HP:' + makeHpBar(battle.hp),
+    '🛡️ 투구 : Lv.' + (battle.helmetLevel || 0) + ' |🦺 갑옷 : Lv.' + (battle.vestLevel || 0)
+  ].join('\n');
+}
+function farmResponseFooter(profile) {
+  const p = createProfile(profile);
+  checkAndResetFarmLimit(p);
+  const n = getCurrentEnhanceLevel(p), req = getRequiredExp(p.level);
+  const count = p.farmData.count || 0;
+  const target = [10,25,50,100,150,200].find(x => x > count) || 200;
+  return [
+    '🎯 무기 : +' + n + ' ' + getWeaponInfo(n,p.job)[0],
+    '🔥 제련 : ' + (REFINE_STARS[Math.min(p.refine,REFINE_STARS.length-1)] || ''),
+    '⭐ Lv.' + p.level + ' (' + (p.exp || 0).toLocaleString() + '/' + req.toLocaleString() + ')',
+    '💪 공격력 : ' + getAttackPower(p).toLocaleString(),
+    '🔘 배율 : x' + getGoldMultiplier(p).toFixed(2) + ' | ⏩ 배속 (x' + (p.speedMultiplier || 1) + ')',
+    '⚔️ 전투 횟수 : (' + count + '/' + p.farmData.max + ')',
+    '📜 퀘스트 보상까지 ' + Math.max(0,target-count) + '회'
+  ].join('\n');
+}
+
 function checkDeath(battle) {
   if (!battle) return;
   if (battle.hp <= 0) {
@@ -1981,11 +2009,11 @@ function resolveProgressionFarmTurn(profile, battle) {
   const stats = getEnhanceStats(getCurrentEnhanceLevel(profile), profile.combatLevel || 0, profile);
   const critical = Math.random() * 100 < Math.max(0, Math.min(100, stats.numCrit));
   const damage = getAttackPower(profile) * (critical ? 2 : 1);
-  // 고정 확률이 이미 상한이므로 치명타도 같은 확률을 사용한다.
-  // 일반공격/치명타 모두 등급별 상한을 넘지 않는다.
+  // 치명타는 기본 확률의 2배이며 최종 한도는 100%이다.
+  // 등급별 값은 일반공격 기본 확률이다.
   const normalSuccessChance = getFarmSuccessChance(gradeIndex, profile);
   const successChance = Math.min(
-    FARM_SUCCESS_CAPS[gradeIndex],
+    100,
     normalSuccessChance * (critical ? 2 : 1)
   );
   let killed = Math.random() * 100 < successChance;
@@ -2013,24 +2041,23 @@ function resolveProgressionFarmTurn(profile, battle) {
     battle.highestGradeIndex = Math.max(Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1, gradeIndex);
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
     battle.farmMonster = null;
-    const lines = ['[' + grade + '] ' + monster.fullName + ' 처치', '(처치 확률 ' + formatFarmChance(successChance) + '%)',
-      '[데미지] ' + (counter ? 'MISS' : damage)];
-    if (counter) lines.push('[' + counter + '] 피해 무효화 · ' + (counter === '풀카운터' ? '확정 처치!' : '50% 처치 판정 성공!'), 'HP -0');
+    const lines = ['[' + grade + '] ' + monster.fullName + ' 처치', '[데미지] ' + damage, attackInfo];
+    if (counter) lines.push('[' + counter + '] 피해 무효화 · ' + (counter === '풀카운터' ? '확정 처치!' : '50% 처치 판정 성공!'));
     if (cash > 0) lines.push('💵 현금 +' + won(cash));
     if (gem > 0) lines.push('💎 보석 +' + gem + '개');
 
-    return { text: lines.join('\n'), imageUrl: monster.image || null };
+    return { text: lines.join('\n'), imageUrl: monster.image || null, encounter: { grade, fullName: monster.fullName, gradeIndex } };
   }
-  const lines = ['[' + grade + '] ' + monster.fullName + ' 처치에 실패했습니다.', '[데미지] MISS'];
+  const lines = ['[' + grade + '] ' + monster.fullName + ' 처치에 실패했습니다.'];
   if (counter) {
-    lines.push('HP -0', '[' + counter + '] 피해 무효화 · 50% 처치 판정 실패', attackInfo);
-    return { text: lines.join('\n'), imageUrl: monster.image || null };
+    lines.push('[데미지] ' + damage, '[' + counter + '] 피해 무효화 · 50% 처치 판정 실패', attackInfo);
+    return { text: lines.join('\n'), imageUrl: monster.image || null, encounter: { grade, fullName: monster.fullName, gradeIndex } };
   }
   const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(profile, battle, rand(20, 30));
   battle.hp = Math.max(0, battle.hp - finalDamage);
   checkDeath(battle);
-  lines.push('HP -' + finalDamage + (totalReduce > 0 ? ' (방어 -' + totalReduce + ')' : ''), attackInfo, ...armorNotes);
-  return { text: lines.join('\n'), imageUrl: monster.image || null };
+  lines.push('[데미지] MISS | HP -' + finalDamage + (totalReduce > 0 ? ' (방어 -' + totalReduce + ')' : ''), attackInfo, ...armorNotes);
+  return { text: lines.join('\n'), imageUrl: monster.image || null, encounter: { grade, fullName: monster.fullName, gradeIndex } };
 }
 
 function resolveFarmFight(profile, battle) {
@@ -4487,11 +4514,13 @@ function processHunt(playerState) {
 
   let footerLines = [
     questLeftText,
-    `🔘 배율 x${lootMult.toFixed(2)} (사냥 전용)`,
-    `💵 현금 : ${won(playerState.cash)}`,
-    `💎 보석 : ${(playerState.gem || 0).toLocaleString()}개`,
-    `사냥 횟수 : (${playerState.huntData.count}/${MAX_HUNT_COUNT})`,
-    `⏩ ${speed}배속`
+    '',
+    '💵 현금 : ' + won(playerState.cash),
+    '💎 보석 : ' + (playerState.gem || 0).toLocaleString() + '개',
+    '',
+    '🔘 배율 : x' + lootMult.toFixed(2) + ' | ⏩ 배속 (x' + speed + ')',
+    '사냥 횟수 : (' + playerState.huntData.count + '/' + MAX_HUNT_COUNT + ')',
+    questLeftText
   ];
 
   const text = `${middleContent}\n\n${footerLines.join('\n')}`;
@@ -5002,7 +5031,10 @@ function processTurn(state, utterance) {
     }
 
     return {
-      text: [displayMsgs.join('\n\n'), '', battleStatusBoard(profile, battle)].join('\n'),
+      text: [farmResponseHeader(profile, battle, fightResult.encounter), '',
+        displayMsgs.join('\n\n'),
+        ...(hasEnded ? [] : ['다음 몬스터 : 처치 확률 ' + formatFarmChance(getFarmSuccessChance(battle.currentGradeIndex, profile)) + '%']),
+        '', farmResponseFooter(profile)].join('\n'),
       imageUrl: fightResult.imageUrl,
       choices: FARM_CHOICES,
       category: 'farm',
