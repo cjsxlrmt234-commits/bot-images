@@ -509,11 +509,9 @@ const ENHANCE_CHOICES = [
   { label: '/강화', action: '/강화' }
 ];
 
-const HUNT_CHOICES = [
-  { label: '/사냥', action: '/사냥' },
-  { label: '/파밍', action: '/파밍' },
-  { label: '/도움말', action: '/도움말' }
-];
+// 파밍/사냥 응답에는 반복 명령 선택 버튼을 표시하지 않는다.
+const FARM_CHOICES = [];
+const HUNT_CHOICES = [];
 
 // 수정사항 6: /제련 메뉴 전용 선택 버튼 (/보급 제거)
 const REFINE_CHOICES = [
@@ -550,7 +548,7 @@ const IMPRINT_OPTION_POOL = [
   { name: '경험치 획득량 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'expBoost' },
   { name: '추가 비밀열쇠 획득 확률 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'keyChance' },
   { name: '피해량 감소', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '', key: 'damageReduce' },
-  { name: '전투력 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
+  { name: '공격력 증가', values: [1, 2, 3, 4, 5], weights: [30, 30, 20, 10, 10], unit: '%', key: 'combatBoost' }
 ];
 
 function rand(min, max) {
@@ -782,14 +780,14 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
     baseCrit = lvl * 0.50;
     baseCritDmg = lvl * 1.00;
     
-    if (lvl <= 15) {
+    if (lvl < 15) {
       baseCounter = 0.00;
     } else {
-      baseCounter = (lvl - 15) * 0.10;
+      baseCounter = (lvl - 14) * 0.10;
     }
 
     if (lvl === 20) {
-      baseFullCounter = 0.50;
+      baseFullCounter = 0.10;
     } else {
       baseFullCounter = 0.00;
     }
@@ -841,18 +839,26 @@ function formatRefineStatDiff(oldRefine, newRefine) {
   return [
     `배율 | x${oldMult} ➔ x${newMult}`,
     `치명타 데미지 증가 | ${oldCrit}% ➔ ${newCrit}%`,
-    `전투력 증가 | ${oldRefine * 2}% ➔ ${newRefine * 2}%`
+    `공격력 증가 | ${oldRefine * 2}% ➔ ${newRefine * 2}%`
   ].join('\n');
 }
 
-function getCombatPower(profile) {
+// 일반 +20: 21,000 / 전직 +0: 21,000 / 전직 +20: 60,000.
+function getWeaponAttackPower(profile) {
+  const n = Math.max(0, Math.min(20, Math.floor(Number(getCurrentEnhanceLevel(profile)) || 0)));
+  return profile && profile.job
+    ? 21000 + 1000 * n + 50 * n * (n - 1)
+    : 50 * n * (n + 1);
+}
+
+function getAttackPower(profile) {
   if (!profile) return 0;
   const combatLv = profile.combatLevel || 0;
   const enhance = getCurrentEnhanceLevel(profile);
   const lvl = profile.level || 1;
   const refineLvl = profile.refine || 0;
 
-  const basePower = (lvl * 100) + (combatLv * 500) + (enhance * 300) + getCollectionCombatPower(profile);
+  const basePower = (lvl * 100) + (combatLv * 500) + getWeaponAttackPower(profile) + getCollectionCombatPower(profile);
   const refineBonusMult = 1 + (refineLvl * 0.02);
   const imprintCombatBoost = getImprintTotalBonus(profile, 'combatBoost') / 100;
   
@@ -873,7 +879,7 @@ function calculatePartDamage(profile, forceCrit = false) {
   const stats = getEnhanceStats(enhanceLevel, combatLevel, profile);
   const roll = Math.random() * 100;
 
-  const combatPower = getCombatPower(profile);
+  const combatPower = getAttackPower(profile);
   const normalDamage = Math.max(1, Math.floor(combatPower / 100));
 
   let hitPartName = '평타';
@@ -1097,7 +1103,7 @@ function migrateProfileData(profile) {
 function createProfile(existing = {}) {
   const safeObj = existing && typeof existing === 'object' ? existing : {};
   
-  const nickname = (safeObj.nickname && safeObj.nickname.trim() !== '') 
+  const nickname = (typeof safeObj.nickname === 'string' && safeObj.nickname.trim() !== '') 
     ? safeObj.nickname 
     : generateRandomNickname();
 
@@ -1150,7 +1156,16 @@ function createProfile(existing = {}) {
       : null
   };
 
-  return migrateProfileData(profile);
+  profile = migrateProfileData(profile);
+  function renameLabels(value) {
+    if (!value || typeof value !== 'object') return;
+    for (const key of Object.keys(value)) {
+      if (typeof value[key] === 'string') value[key] = value[key].replace(/전\uD22C력/g, '공격력');
+      else if (value[key] && typeof value[key] === 'object') renameLabels(value[key]);
+    }
+  }
+  renameLabels(profile.imprints);
+  return profile;
 }
 
 function getVaultCapacity(vault) {
@@ -1338,7 +1353,7 @@ function checkAndResetFarmLimit(playerState) {
 function profileText(profile, detailed = false) {
   const p = createProfile(profile);
   const reqExp = getRequiredExp(p.level);
-  const combatPower = getCombatPower(p);
+  const combatPower = getAttackPower(p);
   const currentEnhance = getCurrentEnhanceLevel(p);
   const [wName] = getWeaponInfo(currentEnhance, p.job);
   const refineStar = REFINE_STARS[Math.min(p.refine, REFINE_STARS.length - 1)] || '';
@@ -1361,7 +1376,7 @@ function profileText(profile, detailed = false) {
     `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
-    `💪 전투력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0} | 보유 효과 +${getCollectionCombatPower(p).toLocaleString()})`,
+    `💪 공격력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0} | 보유 효과 +${getCollectionCombatPower(p).toLocaleString()})`,
     `🔘 배율 : x${totalMult}`,
     `⏩ 배속 : x${p.speedMultiplier || 1}`
   ];
@@ -1381,7 +1396,7 @@ function profileText(profile, detailed = false) {
 
     if (critDmgBonus !== 0) lines.push(`치명타 데미지 : +${critDmgBonus}%`);
     if (critWeightBonus !== 0) lines.push(`치명타 가중치 : +${critWeightBonus}%`);
-    if (combatBoostBonus !== 0) lines.push(`전투력 증가 : +${combatBoostBonus}%`);
+    if (combatBoostBonus !== 0) lines.push(`공격력 증가 : +${combatBoostBonus}%`);
 
     if (critRateBonus !== 0) lines.push(`치명타 확률 증가 : +${critRateBonus}%`);
     if (cashBoostBonus !== 0) lines.push(`현금 획득량 증가 : +${cashBoostBonus}%`);
@@ -1437,7 +1452,7 @@ function processTitleInfo(profile) {
   let lines = [
     `🎖️ [칭호 정보 및 보유 목록]`,
     `현재 장착 칭호 : ${profile.equippedTitle || '없음'}`,
-    `보유 효과 : 칭호 1개당 전투력 +1,000 (현재 +${(profile.ownedTitles.length * 1000).toLocaleString()})`,
+    `보유 효과 : 칭호 1개당 공격력 +1,000 (현재 +${(profile.ownedTitles.length * 1000).toLocaleString()})`,
     `장착 효과 : 금괴 획득량 +10%`,
     ``,
     `📅 현재 획득 가능한 칭호:`,
@@ -1452,7 +1467,7 @@ function processTitleInfo(profile) {
   } else {
     profile.ownedTitles.forEach((titleName, index) => {
       const isEquipped = titleName === profile.equippedTitle ? " (장착 중)" : "";
-      lines.push(`${index + 1}. ${titleName}${isEquipped} — 보유: 전투력 +1,000 / 장착: 금괴 +10%`);
+      lines.push(`${index + 1}. ${titleName}${isEquipped} — 보유: 공격력 +1,000 / 장착: 금괴 +10%`);
     });
   }
 
@@ -1482,7 +1497,7 @@ function processAvatarInfo(profile) {
   const lines = [
     `🧑 [아바타 정보]`,
     `현재 장착 아바타 : ${profile.equippedAvatar || '없음'}`,
-    `보유 효과 : 아바타 1개당 전투력 +1,000 (현재 +${(avatarCount * 1000).toLocaleString()})`,
+    `보유 효과 : 아바타 1개당 공격력 +1,000 (현재 +${(avatarCount * 1000).toLocaleString()})`,
     `장착 효과 : 현금 획득량 +10%`,
     ``,
     `📜 보유 중인 아바타 목록:`
@@ -1493,7 +1508,7 @@ function processAvatarInfo(profile) {
   } else {
     profile.ownedAvatars.forEach((avatarName, index) => {
       const equipped = index === profile.equippedAvatarIndex ? ' (장착 중)' : '';
-      lines.push(`${index + 1}. ${avatarName}${equipped} — 보유: 전투력 +1,000 / 장착: 현금 +10%`);
+      lines.push(`${index + 1}. ${avatarName}${equipped} — 보유: 공격력 +1,000 / 장착: 현금 +10%`);
     });
   }
   lines.push(``, `💡 [/아바타 장착 (숫자)] 명령어로 아바타를 장착할 수 있습니다.`);
@@ -1656,7 +1671,7 @@ function processSupply(profile, countArg = "1") {
 
     if (roll >= 10) {
       if (roll < 60) {
-        const combatPower = getCombatPower(profile);
+        const combatPower = getAttackPower(profile);
         const dice = rand(1, 6);
         let gainedCash = combatPower * 100 * dice * 2;
         gainedCash = applyCreatureCashBonus(gainedCash, profile);
@@ -1767,7 +1782,7 @@ function battleStatusBoard(profile, battle) {
   const currentGrade = FARM_GRADE_STEPS[Math.min(b.currentGradeIndex || 0, FARM_GRADE_STEPS.length - 1)];
 
   let boardLines = [
-    `현재 몬스터 : ${currentGrade}(${getFarmSuccessChance(b.currentGradeIndex)}%)`,
+    `현재 몬스터 : ${currentGrade}(${formatFarmChance(getFarmSuccessChance(b.currentGradeIndex, p))}%)`,
     `HP:${makeHpBar(b.hp)}`,
     `🛡️ 투구: Lv.${b.helmetLevel || 0} (${b.helmetDurability ?? 0}%)`,
     `🦺 갑옷: Lv.${b.vestLevel || 0} (${b.vestDurability ?? 0}%)`,
@@ -1781,11 +1796,7 @@ function battleStatusBoard(profile, battle) {
     `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
-    `💵 현금 : ${won(p.cash)}`,
-    `🧈 금괴 : ${(p.gold || 0).toLocaleString()}개`,
-    `💎 보석 : ${(p.gem || 0).toLocaleString()}개`,
-    `🔑 비밀열쇠 : ${(p.keys || 0).toLocaleString()}개`,
-    `📦 보급 : ${(p.supplyItem || 0).toLocaleString()}개`
+    `💪 공격력 : ${getAttackPower(p).toLocaleString()}`
   );
 
   return boardLines.join('\n');
@@ -1909,9 +1920,19 @@ function createFarmMonster(grade) {
   };
 }
 
-function getFarmSuccessChance(gradeIndex) {
-  const index = Math.max(0, Math.min(Number(gradeIndex) || 0, FARM_GRADE_STEPS.length - 1));
-  return Math.max(10, 80 - index * 10);
+// HP는 누적 차감되지 않는 확률 계산 기준값이다.
+const FARM_MONSTER_HP = [20000,25000,31000,45000,57000,70000,145000,180000,220000,270000,330000,400000,480000,570000,670000,780000,900000,1030000,1170000,1320000,1480000,1650000,1830000,2020000];
+const FARM_SUCCESS_CAPS = [80,75,70,60,55,50,40,35,30,20,15,10,5,5,5,3,3,3,1,1,1,0.1,0.1,0.1];
+function getFarmGradeIndex(index) {
+  return Math.max(0, Math.min(Math.floor(Number(index) || 0), FARM_GRADE_STEPS.length - 1));
+}
+function getFarmSuccessChance(gradeIndex, profile, damage) {
+  const i = getFarmGradeIndex(gradeIndex);
+  const attack = damage === undefined ? getAttackPower(profile) : Math.max(0, Number(damage) || 0);
+  return FARM_SUCCESS_CAPS[i] * Math.min(1, attack / FARM_MONSTER_HP[i]);
+}
+function formatFarmChance(chance) {
+  return String(Number(chance.toFixed(6)));
 }
 
 function resolveProgressionFarmTurn(profile, battle) {
@@ -1920,59 +1941,87 @@ function resolveProgressionFarmTurn(profile, battle) {
 
   if (eventRoll < 0.01) {
     battle.accumulatedSupplyItem = (battle.accumulatedSupplyItem || 0) + 1;
-    return { text: `📦 [보급 획득!] 보급 1개를 발견했습니다. (파밍 종료 시 지급)`, imageUrl: null };
+    return { text: `📦 [재화] 보급 +1개.`, imageUrl: null };
   }
   if (eventRoll < 1.01) {
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const gold = applyCreatureGoldBonus(Math.max(1, rand(ampInfo.minGold, ampInfo.maxGold) * speed), profile);
     battle.accumulatedGold = (battle.accumulatedGold || 0) + gold;
-    return { text: `🧈 [금괴 획득!] 금괴 +${gold.toLocaleString()}개 (파밍 종료 시 지급)`, imageUrl: null };
+    return { text: `🧈 [재화] 금괴 +${gold.toLocaleString()}개`, imageUrl: null };
   }
   if (eventRoll < 3.01) {
     const keys = Math.max(1, speed);
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keys;
-    return { text: `🔑 [비밀열쇠 획득!] 비밀열쇠 +${keys}개 (파밍 종료 시 지급)`, imageUrl: null };
+    return { text: `🔑 [재화] 비밀열쇠 +${keys}개`, imageUrl: null };
   }
   if (eventRoll < 10) {
     const cash = applyCreatureCashBonus(Math.round((10393 / 10) * getGoldMultiplier(profile) * speed), profile);
     battle.accumulatedCash += cash;
     battle.accumulatedExp = (battle.accumulatedExp || 0) + Math.max(1, Math.floor(cash / 10));
-    return { text: `🎰 [잭팟!] 현금 +${won(cash)} (파밍 종료 시 지급)`, imageUrl: null };
+    return { text: `🎰 [잭팟!] 현금 +${won(cash)}`, imageUrl: null };
   }
 
-  const gradeIndex = Math.min(battle.currentGradeIndex || 0, FARM_GRADE_STEPS.length - 1);
+  const gradeIndex = getFarmGradeIndex(battle.currentGradeIndex);
   const grade = FARM_GRADE_STEPS[gradeIndex];
-  const monster = createFarmMonster(grade);
-  const successChance = getFarmSuccessChance(gradeIndex);
-
-  if (Math.random() * 100 < successChance) {
+  // 실패 시 같은 몬스터를 유지하고, 프로필 백업에도 함께 저장한다.
+  if (!battle.farmMonster || battle.farmMonster.grade !== grade) {
+    battle.farmMonster = createFarmMonster(grade);
+  }
+  const monster = battle.farmMonster;
+  const stats = getEnhanceStats(getCurrentEnhanceLevel(profile), profile.combatLevel || 0, profile);
+  const critical = Math.random() * 100 < Math.max(0, Math.min(100, stats.numCrit));
+  const damage = getAttackPower(profile) * (critical ? 2 : 1);
+  // 표시용 반올림 전의 일반공격 확률을 기준으로 치명타는 정확히 2배 적용한다.
+  // 일반공격/치명타 모두 등급별 상한을 넘지 않는다.
+  const normalSuccessChance = getFarmSuccessChance(gradeIndex, profile);
+  const successChance = Math.min(
+    FARM_SUCCESS_CAPS[gradeIndex],
+    normalSuccessChance * (critical ? 2 : 1)
+  );
+  let killed = Math.random() * 100 < successChance;
+  let counter = '';
+  if (!killed) {
+    // 반격 직전에 한 번 추첨한다. 풀카운터와 카운터는 중복되지 않는다.
+    const roll = Math.random() * 100;
+    const fullRate = Math.max(0, Math.min(100, stats.numFullCounter));
+    const counterRate = Math.max(0, Math.min(100 - fullRate, stats.numCounter));
+    if (roll < fullRate) {
+      counter = '풀카운터';
+      killed = true;
+    } else if (roll < fullRate + counterRate) {
+      counter = '카운터';
+      killed = Math.random() < 0.5;
+    }
+  }
+  const attackInfo = '[공격] ' + (critical ? '치명타' : '일반공격') + ' (처치 확률 ' + formatFarmChance(successChance) + '%)';
+  if (killed) {
     let cash = Math.floor(monster.rewardMoney * getLootMultiplier(profile) * 0.5 * speed);
     cash = applyCreatureCashBonus(cash, profile);
     const gem = Math.floor(applyCreatureGemBonus(monster.rewardGem || 0, profile) * 0.5 * speed);
-    battle.accumulatedCash += cash;
+    battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
     battle.accumulatedGem = (battle.accumulatedGem || 0) + gem;
     battle.accumulatedExp = (battle.accumulatedExp || 0) + Math.max(1, Math.floor(cash / 10));
-    battle.highestGradeIndex = Math.max(battle.highestGradeIndex || 0, gradeIndex);
+    battle.highestGradeIndex = Math.max(Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1, gradeIndex);
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
-    const nextGrade = FARM_GRADE_STEPS[battle.currentGradeIndex];
-    const rewards = [`💵 현금 +${won(cash)}`];
-    if (gem > 0) rewards.push(`💎 보석 +${gem}개`);
-    return {
-      text: `✅ [${grade}] ${monster.fullName} 처치 성공! (${successChance}% 확률)\n${rewards.join('\n')}\n다음 도전 몬스터: ${nextGrade} (파밍 종료 시 지급)`,
-      imageUrl: monster.image || null
-    };
+    battle.farmMonster = null;
+    const lines = ['✅ [' + grade + '] ' + monster.fullName + ' 처치 성공!', attackInfo,
+      '[데미지] ' + (counter ? 'MISS' : damage)];
+    if (counter) lines.push('[' + counter + '] 피해 무효화 · ' + (counter === '풀카운터' ? '확정 처치!' : '50% 처치 판정 성공!'), 'HP -0');
+    if (cash > 0) lines.push('💵 현금 +' + won(cash));
+    if (gem > 0) lines.push('💎 보석 +' + gem + '개');
+    lines.push('다음 도전 몬스터: ' + FARM_GRADE_STEPS[battle.currentGradeIndex]);
+    return { text: lines.join('\n'), imageUrl: monster.image || null };
   }
-
-  const rawDamage = rand(20, 30);
-  const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(profile, battle, rawDamage);
+  const lines = ['[' + grade + '] ' + monster.fullName + ' 처치에 실패했습니다.', '[데미지] MISS'];
+  if (counter) {
+    lines.push('HP -0', '[' + counter + '] 피해 무효화 · 50% 처치 판정 실패', attackInfo);
+    return { text: lines.join('\n'), imageUrl: monster.image || null };
+  }
+  const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(profile, battle, rand(20, 30));
   battle.hp = Math.max(0, battle.hp - finalDamage);
   checkDeath(battle);
-  const defense = totalReduce > 0 ? ` (방어 -${totalReduce})` : '';
-  const notes = armorNotes.length > 0 ? `\n${armorNotes.join('\n')}` : '';
-  return {
-    text: `[${grade}] ${monster.fullName} 처치에 실패했습니다. 잔류(MISS) — 같은 몬스터에게 재도전할 수 있습니다.\nHP -${finalDamage}${defense}${notes}`,
-    imageUrl: monster.image || null
-  };
+  lines.push('HP -' + finalDamage + (totalReduce > 0 ? ' (방어 -' + totalReduce + ')' : ''), attackInfo, ...armorNotes);
+  return { text: lines.join('\n'), imageUrl: monster.image || null };
 }
 
 function resolveFarmFight(profile, battle) {
@@ -2001,7 +2050,7 @@ function resolveFarmFight(profile, battle) {
       let raidHp = profile.raidData.hp;
       let raidMsg = `💥 [버서커 패시브 - 레이드 교전 발생!] 거대 레이드 보스 등장! (남은 체력: ${raidHp.toLocaleString()})`;
       
-      const myPower = getCombatPower(profile);
+      const myPower = getAttackPower(profile);
       if (raidHp < 1000000 && Math.random() < (sLvl * 0.01)) {
         raidHp = 0;
         profile.raidData.hp = 100000000;
@@ -2024,7 +2073,7 @@ function resolveFarmFight(profile, battle) {
           dmgDealt = Math.max(dmgDealt, Math.floor(raidHp * 0.01));
           raidMsg += `\n🪓 [버서커 스킬 - 일격!] 레이드 보스 전체 체력의 1% 피해를 입혔습니다!`;
         } else {
-          raidMsg += `\n🪓 레이드 보스에게 전투력(${myPower.toLocaleString()})만큼 피해를 입혔습니다!`;
+          raidMsg += `\n🪓 레이드 보스에게 공격력(${myPower.toLocaleString()})만큼 피해를 입혔습니다!`;
         }
         raidHp = Math.max(0, raidHp - dmgDealt);
         profile.raidData.hp = raidHp;
@@ -2042,7 +2091,7 @@ function resolveFarmFight(profile, battle) {
         battle.accumulatedGold = (battle.accumulatedGold || 0) + raidGold;
         battle.accumulatedGem = (battle.accumulatedGem || 0) + raidGem;
 
-        raidMsg += `\n보상: 현금 +${won(raidRewardCash)}, 금괴 +${raidGold}개, 보석 +${raidGem}개 (종료 시 정산)`;
+        raidMsg += `\n보상: 현금 +${won(raidRewardCash)}, 금괴 +${raidGold}개, 보석 +${raidGem}개`;
 
         if (raidHp === 0) {
           profile.raidData.hp = 100000000;
@@ -2051,7 +2100,7 @@ function resolveFarmFight(profile, battle) {
           battle.accumulatedGem = (battle.accumulatedGem || 0) + 1;
           battle.accumulatedKeys = (battle.accumulatedKeys || 0) + 1;
           battle.accumulatedSupplyItem = (battle.accumulatedSupplyItem || 0) + 1;
-          raidMsg += `\n🎉 레이드 보스를 토벌했습니다! 추가 보상: 현금 1원, 금괴 1개, 보석 1개, 비밀열쇠 1개, 보급 1개 (종료 시 정산)`;
+          raidMsg += `\n🎉 레이드 보스를 토벌했습니다! 추가 보상: 현금 1원, 금괴 1개, 보석 1개, 비밀열쇠 1개, 보급 1개`;
         }
       }
       resultMessages.push(raidMsg);
@@ -2061,7 +2110,7 @@ function resolveFarmFight(profile, battle) {
   let outcome = 'damage';
 
   if (outcome === 'supplyItem') {
-    const combatPower = getCombatPower(profile);
+    const combatPower = getAttackPower(profile);
     earnedCash = applyCreatureCashBonus(combatPower * 10 * speed, profile);
     
     let goldBonus = rand(ampInfo.minGold, ampInfo.maxGold) * speed;
@@ -2862,7 +2911,7 @@ function showRefineInfo(profile) {
         `현재 제련 단계: ${currentRefine}성 (${starStr})`,
         `배율 | x${currentMult}`,
         `치명타 데미지 증가 | ${currentCrit}%`,
-        `전투력 증가 | ${currentCp}%`,
+        `공격력 증가 | ${currentCp}%`,
         `✨ 최고 제련 단계(10성 ★★★★★)에 도달했습니다!`
       ].join('\n')
     };
@@ -2884,7 +2933,7 @@ function showRefineInfo(profile) {
       `💰 제련 필요 재화: ${won(cashCost)}, 금괴 ${goldCost}개`,
       `배율 | x${currentMult}`,
       `치명타 데미지 증가 | ${currentCrit}%`,
-      `전투력 증가 | ${currentCp}%`,
+      `공격력 증가 | ${currentCp}%`,
       `📊 성공: ${succP}%`,
       `📊 유지: ${keepP}%`,
       `📊 하락: ${dropP}%`,
@@ -3073,7 +3122,7 @@ function processUseKey(profile, countArg) {
   let totalGold = 0;
   let totalSupplyItem = 0;
 
-  const combatPower = getCombatPower(profile);
+  const combatPower = getAttackPower(profile);
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
 
   for (let i = 0; i < count; i++) {
@@ -3337,7 +3386,7 @@ function getJobInfoText(jobCode, skillLevel = 1) {
   if (jobCode === 'berserker') {
     return `🪓 버서커 : 파밍 도중 레이드를 마주할 확률 ${chance}%, 레이드 체력 1% 미만 시 ${chance}% 확률로 즉시 처형, 레이드 체력의 1% 피해를 입힐 확률 ${chance}%`;
   } else if (jobCode === 'swordmaster') {
-    return `⚡ 소드마스터 : 전투력 ${chance}% 증가, 매일 랜덤 직업 변경 확률 ${chance}%`;
+    return `⚡ 소드마스터 : 공격력 ${chance}% 증가, 매일 랜덤 직업 변경 확률 ${chance}%`;
   } else if (jobCode === 'shadow') {
     const maxBet = skillLevel * 1000000;
     return `🗡️ 섀도우 : 적 처치 시 ${chance}% 확률로 재화 약탈, /스킬 [금액] 커맨드 사용 가능 (최대 약탈 걸기: ${won(maxBet)})`;
@@ -3405,7 +3454,7 @@ function processJobCommand(profile, targetJob) {
         `1. 🪓 버서커 (/전직 버서커) - 대검 사용`,
         `   - 파밍 중 레이드 난입 / 즉시 처형 및 1% 피해 확률`,
         `2. ⚡ 소드마스터 (/전직 소드마스터) - 광검 사용`,
-        `   - 전투력 % 증가 및 매일 일정 확률 직업 랜덤 변경`,
+        `   - 공격력 % 증가 및 매일 일정 확률 직업 랜덤 변경`,
         `3. 🗡️ 섀도우 (/전직 섀도우) - 단검 사용`,
         `   - 적 처치 시 재화 약탈 / /스킬 [금액] 상대 재화 약탈`,
         `4. 🔮 마검사 (/전직 마검사) - 마검 사용`,
@@ -3574,11 +3623,11 @@ function processShadowBattle(profile, betArg) {
     return { text: `⚠️ 현재 스킬 레벨(Lv.${sLvl})에서는 최대 ${won(maxBet)} 까지만 재화를 걸 수 있습니다.` };
   }
 
-  const combatPower = getCombatPower(profile);
+  const combatPower = getAttackPower(profile);
   const reqPctAmount = Math.floor(betAmount * (combatPower / 10000));
 
   if (profile.cash < reqPctAmount) {
-    return { text: `⚠️ 전투력에 해당하는 % 금액(${won(reqPctAmount)})이 부족하여 대결 스킬을 사용할 수 없습니다.` };
+    return { text: `⚠️ 공격력에 해당하는 % 금액(${won(reqPctAmount)})이 부족하여 대결 스킬을 사용할 수 없습니다.` };
   }
 
   const isSuccess = Math.random() < 0.5;
@@ -3587,7 +3636,7 @@ function processShadowBattle(profile, betArg) {
     return {
       text: [
         `🗡️ [섀도우 대결 약탈 성공! (50%)]`,
-        `상대와의 대결에서 승리하여 전투력 비율 재화 +${won(reqPctAmount)}을(를) 획득했습니다!`,
+        `상대와의 대결에서 승리하여 공격력 비율 재화 +${won(reqPctAmount)}을(를) 획득했습니다!`,
         `(대결받는 상대의 재화는 변동되지 않습니다.)`,
         ``,
         resourceText(profile)
@@ -3598,7 +3647,7 @@ function processShadowBattle(profile, betArg) {
     return {
       text: [
         `💥 [섀도우 대결 약탈 실패! (50%)]`,
-        `상대와의 대결에서 패배하여 전투력 비율 재화 -${won(reqPctAmount)}을(를) 잃었습니다.`,
+        `상대와의 대결에서 패배하여 공격력 비율 재화 -${won(reqPctAmount)}을(를) 잃었습니다.`,
         ``,
         resourceText(profile)
       ].join('\n')
@@ -3623,7 +3672,7 @@ function processPvpBattle(profile) {
 
   profile.pvpData.count += 1;
 
-  const myPower = getCombatPower(profile);
+  const myPower = getAttackPower(profile);
   const enemyPower = Math.floor(myPower * (rand(80, 120) / 100));
 
   const myDmg = Math.floor(myPower * (rand(90, 110) / 100));
@@ -3635,7 +3684,7 @@ function processPvpBattle(profile) {
   if (isWin) {
     const rewardCash = myPower * 10;
     profile.cash += rewardCash;
-    outcomeMsg = `🎉 [대결 승리!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n보상 획득: 현금 +${won(rewardCash)} (본인 전투력 * 10)`;
+    outcomeMsg = `🎉 [대결 승리!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n보상 획득: 현금 +${won(rewardCash)} (본인 공격력 * 10)`;
   } else {
     outcomeMsg = `💥 [대결 패배!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n상대방에게 더 큰 피해를 입어 승리하지 못했습니다.`;
   }
@@ -4803,7 +4852,7 @@ function processTurn(state, utterance) {
       `• /제련 강화 - 무기 제련 시도`,
       `• /연속 강화 [횟수] - 지정 횟수만큼 연속 강화`,
       `• /증폭 - 증폭 정보 확인`,
-      `• /증폭 강화 [수량] - 금괴로 전투력 증폭 강화`,
+      `• /증폭 강화 [수량] - 금괴로 공격력 증폭 강화`,
       `• /배속 [1~10] - 증폭 레벨 제한 내에서 보상 배속 설정`,
       `• /금고 - 금고 정보 확인 및 입/출금/구매/레벨업`,
       `• /열쇠 [수량] - 비밀열쇠를 지정한 수량만큼 연속 사용`,
@@ -4816,7 +4865,7 @@ function processTurn(state, utterance) {
       `• /크리처 - 현재 크리처 정보 및 등급 확인`,
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
       `• /스킬 - 액티브 스킬 사용 (섀도우: /스킬 [금액], 마검사: /스킬)`,
-      `• /대결 - 1대1 대결 (승리 시 본인 전투력*10 금액 수령, 일 10회)`,
+      `• /대결 - 1대1 대결 (승리 시 본인 공격력*10 금액 수령, 일 10회)`,
       `• /던전 - 전 직업 입장 가능 던전 (일 10회)`,
       `• /각인 - 각인 정보 확인`,
       `• /각인 해금 [1~5] - 조건 만족 시 해당 슬롯 해금`,
@@ -4879,7 +4928,7 @@ function processTurn(state, utterance) {
     if (profile.farmData.count >= maxFarmLimit) {
       return {
         text: `⚠️ 오늘의 파밍 가능 횟수를 모두 소모했습니다. (일일 가능 횟수: ${profile.farmData.count}/${maxFarmLimit})`,
-        choices: END_BATTLE_CHOICES,
+        choices: FARM_CHOICES,
         state: { profile, battle }
       };
     }
@@ -4926,17 +4975,17 @@ function processTurn(state, utterance) {
       profile.activeFarmBattle = null;
 
       const rewardLines = [];
-      if (battle.accumulatedCash >= 1) rewardLines.push(`획득 현금 : +${won(battle.accumulatedCash)}`);
-      if (battle.accumulatedGold >= 1) rewardLines.push(`획득 금괴 : +${battle.accumulatedGold.toLocaleString()}개`);
-      if (battle.accumulatedGem >= 1) rewardLines.push(`획득 보석 : +${battle.accumulatedGem.toLocaleString()}개`);
-      if (battle.accumulatedKeys >= 1) rewardLines.push(`획득 비밀열쇠 : +${battle.accumulatedKeys.toLocaleString()}개`);
-      if (battle.accumulatedSupplyItem >= 1) rewardLines.push(`획득 보급 : +${battle.accumulatedSupplyItem.toLocaleString()}개`);
+      if (battle.accumulatedCash >= 1) rewardLines.push(`💵 현금 : +${won(battle.accumulatedCash)}`);
+      if (battle.accumulatedGold >= 1) rewardLines.push(`🧈 금괴 : +${battle.accumulatedGold.toLocaleString()}개`);
+      if (battle.accumulatedGem >= 1) rewardLines.push(`💎 보석 : +${battle.accumulatedGem.toLocaleString()}개`);
+      if (battle.accumulatedKeys >= 1) rewardLines.push(`🔑 비밀열쇠 : +${battle.accumulatedKeys.toLocaleString()}개`);
+      if (battle.accumulatedSupplyItem >= 1) rewardLines.push(`📦 보급 : +${battle.accumulatedSupplyItem.toLocaleString()}개`);
       displayMsgs.push([
         '====☠️[사망]====',
         `최고 처치 등급: ${highestGrade}`,
-        '획득 재화 :',
+        '💰 획득 재화',
         ...rewardLines,
-        `보상 상자: ${boxName} 1개를 획득했습니다. (/상자에서 개봉 가능)`
+        `🪎 상자 : ${boxName} +1개`
       ].join('\n'));
     } else {
       // 다음 요청에서 state.battle이 누락되더라도 HP/등급/누적 보상이 이어지도록 진행 상태를 프로필에도 저장한다.
@@ -4946,7 +4995,7 @@ function processTurn(state, utterance) {
     return {
       text: [displayMsgs.join('\n\n'), '', battleStatusBoard(profile, battle)].join('\n'),
       imageUrl: fightResult.imageUrl,
-      choices: hasEnded ? END_BATTLE_CHOICES : BATTLE_CHOICES,
+      choices: FARM_CHOICES,
       category: 'farm',
       state: { profile, battle }
     };
