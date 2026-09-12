@@ -1376,7 +1376,8 @@ function profileText(profile, detailed = false) {
     `🎯 무기 : +${currentEnhance} ${wName}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
-    `💪 공격력 : ${combatPower.toLocaleString()} (증폭 Lv.${p.combatLevel || 0} | 보유 효과 +${getCollectionCombatPower(p).toLocaleString()})`,
+    `💪 공격력 : ${combatPower.toLocaleString()}`,
+    `🌌 증폭 Lv.${p.combatLevel || 0}`,
     `🔘 배율 : x${totalMult}`,
     `⏩ 배속 : x${p.speedMultiplier || 1}`
   ];
@@ -1429,6 +1430,10 @@ function profileText(profile, detailed = false) {
   );
 
   return lines.join('\n');
+}
+
+function enhanceResourceText(profile) {
+  return `💵 현금 : ${won(profile.cash)}\n🧈 금괴 : ${(profile.gold || 0).toLocaleString()}개`;
 }
 
 function resourceText(profile) {
@@ -1928,11 +1933,16 @@ function getFarmGradeIndex(index) {
 }
 function getFarmSuccessChance(gradeIndex, profile, damage) {
   const i = getFarmGradeIndex(gradeIndex);
-  const attack = damage === undefined ? getAttackPower(profile) : Math.max(0, Number(damage) || 0);
-  return FARM_SUCCESS_CAPS[i] * Math.min(1, attack / FARM_MONSTER_HP[i]);
+  // 등급별 고정 확률. 추후 확률 옵션은 이 지점에서 별도로 적용한다.
+  return FARM_SUCCESS_CAPS[i];
 }
 function formatFarmChance(chance) {
-  return String(Number(chance.toFixed(6)));
+  return chance.toFixed(2);
+}
+
+// 공격력의 1/10을 10원 단위로 버림: 22,746 -> 2,270원.
+function getFarmCashReward(profile) {
+  return Math.floor(Math.max(0, getAttackPower(profile)) / 100) * 10;
 }
 
 function resolveProgressionFarmTurn(profile, battle) {
@@ -1955,7 +1965,7 @@ function resolveProgressionFarmTurn(profile, battle) {
     return { text: `🔑 [재화] 비밀열쇠 +${keys}개`, imageUrl: null };
   }
   if (eventRoll < 10) {
-    const cash = applyCreatureCashBonus(Math.round((10393 / 10) * getGoldMultiplier(profile) * speed), profile);
+    const cash = getFarmCashReward(profile);
     battle.accumulatedCash += cash;
     battle.accumulatedExp = (battle.accumulatedExp || 0) + Math.max(1, Math.floor(cash / 10));
     return { text: `🎰 [잭팟!] 현금 +${won(cash)}`, imageUrl: null };
@@ -1971,7 +1981,7 @@ function resolveProgressionFarmTurn(profile, battle) {
   const stats = getEnhanceStats(getCurrentEnhanceLevel(profile), profile.combatLevel || 0, profile);
   const critical = Math.random() * 100 < Math.max(0, Math.min(100, stats.numCrit));
   const damage = getAttackPower(profile) * (critical ? 2 : 1);
-  // 표시용 반올림 전의 일반공격 확률을 기준으로 치명타는 정확히 2배 적용한다.
+  // 고정 확률이 이미 상한이므로 치명타도 같은 확률을 사용한다.
   // 일반공격/치명타 모두 등급별 상한을 넘지 않는다.
   const normalSuccessChance = getFarmSuccessChance(gradeIndex, profile);
   const successChance = Math.min(
@@ -1995,8 +2005,7 @@ function resolveProgressionFarmTurn(profile, battle) {
   }
   const attackInfo = '[공격] ' + (critical ? '치명타' : '일반공격') + ' (처치 확률 ' + formatFarmChance(successChance) + '%)';
   if (killed) {
-    let cash = Math.floor(monster.rewardMoney * getLootMultiplier(profile) * 0.5 * speed);
-    cash = applyCreatureCashBonus(cash, profile);
+    const cash = getFarmCashReward(profile);
     const gem = Math.floor(applyCreatureGemBonus(monster.rewardGem || 0, profile) * 0.5 * speed);
     battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
     battle.accumulatedGem = (battle.accumulatedGem || 0) + gem;
@@ -2004,12 +2013,12 @@ function resolveProgressionFarmTurn(profile, battle) {
     battle.highestGradeIndex = Math.max(Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1, gradeIndex);
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
     battle.farmMonster = null;
-    const lines = ['✅ [' + grade + '] ' + monster.fullName + ' 처치 성공!', attackInfo,
+    const lines = ['[' + grade + '] ' + monster.fullName + ' 처치', '(처치 확률 ' + formatFarmChance(successChance) + '%)',
       '[데미지] ' + (counter ? 'MISS' : damage)];
     if (counter) lines.push('[' + counter + '] 피해 무효화 · ' + (counter === '풀카운터' ? '확정 처치!' : '50% 처치 판정 성공!'), 'HP -0');
     if (cash > 0) lines.push('💵 현금 +' + won(cash));
     if (gem > 0) lines.push('💎 보석 +' + gem + '개');
-    lines.push('다음 도전 몬스터: ' + FARM_GRADE_STEPS[battle.currentGradeIndex]);
+
     return { text: lines.join('\n'), imageUrl: monster.image || null };
   }
   const lines = ['[' + grade + '] ' + monster.fullName + ' 처치에 실패했습니다.', '[데미지] MISS'];
@@ -2537,7 +2546,7 @@ function processEnhance(profile) {
       subWeaponLine,
       detailMsg,
       ``,
-      resourceText(profile)
+      enhanceResourceText(profile)
     ].join('\n');
 
     return { text: maxText, imageUrl: getEnhanceImage('success', 20, profile.job), status: 'max' };
@@ -2631,7 +2640,7 @@ function processEnhance(profile) {
   const finalResultText = [
     resultMsg,
     ``,
-    resourceText(profile)
+    enhanceResourceText(profile)
   ].join('\n');
 
   return { 
@@ -2740,7 +2749,7 @@ function processGuaranteedEnhance(profile, targetLevel) {
     `🎯 무기 : +${targetLevel} ${newWName}`,
     detailMsg,
     ``,
-    resourceText(profile)
+    enhanceResourceText(profile)
   ].join('\n');
 
   return {
@@ -2846,7 +2855,7 @@ function processMultiEnhance(profile, count) {
         subWeaponLine,
         detailMsg,
         ``,
-        resourceText(profile)
+        enhanceResourceText(profile)
       ].join('\n');
 
       return { 
@@ -2886,7 +2895,7 @@ function processMultiEnhance(profile, count) {
     weaponLine,
     detailMsg,
     ``,
-    resourceText(profile)
+    enhanceResourceText(profile)
   ].join('\n');
 
   return {
@@ -2931,9 +2940,9 @@ function showRefineInfo(profile) {
       `🔥 [현재 제련 정보]`,
       `현재 단계: ${currentRefine}성 (${starStr}) ➔ 다음: ${currentRefine + 1}성 (${REFINE_STARS[currentRefine + 1] || '★'})`,
       `💰 제련 필요 재화: ${won(cashCost)}, 금괴 ${goldCost}개`,
-      `배율 | x${currentMult}`,
-      `치명타 데미지 증가 | ${currentCrit}%`,
-      `공격력 증가 | ${currentCp}%`,
+      `배율 x${currentMult} ➔ x${((currentRefine + 1) * 0.10).toFixed(2)}`,
+      `치명타 데미지 증가 ${currentCrit}% ➔ ${currentCrit + 1}%`,
+      `공격력 증가 ${currentCp}% ➔ ${currentCp + 2}%`,
       `📊 성공: ${succP}%`,
       `📊 유지: ${keepP}%`,
       `📊 하락: ${dropP}%`,
