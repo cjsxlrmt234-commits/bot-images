@@ -1813,7 +1813,6 @@ function farmResponseHeader(profile, battle, encounter, missed = false) {
   const grade = encounter ? encounter.grade : FARM_GRADE_STEPS[i];
   const name = encounter ? encounter.fullName : (battle.farmMonster ? battle.farmMonster.fullName : '');
   return [('[' + grade + '] ' + name).trim(),
-    missed ? '' : '처치 확률 : ' + formatFarmChance(getFarmSuccessChance(i, profile)) + '%',
     'HP:' + makeHpBar(battle.hp),
     '🛡️ 투구 : Lv.' + (battle.helmetLevel || 0) + ' |🦺 갑옷 : Lv.' + (battle.vestLevel || 0)
   ].join('\n');
@@ -2048,7 +2047,7 @@ function resolveProgressionFarmTurn(profile, battle) {
       lines.push('', '[' + counter + '] 피해 무효화 · ' + (counter === '풀카운터' ? '100.00%' : '50.00%') + ' 처치 성공');
     } else {
       lines.push('[' + (critical ? '치명타' : '공격') + '] ' + damage,
-        '처치 확률 ' + formatFarmChance(successChance) + '%');
+        grade + ' 몬스터 처치 확률 : ' + formatFarmChance(successChance) + '%');
     }
     if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
     if (gem > 0) lines.push('💎 보석 +' + gem + '개');
@@ -2063,7 +2062,7 @@ function resolveProgressionFarmTurn(profile, battle) {
   const { finalDamage, totalReduce, armorNotes } = calculateCombatDamage(profile, battle, rand(20, 30));
   battle.hp = Math.max(0, battle.hp - finalDamage);
   checkDeath(battle);
-  lines.push('[공격] MISS | HP -' + finalDamage + (totalReduce > 0 ? ' (방어 -' + totalReduce + ')' : ''), attackInfo, ...armorNotes);
+  lines.push('[공격] MISS | HP -' + finalDamage + (totalReduce > 0 ? ' (방어 -' + totalReduce + ')' : ''), ...armorNotes);
   return { text: lines.join('\n'), imageUrl: monster.image || null, missed: true, encounter: { grade, fullName: monster.fullName, gradeIndex } };
 }
 
@@ -5040,7 +5039,7 @@ function processTurn(state, utterance) {
     return {
       text: [farmResponseHeader(profile, battle, fightResult.encounter, fightResult.missed), '',
         displayMsgs.join('\n\n'),
-        ...(hasEnded ? [] : ['', FARM_GRADE_STEPS[getFarmGradeIndex(battle.currentGradeIndex)] + ' 몬스터 : 처치 확률 ' + formatFarmChance(getFarmSuccessChance(battle.currentGradeIndex, profile)) + '%']),
+        ...(hasEnded ? [] : [...(fightResult.missed ? [] : ['']), FARM_GRADE_STEPS[getFarmGradeIndex(battle.currentGradeIndex)] + ' 몬스터 처치 확률 : ' + formatFarmChance(getFarmSuccessChance(battle.currentGradeIndex, profile)) + '%']),
         '', farmResponseFooter(profile, hasEnded)].join('\n'),
       imageUrl: fightResult.imageUrl,
       choices: FARM_CHOICES,
