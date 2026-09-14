@@ -1162,6 +1162,8 @@ function createProfile(existing = {}) {
 
   let profile = {
     version: safeObj.version ?? CURRENT_DATA_VERSION,
+    // 서버가 MongoDB 조회에 사용하는 사용자 ID. 기존 저장 키와 별도로 보존한다.
+    userId: typeof safeObj.userId === 'string' ? safeObj.userId.trim() : '',
     monsterCollection: normalizeMonsterCollection(safeObj.monsterCollection),
     cash: safeObj.cash ?? 0,
     gold: safeObj.gold ?? 0,
@@ -4169,8 +4171,18 @@ function startGame(existingProfile) {
 }
 
 // 반환 state를 저장하는 연동과 전달한 state를 재사용하는 연동을 모두 지원한다.
-function processTurn(state, utterance) {
-  const result = processTurnInternal(state, utterance);
+function processTurn(state, utterance, context = {}) {
+  // context.userId는 서버에서 확인한 본인의 MongoDB 조회 키만 전달한다.
+  // 명령어 인수나 닉네임으로 ID를 설정하거나 생성하지 않는다.
+  const contextId = context && typeof context.userId === 'string' ? context.userId.trim() : '';
+  const stateId = state && typeof state.userId === 'string' ? state.userId.trim() : '';
+  const savedId = state && state.profile && typeof state.profile.userId === 'string' ? state.profile.userId.trim() : '';
+  const userId = contextId || stateId || savedId;
+  const turnState = state && typeof state === 'object' ? state : {};
+  if (userId) turnState.profile = { ...(turnState.profile || {}), userId };
+  const result = processTurnInternal(turnState, utterance);
+  // /초기화에서도 계정 식별자는 삭제하지 않는다.
+  if (userId && result && result.state && result.state.profile) result.state.profile.userId = userId;
   if (state && typeof state === 'object' && result && result.state) {
     state.profile = result.state.profile;
     state.battle = result.state.battle;
@@ -4199,6 +4211,18 @@ function processTurnInternal(state, utterance) {
 
   let input = typeof utterance === 'string' ? utterance.trim().replace(/\s+/g, ' ') : '';
   const cleanInput = input.toLowerCase();
+
+  if (cleanInput === '/id') {
+    return {
+      text: profile.userId
+        ? '🆔 내 ID\n' + profile.userId
+        : '⚠️ 사용자 ID가 게임에 전달되지 않았습니다. 서버에서 MongoDB 조회에 사용하는 ID를 연결해 주세요.',
+      imageUrl: null,
+      choices: [],
+      category: 'id',
+      state: { profile, battle }
+    };
+  }
 
   if (cleanInput === "/메인" || cleanInput === "메인" || cleanInput === "시작" || cleanInput === "처음으로") {
     const startResult = startGame(profile);
@@ -4318,6 +4342,7 @@ function processTurnInternal(state, utterance) {
   if (input === '/' || input === '/도움말') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
+      `• /id - 내 MongoDB 조회용 사용자 ID 확인`,
       `• /파밍 - 파밍 시작 (기존 전투 기능 대체)`,
       `• /컬렉션 [페이지] - 사냥 몬스터 수집 현황 및 영구 효과`,
       `• /강화 - 무기 강화`,
