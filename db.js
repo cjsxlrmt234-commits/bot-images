@@ -1,23 +1,3 @@
-// db.js
-// MongoDB에 게임 진행 상태를 저장/조회한다.
-// 몽고디비 연결 주소가 직접 설정되어 있어 별도의 환경변수 없이도 바로 작동합니다.
-
-const { MongoClient } = require('mongodb');
-
-let clientPromise = null;
-let collectionPromise = null;
-
-function getCollection() {
-  if (collectionPromise) return collectionPromise;
-
-  // 몽고디비 접속 주소 직접 지정
-  const uri = "mongodb+srv://cjsxlrmt234_db_user:cjswls33@cluster0.lysc1oi.mongodb.net/?appName=Cluster0";
-  
-  if (!uri) {
-    throw new Error(
-      'MONGODB_URI가 설정되지 않았습니다.'
-    );
-  }
 
   const dbName = process.env.MONGODB_DB || 'battlegrounds_bot';
 
