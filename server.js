@@ -16,9 +16,19 @@ function getImageUrl(req, category, customImageUrl) {
   return `${req.protocol}://${req.get('host')}/${customImageUrl.replace(/^\/+/, '')}`;
 }
 
+function safeErrorDetails(err) {
+  let details = String(err && err.stack ? err.stack : err && err.message ? err.message : err);
+  const uri = process.env.MONGODB_URI;
+  if (uri) details = details.split(uri).join('[DB 접속 주소 숨김]');
+  details = details.replace(/mongodb(?:\+srv)?:\/\/[^\s'"<>]+/gi, '[DB 접속 주소 숨김]');
+  details = details.replace(/((?:password|passwd|pwd)\s*[:=]\s*)[^\s,;]+/gi, '$1[숨김]');
+  return details.slice(0, 3000);
+}
+
 const RESTART_WORDS = ['다시하기', '재시작', '시작', '게임시작', '시작하기'];
 
 app.post('/skill', async (req, res) => {
+  let stage = '카카오 요청 해석';
   try {
     const parsed = parseSkillRequest(req.body);
     const userId = parsed && parsed.userId;
@@ -27,11 +37,13 @@ app.post('/skill', async (req, res) => {
       return res.json(buildResponse('사용자 식별 정보를 확인할 수 없습니다. 카카오톡 채널에서 다시 입력해 주세요.', []));
     }
 
+    stage = 'MongoDB 조회';
     let state = await getSession(userId);
     if (!state || typeof state !== 'object' || Array.isArray(state)) state = {};
     state.userId = userId;
     state.profile = { ...(state.profile || {}), userId };
 
+    stage = '게임 명령 처리';
     let result;
     if (!utterance || RESTART_WORDS.includes(utterance)) {
       // startGame은 전체 state가 아닌 profile을 받는다.
@@ -54,13 +66,16 @@ app.post('/skill', async (req, res) => {
     const nextState = result.state;
     nextState.userId = userId;
     nextState.profile.userId = userId;
+    stage = 'MongoDB 저장';
     await saveSession(userId, nextState);
+    stage = '카카오 응답 생성';
     return res.json(buildResponse(result.text, result.choices, getImageUrl(req, result.category, result.imageUrl)));
   } catch (err) {
-    console.error('스킬 처리 실패:', err && err.name ? err.name : 'Error');
-    return res.json(buildResponse('오류가 발생했습니다. 잠시 후 다시 시도해주세요.', [
-      { label: '다시하기', action: '다시하기' },
-    ]));
+    console.error('[스킬 처리 실패] 단계=' + stage + '\n' + safeErrorDetails(err));
+    // 응답 생성 함수 자체가 실패해도 최소 오류 응답은 반환한다.
+    return res.json({ version: '2.0', template: { outputs: [
+      { simpleText: { text: '오류가 발생했습니다. 잠시 후 다시 시도해주세요.' } }
+    ] } });
   }
 });
 
@@ -70,6 +85,7 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
+  if (!process.env.MONGODB_URI) console.error('[설정 확인] MONGODB_URI가 없습니다. 서버 환경변수에 MongoDB 접속 주소를 등록해야 게임 데이터를 조회·저장할 수 있습니다.');
   app.listen(PORT, () => console.log(`Skill server listening on port ${PORT}`));
 }
 module.exports = app;
