@@ -1,42 +1,64 @@
+// db.js — MongoDB 게임 상태 저장/조회
+// 서버 환경변수 MONGODB_URI에 MongoDB 접속 주소를 설정하세요.
+const { MongoClient } = require('mongodb');
 
+let clientPromise = null;
+let collectionPromise = null;
+
+function getCollection() {
+  if (collectionPromise) return collectionPromise;
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('MONGODB_URI가 설정되지 않았습니다. 서버 환경변수에 MongoDB 접속 주소를 등록해 주세요.');
   const dbName = process.env.MONGODB_DB || 'battlegrounds_bot';
+  clientPromise = clientPromise || new MongoClient(uri, {
+    serverSelectionTimeoutMS: 3000,
+    connectTimeoutMS: 3000,
+  }).connect();
 
-  // 연결이 안 될 때 카카오의 응답 제한 시간보다 먼저 실패하도록 타임아웃을 짧게 둔다.
-  clientPromise =
-    clientPromise ||
-    new MongoClient(uri, {
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000,
-    }).connect();
-
-  collectionPromise = clientPromise
-    .then((client) => {
-      console.log('MongoDB 연결 성공');
-      return client.db(dbName).collection('sessions');
-    })
-    .catch((err) => {
-      // 연결 실패 시 캐시를 비워서, 다음 요청이 오면 재연결을 다시 시도하게 한다
-      clientPromise = null;
-      collectionPromise = null;
-      throw err;
-    });
-
+  collectionPromise = clientPromise.then(client => {
+    return client.db(dbName).collection('sessions');
+  }).catch(err => {
+    clientPromise = null;
+    collectionPromise = null;
+    throw err;
+  });
   return collectionPromise;
 }
 
-// 유저의 저장된 게임 상태를 가져온다. 없으면 null.
-async function getSession(userId) {
-  const col = await getCollection();
-  const doc = await col.findOne({ _id: userId });
-  return doc ? doc.state : null;
+function validateUserId(userId) {
+  // UID는 서버가 확인한 카카오 사용자 식별자를 전달해야 합니다.
+  // 조회 키가 바뀌지 않도록 임의 변환하거나 새 ID를 만들지 않습니다.
+  if (typeof userId !== 'string' || !userId.trim()) {
+    throw new Error('유효한 문자열 사용자 ID가 필요합니다.');
+  }
+  return userId;
 }
 
-// 유저의 게임 상태를 저장(있으면 갱신, 없으면 새로 생성)한다.
+function withUserId(state, userId) {
+  const saved = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+  const profile = saved.profile && typeof saved.profile === 'object' && !Array.isArray(saved.profile)
+    ? saved.profile : {};
+  return { ...saved, userId, profile: { ...profile, userId } };
+}
+
+async function getSession(userId) {
+  validateUserId(userId);
+  const col = await getCollection();
+  const doc = await col.findOne({ _id: userId });
+  // 신규 사용자도 ID를 전달합니다. 레벨·재화 등 기본값은 game.js가 생성합니다.
+  // 반환값은 기존의 null 대신 ID가 포함된 상태 객체입니다.
+  return withUserId(doc ? doc.state : null, userId);
+}
+
 async function saveSession(userId, state) {
+  validateUserId(userId);
+  if (!state || typeof state !== 'object' || Array.isArray(state)) {
+    throw new Error('저장할 게임 상태가 올바르지 않습니다.');
+  }
   const col = await getCollection();
   await col.updateOne(
     { _id: userId },
-    { $set: { state, updatedAt: new Date() } },
+    { $set: { state: withUserId(state, userId), updatedAt: new Date() } },
     { upsert: true }
   );
 }
