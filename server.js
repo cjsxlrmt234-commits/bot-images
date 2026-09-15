@@ -7,6 +7,16 @@ const { getSession, saveSession, grantAdminResource, getPowerRanking, getSharedR
 
 const app = express();
 app.set('trust proxy', true);
+// 본문이나 UID는 로그에 남기지 않는다. /skill 이외 경로도 수신 여부 확인.
+let requestSequence = 0;
+app.use((req, res, next) => {
+  req.traceId = ++requestSequence;
+  const started = Date.now();
+  console.log('[요청 도착] #' + req.traceId + ' ' + req.method + ' ' + req.path);
+  res.on('finish', () => console.log('[응답 완료] #' + req.traceId + ' status=' + res.statusCode + ' elapsed=' + (Date.now()-started) + 'ms'));
+  res.on('close', () => { if (!res.writableFinished) console.warn('[응답 전 연결 종료] #' + req.traceId); });
+  next();
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -29,6 +39,10 @@ const RESTART_WORDS = ['다시하기', '재시작', '시작', '게임시작', '�
 
 app.post('/skill', async (req, res) => {
   let stage = '카카오 요청 해석';
+  const delayed = setTimeout(() => console.warn('[처리 지연] #' + req.traceId + ' 단계=' + stage + ' (3초 경과, 완료 여부를 확인하세요)'), 3000);
+  const clearDelayed = () => clearTimeout(delayed);
+  res.once('finish', clearDelayed);
+  res.once('close', clearDelayed);
   try {
     const parsed = parseSkillRequest(req.body);
     const userId = parsed && parsed.userId;
@@ -56,12 +70,15 @@ app.post('/skill', async (req, res) => {
     if (!state || typeof state !== 'object' || Array.isArray(state)) state = {};
     state.userId = userId;
     state.profile = { ...(state.profile || {}), userId };
+    console.log('[사용자 조회 완료] #' + req.traceId);
 
     if (/^\/레이드(?:\s|$)/.test(utterance)) {
       const sub = utterance.replace(/^\/레이드/, '').trim();
       if (!['', '공격', '현황'].includes(sub)) return res.json(buildResponse('사용법: /레이드 · /레이드 공격 · /레이드 현황', []));
       stage = '공유 레이드';
+      console.log('[레이드 처리 시작] #' + req.traceId + ' mode=' + (sub || '공격'));
       const result = sub === '현황' ? { raid: await getSharedRaid(), attacked: false } : await attackSharedRaid(userId);
+      console.log('[레이드 DB 완료] #' + req.traceId);
       const rewardText = formatRaidReward(result.raid, userId);
       return res.json(buildResponse([buildRaidText(state.profile, result), result.cashEarned ? '💵 공격 보상 현금 +'+result.cashEarned.toLocaleString()+'원' : '', rewardText].filter(Boolean).join('\n\n'), result.raid.hp > 0 ? [
         { label: '레이드 공격', action: '/레이드 공격' }, { label: '레이드 현황', action: '/레이드 현황' }
@@ -82,6 +99,7 @@ app.post('/skill', async (req, res) => {
       result = startGame(state.profile);
     } else {
       // 신규 사용자도 /id, /출석 등 최초 입력한 명령을 바로 처리한다.
+      console.log('[게임 명령 진입] #' + req.traceId);
       result = processTurn(state, utterance, { userId });
     }
 
@@ -114,6 +132,7 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   if (!process.env.MONGODB_URI) console.error('[설정 확인] MONGODB_URI가 없습니다. 서버 환경변수에 MongoDB 접속 주소를 등록해야 게임 데이터를 조회·저장할 수 있습니다.');
+  console.log('[서버 시작] 요청 진단 로그 활성화 /skill');
   app.listen(PORT, () => console.log(`Skill server listening on port ${PORT}`));
 }
 module.exports = app;
