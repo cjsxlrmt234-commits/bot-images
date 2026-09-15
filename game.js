@@ -1915,8 +1915,7 @@ const PVP_CHOICES = [
 ];
 
 const CREATURE_CHOICES = [
-  { label: '/크리처 뽑기', action: '/크리처 뽑기' },
-  { label: '/크리처', action: '/크리처' }
+  { label: '/크리처 뽑기', action: '/크리처 뽑기' }
 ];
 
 const IMPRINT_CHOICES = [
@@ -2575,9 +2574,9 @@ function createProfile(existing = {}) {
     title: safeObj.title ?? '',
     ownedTitles: Array.isArray(safeObj.ownedTitles) ? [...safeObj.ownedTitles] : [],
     equippedTitle: safeObj.equippedTitle ?? '',
-    ownedAvatars: Array.isArray(safeObj.ownedAvatars) ? [...safeObj.ownedAvatars] : [],
+    ownedAvatars: Array.isArray(safeObj.ownedAvatars) ? [...new Set(safeObj.ownedAvatars.filter(x => typeof x === 'string' && x))] : [],
     equippedAvatar: typeof safeObj.equippedAvatar === 'string' ? safeObj.equippedAvatar : '',
-    equippedAvatarIndex: Number.isInteger(safeObj.equippedAvatarIndex) ? safeObj.equippedAvatarIndex : -1,
+    equippedAvatarIndex: -1, // 중복 제거 후 장착 이름으로 다시 계산
     supplyItem: safeObj.supplyItem ?? safeObj.monthItems ?? 0,
     gamesPlayed: safeObj.gamesPlayed ?? 0,
     maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
@@ -2855,7 +2854,6 @@ function profileText(profile, detailed = false) {
     `🎖️ 직업 : ${jobDisplay}`,
     `🐾 크리처 : ${creatureDisplay}`,
     `🎯 무기 : +${currentEnhance} ${wName}`,
-    `📖 ${wDescription}`,
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 공격력 : ${combatPower.toLocaleString()}`,
@@ -3116,8 +3114,13 @@ function processSupply(profile, countArg = "1") {
         roll = 10 + Math.random() * 90;
       }
     } else if (roll < 10) {
-      profile.ownedAvatars.push(currentMonthAvatar);
-      gainedAvatars.push(`월별 아바타: '${currentMonthAvatar}'`);
+      if (profile.ownedAvatars.includes(currentMonthAvatar)) {
+        totalCash += 1000000;
+        gainedAvatars.push(`중복 아바타: '${currentMonthAvatar}' → 현금 1,000,000원 대체`);
+      } else {
+        profile.ownedAvatars.push(currentMonthAvatar);
+        gainedAvatars.push(`월별 아바타: '${currentMonthAvatar}'`);
+      }
     }
 
     if (roll >= 10) {
@@ -3273,7 +3276,7 @@ function addBoxToInventory(profile, boxKey) {
     category: 'box',
     boxSource: 'farm',
     name: boxData.name,
-    desc: `${boxData.name}입니다. (/상자 개봉 명령어로 사용)`
+    desc: `${boxData.name}입니다. (/상자 [상자번호] [수량] 명령어로 사용)`
   });
   return boxData.name;
 }
@@ -3585,7 +3588,7 @@ function processEnhance(profile) {
 
     resultMsg = `[강화성공] +${initialEnhance} ➔ +${profile[currentEnhanceKey]}\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +${profile[currentEnhanceKey]} ${newWName}` +
-                `\n${detailMsg}`;
+                `\n📖 ${getWeaponInfo(profile[currentEnhanceKey], profile.job)[1]}\n\n${detailMsg}`;
   } else if (roll < successRate + keepRate) {
     resultStatus = 'keep';
     const newStats = getEnhanceStats(profile[currentEnhanceKey], profile.combatLevel || 0, profile);
@@ -3594,7 +3597,7 @@ function processEnhance(profile) {
 
     resultMsg = `[강화 유지] +${initialEnhance} (변동 없음)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +${profile[currentEnhanceKey]} ${currWName}` +
-                `\n${detailMsg}`;
+                `\n📖 ${getWeaponInfo(profile[currentEnhanceKey], profile.job)[1]}\n\n${detailMsg}`;
   } else if (isJob && roll < successRate + keepRate + dropRate) {
     resultStatus = 'drop';
     profile[currentEnhanceKey] = Math.max(0, profile[currentEnhanceKey] - 1);
@@ -3604,7 +3607,7 @@ function processEnhance(profile) {
 
     resultMsg = `[강화 하락] +${initialEnhance} ➔ +${profile[currentEnhanceKey]} (단계 하락)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +${profile[currentEnhanceKey]} ${dropWName}` +
-                `\n${detailMsg}`;
+                `\n📖 ${getWeaponInfo(profile[currentEnhanceKey], profile.job)[1]}\n\n${detailMsg}`;
   } else {
     resultStatus = 'destroy';
     profile[currentEnhanceKey] = 0;
@@ -3614,12 +3617,11 @@ function processEnhance(profile) {
 
     resultMsg = `[무기 파괴] +${initialEnhance} ➔ +0 (파괴)\n(소모 비용: ${won(cost)}${gemCost > 0 ? `, 보석 ${gemCost}개` : ''})\n` +
                 `🎯 무기 : +0 ${zeroWName}` +
-                `\n${detailMsg}`;
+                `\n📖 ${getWeaponInfo(profile[currentEnhanceKey], profile.job)[1]}\n\n${detailMsg}`;
   }
 
   const finalResultText = [
     resultMsg,
-    `📖 ${getWeaponInfo(profile[currentEnhanceKey], profile.job)[1]}`,
     ``,
     enhanceResourceText(profile)
   ].join('\n');
@@ -4016,11 +4018,11 @@ function showAmplifyInfo(profile) {
   
   let lines = [
     `⏩ [현재 증폭 정보]`,
-    `⏩ 증폭 단계 : Lv.${currentLevel}`,
-    `• 배율 가산 : x${currentAmp.multBonus.toFixed(2)}`,
-    `• 치명타 가중치 : ${Math.round(currentAmp.critWeight * 100)}%`,
-    `• 강화 성공 보정 : +${currentAmp.successBonus.toFixed(1)}%`,
-    `• 획득 가능 금괴 수량 : ${currentGoldRange}`
+    `⏩ 증폭 단계 Lv.${currentLevel}`,
+    `• 배율 가산 x${currentAmp.multBonus.toFixed(2)}`,
+    `• 치명타 가중치 ${Math.round(currentAmp.critWeight * 100)}%`,
+    `• 강화 성공 보정 +${currentAmp.successBonus.toFixed(1)}%`,
+    `• 획득 가능 금괴 수량 ${currentGoldRange}`
   ];
 
   if (currentLevel < 10) {
@@ -4028,12 +4030,12 @@ function showAmplifyInfo(profile) {
     const goldRange = nextAmp.minGold === nextAmp.maxGold ? `${nextAmp.minGold.toLocaleString()}개` : `${nextAmp.minGold.toLocaleString()}~${nextAmp.maxGold.toLocaleString()}개`;
     lines.push(
       ``,
-      `⏩ 증폭(Lv.${currentLevel + 1}) 업그레이드 정보:`,
-      `• 필요 금괴 : ${nextAmp.costNext.toLocaleString()}개`,
-      `• 배율 가산 : x${nextAmp.multBonus.toFixed(2)}`,
-      `• 치명타 가중치 : ${Math.round(nextAmp.critWeight * 100)}%`,
-      `• 강화 성공 보정 : +${nextAmp.successBonus.toFixed(1)}%`,
-      `• 획득 가능 금괴 수량 : ${goldRange}`,
+      `⏩ 증폭(Lv.${currentLevel + 1})`,
+      `• 필요 금괴 ${nextAmp.costNext.toLocaleString()}개`,
+      `• 배율 가산 x${nextAmp.multBonus.toFixed(2)}`,
+      `• 치명타 가중치 ${Math.round(nextAmp.critWeight * 100)}%`,
+      `• 강화 성공 보정 +${nextAmp.successBonus.toFixed(1)}%`,
+      `• 획득 가능 금괴 수량 ${goldRange}`,
       ``,
       `증폭 강화를 진행하시려면 [/증폭 강화] 명령어를 입력해 주세요.`
     );
@@ -4081,11 +4083,11 @@ function processAmplify(profile, targetLevels = 1) {
   const resultMsg = [
     `⏩ 증폭 강화 성공!`,
     `[증폭 Lv.${startLevel} ➔ Lv.${profile.combatLevel}]`,
-    `• 소모 금괴: ${totalGoldSpent.toLocaleString()}개`,
-    `• 배율 가산 | x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
-    `• 치명타 가중치 | ${Math.round(prevAmp.critWeight * 100)}% ➔ ${Math.round(nextAmp.critWeight * 100)}%`,
-    `• 강화 성공 보정: +${prevAmp.successBonus.toFixed(1)}% ➔ +${nextAmp.successBonus.toFixed(1)}%`,
-    `• 금괴 획득 수량 | ${goldRangePrev} ➔ ${goldRangeNext}`
+    `• 소모 금괴 ${totalGoldSpent.toLocaleString()}개`,
+    `• 배율 가산 x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
+    `• 치명타 가중치 ${Math.round(prevAmp.critWeight * 100)}% ➔ ${Math.round(nextAmp.critWeight * 100)}%`,
+    `• 강화 성공 보정 +${prevAmp.successBonus.toFixed(1)}% ➔ +${nextAmp.successBonus.toFixed(1)}%`,
+    `• 금괴 획득 수량 ${goldRangePrev} ➔ ${goldRangeNext}`
   ].join('\n');
 
   return { 
@@ -4159,7 +4161,9 @@ function processUpdatedBoxesCommand(profile, arg) {
   if (!Array.isArray(profile.inventory)) profile.inventory = [];
   if (!Array.isArray(profile.ownedTitles)) profile.ownedTitles = [];
 
-  let cleanArg = (arg || '').trim().replace(/^개봉\s*/, '');
+  let cleanArg = (arg || '').trim();
+  if (cleanArg && !/^[1-9]\d*\s+[1-9]\d*$/.test(cleanArg)) return { text: '사용법: /상자 [상자번호] [수량] (예: /상자 1 2)' };
+  if (cleanArg && !cleanArg.split(/\s+/).every(x => Number.isSafeInteger(Number(x)))) return { text: '상자번호와 수량은 올바른 정수로 입력해 주세요.' };
   const parts = cleanArg.split(/\s+/).filter(Boolean);
   const catalog = getBoxCatalog();
 
@@ -4691,7 +4695,7 @@ function processImprintCommand(profile) {
     }
   });
 
-  const showHelp = checkAndMarkHelp(profile, 'imprint');
+  const showHelp = true;
   if (showHelp) {
     lines.push(`\n💡 사용 가능한 명령어:`);
     lines.push(`• /각인 해금 [1~5] - 조건 만족 시 해당 슬롯 해금`);
@@ -5034,9 +5038,9 @@ function processHunt(playerState) {
           category: 'box',
           boxSource: 'hunt',
           name: boxData.name,
-          desc: `${boxData.name}입니다. (/상자 개봉 명령어로 사용)`
+          desc: `${boxData.name}입니다. (/상자 [상자번호] [수량] 명령어로 사용)`
         });
-        droppedLootTexts.push(`🎁 [상자 획득!] [${boxData.name}]을(를) 획득했습니다! (/상자 개봉 명령어로 사용 가능)`);
+        droppedLootTexts.push(`🎁 [상자 획득!] [${boxData.name}]을(를) 획득했습니다! (/상자 [상자번호] [수량] 명령어로 사용 가능)`);
       }
     }
 
@@ -5718,36 +5722,28 @@ function processTurnInternal(state, utterance, context = {}) {
   if (input === '/' || input === '/도움말') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
-      `• /랭킹 - 공격력 상위 5명`,
-      `• /id - 내 MongoDB 조회용 사용자 ID 확인`,
+      `• /랭킹 - 공격력 랭킹`,
+      `• /id - 사용자 ID 확인`,
       `• /레이드 - 협동 레이드 공격 (현황: /레이드 현황)`,
       `• /파밍 - 파밍 시작 (기존 전투 기능 대체)`,
       `• /컬렉션 [페이지] - 사냥 몬스터 수집 현황 및 영구 효과`,
       `• /강화 - 무기 강화`,
       `• /제련 - 제련 정보 확인`,
-      `• /제련 강화 - 무기 제련 시도`,
       `• /연속 강화 [횟수] - 지정 횟수만큼 연속 강화`,
       `• /증폭 - 증폭 정보 확인`,
-      `• /증폭 강화 [수량] - 금괴로 공격력 증폭 강화`,
       `• /배속 [1~10] - 증폭 레벨 제한 내에서 보상 배속 설정`,
       `• /금고 - 금고 정보 확인 및 입/출금/구매/레벨업`,
       `• /열쇠 [수량] - 비밀열쇠를 지정한 수량만큼 연속 사용`,
-      `• /상자 - 보유 상자 확인 및 개봉 (/상자 개봉 [상자번호] [수량])`,
+      `• /상자 - 보유 상자 확인 및 개봉 (/상자 [상자번호] [수량])`,
       `• /보급 [수량] - 보급 재화를 사용해 칭호 및 재화 획득`,
       `• /칭호 - 칭호 정보 및 보유 목록 확인`,
-      `• /칭호 장착 [숫자] - 보유한 칭호 장착`,
       `• /아바타 - 아바타 정보 및 보유 목록 확인`,
-      `• /아바타 장착 [숫자] - 보유한 아바타 장착`,
       `• /크리처 - 현재 크리처 정보 및 등급 확인`,
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
-      `• /스킬 - 액티브 스킬 사용 (섀도우: /스킬 [금액], 마검사: /스킬)`,
-      `• /대결 - 1대1 대결 (승리 시 본인 공격력*10 금액 수령, 일 10회)`,
-      `• /던전 - 전 직업 입장 가능 던전 (일 10회)`,
+      `• /스킬 - 액티브 스킬 사용`,
+      `• /대결 - 1대1 대결`,
+      `• /던전 - 고등급 던전 입장`,
       `• /각인 - 각인 정보 확인`,
-      `• /각인 해금 [1~5] - 조건 만족 시 해당 슬롯 해금`,
-      `• /각인 잠금 [1~5] - 해당 슬롯 옵션 잠금`,
-      `• /각인 해제 [1~5] - 잠긴 슬롯 해제`,
-      `• /각인 변경 - 각인 변경`,
       `• /전리품 - 획득한 전리품 확인`,
       `• /프로필 - 내 정보 확인`,
       `• /사냥 - 몬스터 사냥 및 현금 보상 획득`,
@@ -5766,7 +5762,7 @@ function processTurnInternal(state, utterance, context = {}) {
   if (command === '/제련' && arg.startsWith('강화')) {
     command = '/제련 강화';
     arg = arg.replace(/^강화\s*/, '').trim();
-  } else if (command === '/연속' && arg.startsWith('강화')) {
+  } else if (command === '/연속' && /^강화(?:\s|$)/.test(arg)) {
     command = '/연속 강화';
     arg = arg.replace(/^강화\s*/, '').trim();
   } else if (command === '/증폭' && arg.startsWith('강화')) {
@@ -5921,9 +5917,9 @@ function processTurnInternal(state, utterance, context = {}) {
   }
 
   // 4. /연속 강화 명령어
-  if (command === '/연속 강화' || command === '/연속강화') {
+  if (command === '/연속 강화') {
     let count = parseInt(arg, 10);
-    if (isNaN(count) || count < 1) count = 10;
+    if (!/^[1-9]\d*$/.test(arg) || !Number.isSafeInteger(Number(arg))) return { text: '사용법: /연속 강화 [횟수]', choices: [], state: { profile, battle } };
 
     const mResult = processMultiEnhance(profile, count);
     return {
@@ -6042,7 +6038,7 @@ function processTurnInternal(state, utterance, context = {}) {
       return {
         text: tEquip.text,
         imageUrl: null,
-        choices: END_BATTLE_CHOICES,
+        choices: [],
         category: 'titleEquip',
         state: { profile, battle }
       };
@@ -6052,7 +6048,7 @@ function processTurnInternal(state, utterance, context = {}) {
     return {
       text: tInfo.text,
       imageUrl: null,
-      choices: END_BATTLE_CHOICES,
+      choices: [],
       category: 'titleInfo',
       state: { profile, battle }
     };
@@ -6066,7 +6062,7 @@ function processTurnInternal(state, utterance, context = {}) {
       return {
         text: avatarEquip.text,
         imageUrl: null,
-        choices: END_BATTLE_CHOICES,
+        choices: [],
         category: 'avatarEquip',
         state: { profile, battle }
       };
@@ -6076,7 +6072,7 @@ function processTurnInternal(state, utterance, context = {}) {
     return {
       text: avatarInfo.text,
       imageUrl: null,
-      choices: END_BATTLE_CHOICES,
+      choices: [],
       category: 'avatarInfo',
       state: { profile, battle }
     };
