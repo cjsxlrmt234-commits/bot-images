@@ -80,9 +80,11 @@ app.post('/skill', async (req, res) => {
       const result = sub === '현황' ? { raid: await getSharedRaid(), attacked: false } : await attackSharedRaid(userId);
       console.log('[레이드 DB 완료] #' + req.traceId);
       const rewardText = formatRaidReward(result.raid, userId);
-      return res.json(buildResponse([buildRaidText(state.profile, result), result.cashEarned ? '💵 공격 보상 현금 +'+result.cashEarned.toLocaleString()+'원' : '', rewardText].filter(Boolean).join('\n\n'), result.raid.hp > 0 ? [
+      const raidResponse = buildResponse([buildRaidText(state.profile, result), result.cashEarned ? '💵 공격 보상 현금 +'+result.cashEarned.toLocaleString()+'원' : '', rewardText].filter(Boolean).join('\n\n'), result.raid.hp > 0 ? [
         { label: '레이드 공격', action: '/레이드 공격' }, { label: '레이드 현황', action: '/레이드 현황' }
-      ] : [], RAID_IMAGE));
+      ] : [], null);
+      console.log('[레이드 응답 구성] #' + req.traceId + ' outputs=' + raidResponse.template.outputs.map(x => Object.keys(x)[0]).join(',') + ' textLength=' + raidResponse.template.outputs[0].simpleText.text.length);
+      return res.json(raidResponse);
     }
 
     stage = '게임 명령 처리';
