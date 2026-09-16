@@ -48,7 +48,7 @@ async function getSession(userId) {
   const doc = await col.findOne({ _id: userId });
   // 신규 사용자도 ID를 전달합니다. 레벨·재화 등 기본값은 game.js가 생성합니다.
   // 반환값은 기존의 null 대신 ID가 포함된 상태 객체입니다.
-  return { ...withUserId(doc ? doc.state : null, userId), _dbRevision: doc && Number.isSafeInteger(doc.revision) ? doc.revision : 0, _dbExists: !!doc };
+  return { ...withUserId(doc ? doc.state : null, userId), _dbRevision: doc && Number.isSafeInteger(doc.revision) ? doc.revision : 0, _dbExists: !!doc, _combatReadyAt: doc && doc.combatReadyAt || 0 };
 }
 
 async function saveSession(userId, state, expected = { revision: state && state._dbRevision, exists: state && state._dbExists }) {
@@ -58,7 +58,7 @@ async function saveSession(userId, state, expected = { revision: state && state.
   await ensureNicknames();
   const stored = withUserId(state, userId);
   stored.profile.nickname = await reserveNickname(userId, stored.profile.nickname || createProfile({}).nickname);
-  delete stored._dbRevision; delete stored._dbExists;
+  delete stored._dbRevision; delete stored._dbExists; delete stored._combatReadyAt;
   const conflict = () => { const err = new Error('다른 요청이 먼저 저장되었습니다. 다시 시도해 주세요.'); err.code = 'STATE_CONFLICT'; return err; };
   if (!expected.exists) {
     try { await col.insertOne({ _id: userId, state: stored, revision: 1, updatedAt: new Date() }); }
@@ -72,7 +72,7 @@ async function saveSession(userId, state, expected = { revision: state && state.
 }
 
 // 공격·처치·참여자 보상은 한 트랜잭션으로 확정한다 (MongoDB Atlas).
-const { createProfile, getRaidAttackPower, isGameAdmin, ADMIN_RESOURCES } = require('./game');
+const { createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
 const RAID_ID = 'world-boss-rewards-v1';
 const RAID_HP = 100000000;
 const RAID_REWARDS = Object.freeze({ cash: 10000000, gold: 1000, gem: 1000, keys: 100 });
@@ -125,7 +125,8 @@ async function getPowerRanking() {
     if (!doc.state || !doc.state.profile || typeof doc._id !== 'string') continue;
     const profile = createProfile({ ...doc.state.profile, nickname: doc.state.profile.nickname || '이름 없는 유저' });
     const power = getRaidAttackPower(profile);
-    top.push({ id: doc._id, nickname: profile.nickname, power });
+    const enhance = getCurrentEnhanceLevel(profile);
+    top.push({ id: doc._id, nickname: profile.nickname, power, level: profile.level, enhance, weaponName:getWeaponInfo(enhance,profile.job)[0] });
     top.sort((a, b) => b.power - a.power || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (top.length > 5) top.pop();
   }
@@ -159,46 +160,114 @@ function distributeRaidRewards(participants) {
   }
   return rows;
 }
-async function attackSharedRaid(userId) {
-  validateUserId(userId);
-  await ensureNicknames();
-  const existingUser = await (await getCollection()).findOne({_id:userId});
-  const fallbackNickname = existingUser && existingUser.state && existingUser.state.profile && existingUser.state.profile.nickname || await reserveNickname(userId, createProfile({}).nickname);
-  const db = await database(); await ensureRaid(db);
-  return transaction(async (db, session) => {
-    const raids = db.collection('raids'), users = db.collection('sessions');
-    const raid = await raids.findOne({ _id: RAID_ID }, { session });
-    if (raid.hp <= 0) return { raid, attacked: false, damage: 0 };
-    const doc = await users.findOne({ _id: userId }, { session });
-    const profile = createProfile(doc && doc.state ? doc.state.profile : { userId, nickname: fallbackNickname });
-    const attackPower = getRaidAttackPower(profile);
-    if (attackPower <= 0) return { raid, attacked: false, damage: 0, attackPower };
-    if (!doc) await users.insertOne({ _id: userId, state: withUserId({ profile }, userId), revision: 0, updatedAt: new Date() }, { session });
-    const attackerState = withUserId(doc ? doc.state : {profile}, userId);
-    addResources(attackerState.profile, {cash: attackPower});
-    await users.updateOne({_id:userId}, {$set:{state:attackerState,updatedAt:new Date()},$inc:{revision:1}}, {session});
-    const damage = Math.min(raid.hp, attackPower);
-    const participant = raid.participants.find(p => p.userId === userId);
-    if (participant) participant.damage += damage;
-    else raid.participants.push({ userId, damage });
-    raid.hp -= damage; raid.attackCount++; raid.updatedAt = new Date();
-    if (raid.hp === 0) {
-      raid.rewards = distributeRaidRewards(raid.participants);
-      for (const reward of raid.rewards) {
-        const player = await users.findOne({ _id: reward.userId }, { session });
-        if (!player) throw new Error('레이드 참여자의 저장 데이터가 없습니다.');
-        const state = withUserId(player.state, reward.userId);
-        addResources(state.profile, { cash: reward.cash, gold: reward.gold, gem: reward.gem, keys: reward.keys });
-        await users.updateOne({ _id: reward.userId }, { $set: { state, updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
-      }
-      raid.defeatedAt = new Date(); raid.rewardPaid = true;
+// Compare-and-save game state, cooldown and shared raid rewards together.
+// Random samples are captured outside the retrying transaction and replayed inside it.
+async function commitGameTurn(userId, nextState, expected, options = {}) {
+  validateUserId(userId); await ensureNicknames();
+  if (!nextState || !nextState.profile || !expected || !Number.isSafeInteger(expected.revision) || typeof expected.exists !== 'boolean') throw new Error('게임 저장 정보가 없습니다.');
+  const prepared=withUserId(nextState,userId);
+  delete prepared._dbRevision;delete prepared._dbExists;delete prepared._combatReadyAt;
+  prepared.profile.nickname=await reserveNickname(userId,prepared.profile.nickname || createProfile({}).nickname);
+  const combat=options.combatPerformed === true && ['farm','hunt'].includes(options.source);
+  const adminRaid=options.adminRaid === true, adminJob=options.adminJob === true;
+  if((adminRaid || adminJob) && !isGameAdmin(userId))throw new Error('관리자만 사용할 수 있습니다.');
+  const raidAction=combat || adminRaid;
+  const rolls=Array.from({length:8},()=>Math.random());
+  if(raidAction) await ensureRaid(await database());
+  return transaction(async(db,session)=>{
+    const users=db.collection('sessions');
+    const current=await users.findOne({_id:userId},{session});
+    const now=Date.now();
+    if(combat && current && current.combatReadyAt > now) {
+      const err=new Error('잠시 후 다시 시도하세요.');err.code='COOLDOWN';err.remainingMs=current.combatReadyAt-now;throw err;
     }
-    await raids.replaceOne({ _id: RAID_ID }, raid, { session });
-    return { raid, attacked: true, damage, attackPower, cashEarned: attackPower, defeated: raid.hp === 0 };
+    if(!!current!==expected.exists || (current && (current.revision || 0)!==expected.revision)) {
+      const err=new Error('다른 명령이 먼저 저장되었습니다.');err.code='STATE_CONFLICT';throw err;
+    }
+    const stored=JSON.parse(JSON.stringify(prepared));
+    const update={state:stored,revision:expected.revision+1,updatedAt:new Date()};
+    if(combat)update.combatReadyAt=now+2000;
+    if(current)await users.updateOne({_id:userId},{$set:update},{session});
+    else await users.insertOne({_id:userId,...update},{session});
+    let raidResult=null;
+    if(raidAction) {
+      const raids=db.collection('raids');
+      let raid=await raids.findOne({_id:RAID_ID},{session});
+      let discovered=false;
+      const pristine=!raid.discoveredBy && !(raid.attackCount>0) && !(raid.participants||[]).length;
+      if((raid.hp===0 || pristine) && (adminRaid || rolls[0]<0.001)) {
+        const oldGeneration=raid.generation || 1;
+        if(raid.hp===0) {
+          const historyId=RAID_ID+':'+oldGeneration;
+          await db.collection('raid_history').updateOne({_id:historyId},{$setOnInsert:{...raid,_id:historyId}},{upsert:true,session});
+        }
+        raid={_id:RAID_ID,generation:raid.hp===0 ? oldGeneration+1 : oldGeneration,hp:RAID_HP,maxHp:RAID_HP,attackCount:0,participants:[],rewards:[],createdAt:new Date(),discoveredBy:userId,discoveredNickname:stored.profile.nickname,discoveredAt:new Date()};
+        addRaidBox(stored.profile);
+        await users.updateOne({_id:userId},{$set:{state:stored}},{session});
+        await raids.replaceOne({_id:RAID_ID},raid,{session});
+        discovered=true;
+        raidResult={raid,discovered:true,attacked:false,raidBoxAwarded:'discover'};
+      }
+      let index=0;
+      const hit=resolveRaidAttack(stored.profile,raid,{source:options.source || 'farm',random:()=>{if(discovered && !adminRaid && index===0){index=1;return 0;}return rolls[index++];},forceEncounter:adminRaid,actorId:userId});
+      if(hit.attacked) {
+        addResources(stored.profile,{cash:hit.cashEarned,gold:hit.goldEarned,gem:hit.gemEarned});
+        await users.updateOne({_id:userId},{$set:{state:stored}},{session});
+        const participant=raid.participants.find(p=>p.userId===userId);
+        if(participant)participant.damage+=hit.damage;else raid.participants.push({userId,damage:hit.damage});
+        raid.hp-=hit.damage;raid.attackCount++;raid.updatedAt=new Date();
+        if(raid.hp===0) {
+          raid.rewards=distributeRaidRewards(raid.participants);
+          for(const reward of raid.rewards) {
+            const player=await users.findOne({_id:reward.userId},{session});
+            if(!player)throw new Error('레이드 참여자의 계정이 없습니다.');
+            const state=withUserId(player.state,reward.userId);
+            addResources(state.profile,{cash:reward.cash,gold:reward.gold,gem:reward.gem,keys:reward.keys});
+            if(reward.userId===userId)addRaidBox(state.profile);
+            await users.updateOne({_id:reward.userId},{$set:{state,updatedAt:new Date()},$inc:{revision:1}},{session});
+          }
+          raid.rewardPaid=true;raid.defeatedAt=new Date();raid.killedBy=userId;raid.killerNickname=stored.profile.nickname;
+        }
+        await raids.replaceOne({_id:RAID_ID},raid,{session});
+        if(raid.hp===0) {
+          const historyId=RAID_ID+':'+(raid.generation || 1);
+          await db.collection('raid_history').updateOne({_id:historyId},{$setOnInsert:{...raid,_id:historyId}},{upsert:true,session});
+        }
+        raidResult={...hit,raid,discovered,raidBoxAwarded:hit.defeated ? 'kill' : discovered ? 'discover' : null};
+      }
+    }
+    if(adminRaid || adminJob)await db.collection('admin_grants').insertOne({actorId:userId,targetId:userId,action:adminRaid?'forceRaid':'forceJob',job:stored.profile.job,createdAt:new Date()},{session});
+    const final=await users.findOne({_id:userId},{session});
+    return {state:final.state,raidResult};
   });
 }
-
-module.exports = { getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, attackSharedRaid };
+async function renameUser(actorId,targetId,requestedName) {
+  if(!isGameAdmin(actorId))throw new Error('관리자만 사용할 수 있습니다.');
+  validateUserId(targetId);await ensureNicknames();
+  const nickname=String(requestedName || '').normalize('NFKC').trim();
+  if(!nickname || Array.from(nickname).length>60 || /[\x00-\x1f\x7f]/.test(nickname))throw new Error('닉네임은 제어문자 없이 1~60자로 입력하세요.');
+  return nicknameTransaction(async(db,session)=>{
+    const users=db.collection('sessions'),claims=db.collection('nickname_claims');
+    const doc=await users.findOne({_id:targetId},{session});if(!doc)return {found:false};
+    const key=nickname.toLocaleLowerCase('en-US');
+    const claim=await claims.findOne({_id:key},{session});
+    if(claim && claim.userId!==targetId) {
+      const owner=await users.findOne({_id:claim.userId},{session});
+      if(owner && nicknameBase(owner.state?.profile?.nickname).toLocaleLowerCase('en-US')===key)return {found:true,duplicate:true};
+    }
+    const replacement={_id:key,userId:targetId,nickname};
+    if(claim)await claims.replaceOne({_id:key},replacement,{session});
+    else await claims.insertOne(replacement,{session});
+    const previous=doc.state?.profile?.nickname || '';
+    const state=withUserId(doc.state,targetId);state.profile.nickname=nickname;
+    await users.updateOne({_id:targetId},{$set:{state,updatedAt:new Date()},$inc:{revision:1}},{session});
+    const oldKey=nicknameBase(previous).toLocaleLowerCase('en-US');
+    if(previous && oldKey!==key)await claims.deleteOne({_id:oldKey,userId:targetId},{session});
+    await db.collection('admin_grants').insertOne({actorId,targetId,action:'rename',previous,nickname,createdAt:new Date()},{session});
+    return {found:true,duplicate:false,nickname};
+  });
+}
+module.exports = { getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn };
 
 // Names are claimed in MongoDB by a unique _id. Claims are never released, so a
 // concurrent reset/save cannot let a second account take the same nickname.
