@@ -1,9 +1,9 @@
 // server.js — 카카오톡 챗봇 스킬 서버
 const path = require('path');
 const express = require('express');
-const { startGame, processTurn, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, RAID_IMAGE } = require('./game');
+const { startGame, processTurn, createProfile, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
 const { buildResponse, parseSkillRequest } = require('./kakao');
-const { getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, attackSharedRaid } = require('./db');
+const { getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn } = require('./db');
 
 const app = express();
 app.set('trust proxy', true);
@@ -53,9 +53,17 @@ app.post('/skill', async (req, res) => {
 
     // 요청 발신 UID를 기준으로 검사하며 명령에 적힌 대상 UID로 권한을 판정하지 않는다.
     if (requiresGameAdmin(utterance) && !isGameAdmin(userId)) return res.json(buildResponse('관리자만 사용할 수 있는 명령어입니다.', []));
-    if (/^\/관리자(?:\s|$)/.test(utterance)) {
+    const adminRaidCommand=utterance === '/관리자 레이드';
+    const adminJobCommand=/^\/관리자\s+전직\s+\S+$/.test(utterance);
+    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand) {
+      const rename=parseAdminRename(utterance);
+      if(rename) {
+        stage='관리자 닉네임 변경';
+        const result=await renameUser(userId,rename.targetId,rename.nickname);
+        return res.json(buildResponse(!result.found ? '해당 UID의 계정이 없습니다.' : result.duplicate ? '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.' : '✅ 닉네임 변경 완료\n'+result.nickname,[]));
+      }
       const grant = parseAdminGrant(utterance);
-      if (!grant) return res.json(buildResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수', []));
+      if (!grant) return res.json(buildResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명', []));
       stage = '관리자 재화 지급';
       const paid = await grantAdminResource(userId, grant.targetId, grant.field, grant.amount);
       return res.json(buildResponse(paid.found ? '✅ 지급 완료\n대상: ' + grant.targetId + '\n' + grant.label + ' +' + grant.amount.toLocaleString() + (grant.field === 'cash' ? '원' : '개') : '해당 UID의 게임 계정이 없습니다. UID를 확인해 주세요.', []));
@@ -72,20 +80,20 @@ app.post('/skill', async (req, res) => {
     state.profile = { ...(state.profile || {}), userId };
     console.log('[사용자 조회 완료] #' + req.traceId);
 
-    if (/^\/레이드(?:\s|$)/.test(utterance)) {
-      const sub = utterance.replace(/^\/레이드/, '').trim();
-      if (!['', '공격', '현황'].includes(sub)) return res.json(buildResponse('사용법: /레이드 · /레이드 공격 · /레이드 현황', []));
-      stage = '공유 레이드';
-      console.log('[레이드 처리 시작] #' + req.traceId + ' mode=' + (sub || '공격'));
-      const result = sub === '현황' ? { raid: await getSharedRaid(), attacked: false } : await attackSharedRaid(userId);
-      console.log('[레이드 DB 완료] #' + req.traceId);
-      const rewardText = formatRaidReward(result.raid, userId);
-      const raidResponse = buildResponse([buildRaidText(state.profile, result), result.cashEarned ? '💵 공격 보상 현금 +'+result.cashEarned.toLocaleString()+'원' : '', rewardText].filter(Boolean).join('\n\n'), result.raid.hp > 0 ? [
-        { label: '레이드 공격', action: '/레이드 공격' }, { label: '레이드 현황', action: '/레이드 현황' }
-      ] : [], null);
-      console.log('[레이드 응답 구성] #' + req.traceId + ' outputs=' + raidResponse.template.outputs.map(x => Object.keys(x)[0]).join(',') + ' textLength=' + raidResponse.template.outputs[0].simpleText.text.length);
-      return res.json(raidResponse);
+    if(adminRaidCommand) {
+      const nextState={...state,profile:createProfile(state.profile)};
+      const committed=await commitGameTurn(userId,nextState,{revision:state._dbRevision,exists:state._dbExists},{adminRaid:true});
+      const raidResult=committed.raidResult || {raid:await getSharedRaid(),attacked:false};
+      return res.json(buildResponse([buildRaidText(committed.state.profile,raidResult),formatRaidReward(raidResult.raid,userId)].filter(Boolean).join('\n\n'),[],RAID_IMAGE));
     }
+    if (/^\/레이드(?:\s|$)/.test(utterance)) {
+      if (utterance !== '/레이드') return res.json(buildResponse('레이드는 /레이드로 조회하세요. 공격은 /파밍·/사냥 중 조우했을 때 자동으로 진행됩니다.',[]));
+      stage='레이드 조회';
+      const raid=await getSharedRaid();
+      return res.json(buildResponse([buildRaidText(state.profile,{raid,attacked:false}),formatRaidReward(raid,userId)].filter(Boolean).join('\n\n'),[],RAID_IMAGE));
+    }
+    const combatCommand=/^\/(파밍|사냥)(?:\s|$)/.test(utterance);
+    if(combatCommand && state._combatReadyAt > Date.now()) return res.json(buildResponse('⏳ 파밍·사냥은 2초마다 가능합니다. '+((state._combatReadyAt-Date.now())/1000).toFixed(1)+'초 후 다시 입력하세요.',[]));
 
     stage = '게임 명령 처리';
     let result;
@@ -102,22 +110,40 @@ app.post('/skill', async (req, res) => {
     } else {
       // 신규 사용자도 /id, /출석 등 최초 입력한 명령을 바로 처리한다.
       console.log('[게임 명령 진입] #' + req.traceId);
-      result = processTurn(state, utterance, { userId });
+      result = processTurn(state, utterance, { userId, sharedRaidPassives:true });
     }
 
     if (!result || !result.state || !result.state.profile) {
       throw new Error('게임 처리 결과에 저장할 상태가 없습니다.');
     }
-    const nextState = result.state;
+    let nextState = result.state;
     nextState.userId = userId;
     nextState.profile.userId = userId;
     stage = 'MongoDB 저장';
     const displayedNickname = nextState.profile.nickname;
-    await saveSession(userId, nextState, { revision: state._dbRevision, exists: state._dbExists });
+    const expected={revision:state._dbRevision,exists:state._dbExists};
+    if(adminJobCommand && result.adminAction === 'job') {
+      const committed=await commitGameTurn(userId,nextState,expected,{adminJob:true});
+      nextState=committed.state;
+    } else if(combatCommand && result.combatPerformed === true) {
+      const beforeResources=resourceText(nextState.profile);
+      const committed=await commitGameTurn(userId,nextState,expected,{combatPerformed:true,source:result.category});
+      nextState=committed.state;
+      result.text=result.text.split(beforeResources).join(resourceText(nextState.profile));
+      if(committed.raidResult) {
+        result.text += '\n\n'+buildRaidText(nextState.profile,committed.raidResult);
+        const reward=formatRaidReward(committed.raidResult.raid,userId);
+        if(reward)result.text+='\n\n'+reward;
+        result.imageUrl=RAID_IMAGE;
+      }
+    } else {
+      await saveSession(userId,nextState,expected);
+    }
     if (displayedNickname && nextState.profile.nickname !== displayedNickname && typeof result.text === 'string') result.text = result.text.split(displayedNickname).join(nextState.profile.nickname);
     stage = '카카오 응답 생성';
     return res.json(buildResponse(result.text, result.choices, getImageUrl(req, result.category, result.imageUrl)));
   } catch (err) {
+    if (err && err.code === 'COOLDOWN') return res.json(buildResponse('⏳ 파밍·사냥은 2초마다 가능합니다. '+(Math.max(0,err.remainingMs)/1000).toFixed(1)+'초 후 다시 입력하세요.',[]));
     if (err && err.code === 'STATE_CONFLICT') return res.json(buildResponse('다른 명령이 먼저 반영되었습니다. 이번 명령을 다시 입력해 주세요.', []));
     console.error('[스킬 처리 실패] 단계=' + stage + '\n' + safeErrorDetails(err));
     // 응답 생성 함수 자체가 실패해도 최소 오류 응답은 반환한다.
