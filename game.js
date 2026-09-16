@@ -95,7 +95,8 @@ const JOB_NAMES = Object.fromEntries(Object.entries(JOB_CATALOG).map(([k,v])=>[k
 
 const VAULT_CAPACITY_PER_LEVEL = 2000000;
 const EXP_PER_LEVEL_BASE = 200;
-const FARM_DAILY_LIMIT = 200;
+const FARM_DAILY_LIMIT = 1000;
+const FARM_QUEST_MILESTONES = [100,250,500,1000,1500,2000];
 const JOB_UNLOCK_CASH = 50000000;
 const JOB_UNLOCK_GOLD = 500;
 const JOB_CHANGE_CASH = 100000000;
@@ -162,25 +163,78 @@ function getCreatureImage(gradeCode) {
 }
 
 const prefixes = {
-  "D+등급": ["초보", "약한", "지저분한", "배고픈", "겁먹은"],
-  "D++등급": ["흉악한", "날카로운", "광폭한", "변종", "돌연변이"],
-  "C+등급": ["단단한", "날쌘", "거친", "사나운", "독이 묻은"],
-  "C++등급": ["강철", "맹독", "원혼의", "기괴한", "폭주한"],
-  "B+등급": ["거대한", "흉포한", "타락한", "어둠의", "철갑"],
-  "B++등급": ["혈투의", "지옥의", "심연의", "저주받은", "사령"],
-  "A+등급": ["광폭한", "고대의", "지옥의", "군주", "수호자"],
-  "A++등급": ["파멸의", "초월적", "대재앙", "전설의", "불멸의"],
-  "S+등급": ["파멸의", "절망의", "신들의", "혼돈의", "태초의"],
-  "S++등급": ["신역의", "창세의", "우주의", "공허의", "무한의"],
-  "SS+등급": ["차원의", "시공의", "초신성", "절대자", "계시의"],
-  "SS++등급": ["신격의", "영원의", "무극의", "근원의", "종언의"],
-  "SSS+등급": ["전능의", "천상의", "만물의", "신화의", "무한대의"],
-  "SSS++등급": ["차원초월", "창조주의", "전지전능", "신들의군주", "세계선의"],
-  "EX+등급": ["빅뱅의", "태초근원", "우주창조", "신역초월", "절대신"],
-  "EX++등급": ["전무후무", "신화의정점", "세계의의지", "궁극의", "시공초월"]
+  "E+등급": [
+    "날쌘",
+    "겁없는",
+    "성난",
+    "튼튼한",
+    "배고픈"
+  ],
+  "D+등급": [
+    "초보",
+    "약한",
+    "지저분한",
+    "배고픈",
+    "겁먹은"
+  ],
+  "C+등급": [
+    "단단한",
+    "날쌘",
+    "거친",
+    "사나운",
+    "독이 묻은"
+  ],
+  "B+등급": [
+    "거대한",
+    "흉포한",
+    "타락한",
+    "어둠의",
+    "철갑"
+  ],
+  "A+등급": [
+    "광폭한",
+    "고대의",
+    "지옥의",
+    "군주",
+    "수호자"
+  ],
+  "S+등급": [
+    "파멸의",
+    "절망의",
+    "신들의",
+    "혼돈의",
+    "태초의"
+  ],
+  "EX+등급": [
+    "빅뱅의",
+    "태초근원",
+    "우주창조",
+    "신역초월",
+    "절대신"
+  ]
 };
 
 const monsters = [
+  {name:"생쥐",grade:"E등급",description:"작고 재빠른 최하급 몬스터",image:`${BASE_URL}/images/E_1.png`},
+  {name:"참새",grade:"E등급",description:"떼로 날아다니며 공격하는 작은 새",image:`${BASE_URL}/images/E_2.png`},
+  {name:"두더지",grade:"E등급",description:"땅속에 숨어 있다 튀어나오는 몬스터",image:`${BASE_URL}/images/E_3.png`},
+  {name:"청개구리",grade:"E등급",description:"통통 뛰어다니는 습지 몬스터",image:`${BASE_URL}/images/E_4.png`},
+  {name:"다람쥐",grade:"E등급",description:"도토리를 던져 공격하는 숲 몬스터",image:`${BASE_URL}/images/E_5.png`},
+  {name:"햄스터",grade:"E등급",description:"몸통 박치기를 하는 둥근 몬스터",image:`${BASE_URL}/images/E_6.png`},
+  {name:"병아리",grade:"E등급",description:"떼로 몰려다니는 초원 몬스터",image:`${BASE_URL}/images/E_7.png`},
+  {name:"토끼",grade:"E등급",description:"빠른 점프로 공격을 피하는 몬스터",image:`${BASE_URL}/images/E_8.png`},
+  {name:"고슴도치",grade:"E등급",description:"작은 가시를 세워 방어하는 몬스터",image:`${BASE_URL}/images/E_9.png`},
+  {name:"족제비",grade:"E등급",description:"빠르게 달려들어 물고 도망가는 몬스터",image:`${BASE_URL}/images/E_10.png`},
+  {name:"오리",grade:"E등급",description:"물가에서 부리로 공격하는 몬스터",image:`${BASE_URL}/images/E_11.png`},
+  {name:"펭귄",grade:"E등급",description:"얼음 위를 미끄러져 돌진하는 몬스터",image:`${BASE_URL}/images/E_12.png`},
+  {name:"수달",grade:"E등급",description:"작은 돌멩이를 사용하는 물가 몬스터",image:`${BASE_URL}/images/E_13.png`},
+  {name:"라쿤",grade:"E등급",description:"잡동사니를 주워 던지는 몬스터",image:`${BASE_URL}/images/E_14.png`},
+  {name:"미어캣",grade:"E등급",description:"땅굴 주변을 지키는 경계형 몬스터",image:`${BASE_URL}/images/E_15.png`},
+  {name:"기니피그",grade:"E등급",description:"둥글고 느린 초식 몬스터",image:`${BASE_URL}/images/E_16.png`},
+  {name:"아기 염소",grade:"E등급",description:"작은 뿔로 들이받는 몬스터",image:`${BASE_URL}/images/E_17.png`},
+  {name:"도마뱀",grade:"E등급",description:"바위 사이를 빠르게 움직이는 몬스터",image:`${BASE_URL}/images/E_18.png`},
+  {name:"소라게",grade:"E등급",description:"작은 껍데기로 몸을 보호하는 몬스터",image:`${BASE_URL}/images/E_19.png`},
+  {name:"아르마딜로",grade:"E등급",description:"몸을 말아 굴러오는 방어형 몬스터",image:`${BASE_URL}/images/E_20.png`},
   { name: "먼지 정령", grade: "D등급", description: "버려진 공간에서 자생하는 약한 마력의 작은 먼지 덩어리.", image: `${BASE_URL}/images/D_1.png` },
   { name: "이슬 슬라임", grade: "D등급", description: "숲속의 맑은 물웅덩이에서 발견되는 투명하고 해가 없는 물컹한 생명체.", image: `${BASE_URL}/images/D_2.png` },
   { name: "들쥐 포식자", grade: "D등급", description: "곡식 창고나 들판을 배회하며 농작물을 훔쳐 먹는 덩치 큰 일반 쥐.", image: `${BASE_URL}/images/D_3.png` },
@@ -252,61 +306,234 @@ const monsters = [
   { name: "시간을 멈추는 공허의 군주", grade: "S등급", description: "우주의 끝에서 날아와 주변 공간의 물리 법칙과 시간의 흐름을 완전히 정지시키는 절대자.", image: `${BASE_URL}/images/S_5.png` },
   { name: "혼돈의 마신왕", grade: "S등급", description: "차원의 장벽을 부수고 나타나 만물을 무로 되돌리며 세계를 종말로 인도하는 어둠의 정점.", image: `${BASE_URL}/images/S_6.png` },
 
-  { name: "시공의 파괴자", grade: "SS등급", description: "시공간의 틈새를 자유로이 넘나들며 차원을 붕괴시키는 초월체.", image: `${BASE_URL}/images/SS_1.png` },
-  { name: "창세의 거신", grade: "SSS등급", description: "우주의 시작과 함께 태어나 행성을 집어삼키는 전설의 존재.", image: `${BASE_URL}/images/SSS_1.png` },
   { name: "절대신 아포피스", grade: "EX등급", description: "모든 차원과 세계선을 초월하여 만물을 주관하는 궁극의 절대자.", image: `${BASE_URL}/images/EX_1.png` }
 ];
 
 const gradeRewards = {
-  "D등급": { min: 100, max: 300 },
-  "D+등급": { min: 400, max: 1000 },
-  "D++등급": { min: 1100, max: 2000 },
-  "C등급": { min: 2100, max: 3000 },
-  "C+등급": { min: 3100, max: 4500 },
-  "C++등급": { min: 4600, max: 6000 },
-  "B등급": { min: 6100, max: 8000 },
-  "B+등급": { min: 8100, max: 10000 },
-  "B++등급": { min: 10100, max: 15000 },
-  "A등급": { min: 15100, max: 20000, gem: 1 },
-  "A+등급": { min: 20100, max: 35000, gem: 5 },
-  "A++등급": { min: 35100, max: 50000, gem: 8 },
-  "S등급": { min: 50100, max: 100000, gem: 10 },
-  "S+등급": { min: 100100, max: 500000, gem: 50 },
-  "S++등급": { min: 500100, max: 1000000, gem: 100 },
-  "SS등급": { min: 1000000, max: 2000000, gem: 200 },
-  "SS+등급": { min: 2000000, max: 4000000, gem: 300 },
-  "SS++등급": { min: 4000000, max: 8000000, gem: 500 },
-  "SSS등급": { min: 8000000, max: 15000000, gem: 1000 },
-  "SSS+등급": { min: 15000000, max: 30000000, gem: 2000 },
-  "SSS++등급": { min: 30000000, max: 50000000, gem: 3000 },
-  "EX등급": { min: 50000000, max: 100000000, gem: 5000 },
-  "EX+등급": { min: 100000000, max: 300000000, gem: 10000 },
-  "EX++등급": { min: 300000000, max: 500000000, gem: 20000 }
+  "E등급": {
+    "min": 10,
+    "max": 90
+  },
+  "E+등급": {
+    "min": 100,
+    "max": 200
+  },
+  "D등급": {
+    "min": 100,
+    "max": 300
+  },
+  "D+등급": {
+    "min": 400,
+    "max": 1000
+  },
+  "C등급": {
+    "min": 2100,
+    "max": 3000
+  },
+  "C+등급": {
+    "min": 3100,
+    "max": 4500
+  },
+  "B등급": {
+    "min": 6100,
+    "max": 8000
+  },
+  "B+등급": {
+    "min": 8100,
+    "max": 10000
+  },
+  "A등급": {
+    "min": 15100,
+    "max": 20000,
+    "gem": 1
+  },
+  "A+등급": {
+    "min": 20100,
+    "max": 35000,
+    "gem": 5
+  },
+  "S등급": {
+    "min": 50100,
+    "max": 100000,
+    "gem": 10
+  },
+  "S+등급": {
+    "min": 100100,
+    "max": 500000,
+    "gem": 50
+  },
+  "EX등급": {
+    "min": 50000000,
+    "max": 100000000,
+    "gem": 5000
+  },
+  "EX+등급": {
+    "min": 100000000,
+    "max": 300000000,
+    "gem": 10000
+  }
 };
 
-// /파밍 종료 보상 전용 상자. /사냥 상자와 이름과 보상 테이블을 분리한다.
 const FARM_BOX_INFO = {
-  "D": { name: "D등급 상자", minCash: 100, maxCash: 1000, minGold: 0, maxGold: 0, minGem: 0, maxGem: 0 },
-  "C": { name: "C등급 상자", minCash: 1000, maxCash: 5000, minGold: 1, maxGold: 1, minGem: 0, maxGem: 0, goldChance: 0.10 },
-  "B": { name: "B등급 상자", minCash: 5000, maxCash: 10000, minGold: 1, maxGold: 1, minGem: 1, maxGem: 1, goldChance: 0.30, gemChance: 0.30 },
-  "A": { name: "A등급 상자", minCash: 10000, maxCash: 50000, minGold: 2, maxGold: 2, minGem: 2, maxGem: 2, bonusBox: "S", bonusBoxChance: 0.10 },
-  "S": { name: "S등급 상자", minCash: 50000, maxCash: 100000, minGold: 5, maxGold: 5, minGem: 5, maxGem: 5, bonusBox: "EX", bonusBoxChance: 0.10, monthlyTitleChance: 1 },
-  "SS": { name: "SS등급 상자", minCash: 100000, maxCash: 200000, minGold: 7, maxGold: 7, minGem: 7, maxGem: 7, bonusBox: "EX", bonusBoxChance: 0.10, monthlyTitleChance: 1 },
-  "SSS": { name: "SSS등급 상자", minCash: 200000, maxCash: 300000, minGold: 8, maxGold: 8, minGem: 8, maxGem: 8, bonusBox: "EX", bonusBoxChance: 0.10, monthlyTitleChance: 1 },
-  "EX": { name: "EX등급 상자", minCash: 100000, maxCash: 500000, minGold: 10, maxGold: 10, minGem: 10, maxGem: 10, bonusBox: "SEASON", bonusBoxChance: 1, monthlyTitleChance: 1 },
-  "SEASON": { name: "시즌 칭호 상자", minCash: 0, maxCash: 0, minGold: 0, maxGold: 0, minGem: 0, maxGem: 0, seasonTitleChance: 1 }
+  "E": {
+    "name": "E등급 상자",
+    "minCash": 100,
+    "maxCash": 1000,
+    "minGold": 0,
+    "maxGold": 0,
+    "minGem": 0,
+    "maxGem": 0
+  },
+  "D": {
+    "name": "D등급 상자",
+    "minCash": 1000,
+    "maxCash": 5000,
+    "minGold": 1,
+    "maxGold": 1,
+    "minGem": 0,
+    "maxGem": 0,
+    "goldChance": 0.1
+  },
+  "C": {
+    "name": "C등급 상자",
+    "minCash": 5000,
+    "maxCash": 10000,
+    "minGold": 1,
+    "maxGold": 1,
+    "minGem": 1,
+    "maxGem": 1,
+    "goldChance": 0.3,
+    "gemChance": 0.3
+  },
+  "B": {
+    "name": "B등급 상자",
+    "minCash": 10000,
+    "maxCash": 50000,
+    "minGold": 2,
+    "maxGold": 2,
+    "minGem": 2,
+    "maxGem": 2,
+    "bonusBox": "A",
+    "bonusBoxChance": 0.1
+  },
+  "A": {
+    "name": "A등급 상자",
+    "minCash": 50000,
+    "maxCash": 100000,
+    "minGold": 5,
+    "maxGold": 5,
+    "minGem": 5,
+    "maxGem": 5,
+    "bonusBox": "EX+",
+    "bonusBoxChance": 0.1,
+    "monthlyTitleChance": 1
+  },
+  "S": {
+    "name": "S등급 상자",
+    "minCash": 100000,
+    "maxCash": 200000,
+    "minGold": 7,
+    "maxGold": 7,
+    "minGem": 7,
+    "maxGem": 7,
+    "bonusBox": "EX+",
+    "bonusBoxChance": 0.1,
+    "monthlyTitleChance": 1
+  },
+  "EX": {
+    "name": "EX등급 상자",
+    "minCash": 200000,
+    "maxCash": 300000,
+    "minGold": 8,
+    "maxGold": 8,
+    "minGem": 8,
+    "maxGem": 8,
+    "bonusBox": "EX+",
+    "bonusBoxChance": 0.1,
+    "monthlyTitleChance": 1
+  },
+  "EX+": {
+    "name": "EX+등급 상자",
+    "minCash": 100000,
+    "maxCash": 500000,
+    "minGold": 10,
+    "maxGold": 10,
+    "minGem": 10,
+    "maxGem": 10,
+    "bonusBox": "SEASON",
+    "bonusBoxChance": 1,
+    "monthlyTitleChance": 1
+  },
+  "SEASON": {
+    "name": "시즌 칭호 상자",
+    "minCash": 0,
+    "maxCash": 0,
+    "minGold": 0,
+    "maxGold": 0,
+    "minGem": 0,
+    "maxGem": 0,
+    "seasonTitleChance": 1
+  }
 };
 
 // /사냥 희귀 드롭 전용 상자. 기존 상자 보상과 이름을 그대로 유지한다.
 const HUNT_BOX_INFO = {
-  "D": { name: "나무 상자", minCash: 1000, maxCash: 10000, minGem: 1, maxGem: 5 },
-  "C": { name: "은 상자", minCash: 1000, maxCash: 50000, minGem: 1, maxGem: 10 },
-  "B": { name: "금 상자", minCash: 10000, maxCash: 100000, minGem: 5, maxGem: 15 },
-  "A": { name: "사파이어 상자", minCash: 10000, maxCash: 500000, minGem: 5, maxGem: 20 },
-  "S": { name: "에메랄드 상자", minCash: 100000, maxCash: 1000000, minGem: 10, maxGem: 25 },
-  "SS": { name: "제이다이트 상자", minCash: 100000, maxCash: 5000000, minGem: 10, maxGem: 30 },
-  "SSS": { name: "루비 상자", minCash: 1000000, maxCash: 10000000, minGem: 15, maxGem: 35 },
-  "EX": { name: "다이아몬드 상자", minCash: 1000000, maxCash: 50000000, minGem: 15, maxGem: 40 }
+  "E": {
+    "name": "나무 상자",
+    "minCash": 1000,
+    "maxCash": 10000,
+    "minGem": 1,
+    "maxGem": 5
+  },
+  "D": {
+    "name": "은 상자",
+    "minCash": 1000,
+    "maxCash": 50000,
+    "minGem": 1,
+    "maxGem": 10
+  },
+  "C": {
+    "name": "금 상자",
+    "minCash": 10000,
+    "maxCash": 100000,
+    "minGem": 5,
+    "maxGem": 15
+  },
+  "B": {
+    "name": "사파이어 상자",
+    "minCash": 10000,
+    "maxCash": 500000,
+    "minGem": 5,
+    "maxGem": 20
+  },
+  "A": {
+    "name": "에메랄드 상자",
+    "minCash": 100000,
+    "maxCash": 1000000,
+    "minGem": 10,
+    "maxGem": 25
+  },
+  "S": {
+    "name": "제이다이트 상자",
+    "minCash": 100000,
+    "maxCash": 5000000,
+    "minGem": 10,
+    "maxGem": 30
+  },
+  "EX": {
+    "name": "루비 상자",
+    "minCash": 1000000,
+    "maxCash": 10000000,
+    "minGem": 15,
+    "maxGem": 35
+  },
+  "EX+": {
+    "name": "다이아몬드 상자",
+    "minCash": 1000000,
+    "maxCash": 50000000,
+    "minGem": 15,
+    "maxGem": 40
+  }
 };
 
 const MONTHLY_AVATARS = {
@@ -316,13 +543,8 @@ const MONTHLY_AVATARS = {
   10: "낙엽의 추적자 아바타", 11: "서릿발 척살자 아바타", 12: "종말의 인도자 아바타"
 };
 
-// 파밍에서 처치할수록 다음 등급으로 도전한다. D→D+→D++→C 순으로 이어진다.
-const FARM_GRADE_STEPS = [
-  "D등급", "D+등급", "D++등급", "C등급", "C+등급", "C++등급",
-  "B등급", "B+등급", "B++등급", "A등급", "A+등급", "A++등급",
-  "S등급", "S+등급", "S++등급", "SS등급", "SS+등급", "SS++등급",
-  "SSS등급", "SSS+등급", "SSS++등급", "EX등급", "EX+등급", "EX++등급"
-];
+// 파밍에서 처치할수록 다음 등급으로 도전한다. E→E+→D→D+ 순으로 이어진다.
+const FARM_GRADE_STEPS = ["E등급","E+등급","D등급","D+등급","C등급","C+등급","B등급","B+등급","A등급","A+등급","S등급","S+등급","EX등급","EX+등급"];
 
 const LOOT_DATABASE = {
   hilt: [
@@ -1976,8 +2198,8 @@ function getKSTMonthString() {
 }
 
 function generateRandomNickname() {
-  const adjectives = ['조용한', '별속의', '용감한', '빛나는', '차가운', '뜨거운', '화려한', '어두운', '신비로운', '재빠른'];
-  const nouns = ['사업자', '미인', '모험가', '사냥꾼', '지배자', '방랑자', '지장보살', '지킴이', '전사', '마법사'];
+  const adjectives = ['조용한','용감한','빛나는','차가운','어두운','신비로운','재빠른','초보자','불굴의','고독한','새벽의','황혼의','잊혀진','깨어난','은빛','붉은','푸른','검은','백야의','달빛의','별빛의','심연의','폭풍의','서리의','화염의','천둥의','안개의','숲속의','사막의','방랑하는','맹세한','봉인된','눈부신','침묵의','전설의','그림자','무명의','굳건한','은밀한','날쌘'];
+  const nouns = ['모험가','사냥꾼','지배자','방랑자','지킴이','전사','마법사','궁수','도적','수호자','검객','정찰자','추적자','기사','용병','방패병','저격수','정령사','현자','암살자','쌍검사','마검사','개척자','탐험가','순찰자','파수꾼','주술사','퇴마사','집행자','정복자'];
   
   const adj = adjectives[rand(0, adjectives.length - 1)];
   const noun = nouns[rand(0, nouns.length - 1)];
@@ -2142,24 +2364,23 @@ function getMonsterCollectionCatalog() {
   return monsters.map(m => ({ id: m.grade + ':' + m.name, name: m.name, base: m.grade.replace('등급', '') }));
 }
 function normalizeMonsterCollection(value) {
-  const records = {};
-  const input = value && typeof value === 'object' && value.records && typeof value.records === 'object' ? value.records : {};
-  for (const entry of getMonsterCollectionCatalog()) {
-    const mask = input[entry.id];
-    if (Number.isInteger(mask) && mask >= 1 && mask <= 7) records[entry.id] = mask;
+  const records={}, input=value && value.records || {};
+  for(const entry of getMonsterCollectionCatalog()) {
+    const mask=input[entry.id];
+    if(Number.isInteger(mask) && mask>=1 && mask<=3)records[entry.id]=mask;
   }
-  return { records };
+  return {schemaVersion:2,records};
 }
 function getMonsterCollectionPoints(profile) {
-  const data = normalizeMonsterCollection(profile && profile.monsterCollection);
-  return Object.values(data.records).filter(mask => mask === 7).length;
+  const data=normalizeMonsterCollection(profile && profile.monsterCollection);
+  return Object.values(data.records).filter(mask=>mask===3).length;
 }
 function getMonsterCollectionBonus(profile) {
   const points = getMonsterCollectionPoints(profile);
   return { points, critRate: points >= 1 ? 1 : 0, critDmg: points >= 5 ? 1 : 0, counterRate: points >= 10 ? 1 : 0 };
 }
 function recordHuntCollection(profile, monster) {
-  const match = /^(D|C|B|A|S|SS|SSS|EX)(\+{0,2})등급$/.exec(monster.grade || '');
+  const match = /^(E|D|C|B|A|S|EX)(\+?)등급$/.exec(monster.grade || '');
   if (!match) return '';
   const entry = getMonsterCollectionCatalog().find(e => e.base === match[1] && e.name === monster.name);
   if (!entry) return '';
@@ -2169,10 +2390,10 @@ function recordHuntCollection(profile, monster) {
   const after = before | (1 << match[2].length);
   records[entry.id] = after;
   if (before === after) return '';
-  if (after !== 7) return '📖 컬렉션 등록: [' + monster.grade + '] ' + entry.name;
+  if (after !== 3) return '📖 컬렉션 등록: [' + monster.grade + '] ' + entry.name;
   const points = getMonsterCollectionPoints(profile);
   const reward = points === 1 ? '치명타 확률 +1%p' : points === 5 ? '치명타 데미지 +1%' : points === 10 ? '카운터 확률 +1%p' : '';
-  return '🏆 컬렉션 완성: ' + entry.name + ' (' + entry.base + '/' + entry.base + '+/' + entry.base + '++)\n컬렉션 포인트 +1 · 총 ' + points + '포인트' + (reward ? '\n✨ 영구 효과 해금: ' + reward : '');
+  return '🏆 컬렉션 완성: ' + entry.name + ' (' + entry.base + '/' + entry.base + '+)\n컬렉션 포인트 +1 · 총 ' + points + '포인트' + (reward ? '\n✨ 영구 효과 해금: ' + reward : '');
 }
 function processMonsterCollection(profile, arg = '') {
   const catalog = getMonsterCollectionCatalog();
@@ -2184,10 +2405,10 @@ function processMonsterCollection(profile, arg = '') {
   const lines = ['📖 몬스터 컬렉션', '컬렉션 포인트 : ' + bonus.points + ' / ' + catalog.length,
     '영구 효과: 치명타 확률 +' + bonus.critRate + '%p | 치명타 데미지 +' + bonus.critDmg + '% | 카운터 확률 +' + bonus.counterRate + '%p',
     '', '1포인트: 치명타 확률 +1%p', '5포인트: 위 효과 + 치명타 데미지 1%', '10포인트: 위 효과 + 카운터 확률 1%p',
-    '', '/사냥 처치만 등록됩니다. 같은 몬스터 기본/+/++ 완료 시 1포인트.', ''];
+    '', '/사냥 처치만 등록됩니다. 같은 몬스터 기본/+ 완료 시 1포인트.', ''];
   for (const e of catalog.slice((page - 1) * size, page * size)) {
     const mask = data.records[e.id] || 0;
-    lines.push((mask === 7 ? '🏆 ' : '▫️ ') + e.name, [0,1,2].map(i => ((mask & (1 << i)) ? '✅ ' : '⬜ ') + e.base + '+'.repeat(i)).join(' | '), '');
+    lines.push((mask === 3 ? '🏆 ' : '▫️ ') + e.name, [0,1].map(i => ((mask & (1 << i)) ? '✅ ' : '⬜ ') + e.base + '+'.repeat(i)).join(' | '), '');
   }
   lines.push('페이지 ' + page + '/' + pages + ' · /컬렉션 [페이지]');
   return { text: lines.join('\n') };
@@ -2549,6 +2770,7 @@ function createProfile(existing = {}) {
 
   let profile = {
     version: safeObj.version ?? CURRENT_DATA_VERSION,
+    gradeSchemaVersion: 2,
     // 서버가 MongoDB 조회에 사용하는 사용자 ID. 기존 저장 키와 별도로 보존한다.
     userId: typeof safeObj.userId === 'string' ? safeObj.userId.trim() : '',
     monsterCollection: normalizeMonsterCollection(safeObj.monsterCollection),
@@ -2780,7 +3002,8 @@ function checkAndMarkHelp(profile, commandName) {
 
 function checkAndResetFarmLimit(playerState) {
   const todayStr = getKSTDateString();
-  const maxLimit = FARM_DAILY_LIMIT;
+  const day = getKSTParts().weekday;
+  const maxLimit = (day === 0 || day === 6) ? 2000 : FARM_DAILY_LIMIT;
 
   if (!playerState.farmData || playerState.farmData.date !== todayStr) {
     playerState.farmData = { date: todayStr, count: 0, max: maxLimit, lastClaimedFarmQuest: 0 };
@@ -2814,10 +3037,9 @@ function activeAbilityText(profile) {
   add('공격력 증가 (현재 공격력에 반영)', attackIncrease);
   add('칭호·아바타 수집 공격력 (현재 공격력에 반영)', getCollectionCombatPower(p), '');
   add('받는 피해 감소 (최소 피해 1)', imprint('damageReduce'), '');
-  const farmMult = getGoldMultiplier(p);
+  const farmMult = getGoldMultiplier(p) * (1+getAvatarCashBonus(p));
   add('💵 파밍 현금 획득량 증가', (farmMult - 1) * 100);
-  add('⭐ 파밍 경험치 획득량 증가', (farmMult * (1 + imprint('expBoost') / 100) - 1) * 100);
-  add('파밍 경험치 각인 보너스 (위 수치에 반영)', imprint('expBoost'));
+  add('⭐ 파밍 경험치 증가 (획득 현금에 비례)', (farmMult - 1) * 100);
   const creature = getCreatureBonus(p);
   const huntMult = getLootMultiplier(p) * (1 + creature.cashPct + getAvatarCashBonus(p));
   add('💵 사냥 현금 획득량 증가', (huntMult - 1) * 100);
@@ -3167,6 +3389,7 @@ function processSupply(profile, countArg = "1") {
 function createBattle(profile) {
   // 전투 횟수는 전투 생성 시점이 아니라 파밍이 실제 종료된 시점에 1회만 증가시킨다.
   return {
+    gradeSchemaVersion: 2,
     progressVersion: 0, // 상태 백업의 최신 여부를 비교하는 내부 번호 (턴 제한 없음)
     hp: 100,
     alive: true,
@@ -3206,7 +3429,7 @@ function farmResponseFooter(profile) {
   checkAndResetFarmLimit(p);
   const n = getCurrentEnhanceLevel(p), req = getRequiredExp(p.level);
   const count = p.farmData.count || 0;
-  const target = [10,25,50,100,150,200].find(x => x > count) || FARM_DAILY_LIMIT;
+  const target = FARM_QUEST_MILESTONES.find(x => x > count && x <= p.farmData.max);
   return [
     '🎯 무기 : +' + n + ' ' + getWeaponInfo(n,p.job)[0],
     '🔥 제련 : ' + (REFINE_STARS[Math.min(p.refine,REFINE_STARS.length-1)] || ''),
@@ -3214,7 +3437,7 @@ function farmResponseFooter(profile) {
     '💪 공격력 : ' + getCombatPower(p),
     '🔘 배율 : x' + getGoldMultiplier(p).toFixed(2) + ' | ⏩ 배속 (x' + (p.speedMultiplier || 1) + ')',
     '⚔️ 전투 횟수 : (' + count + '/' + p.farmData.max + ')',
-    '📜 퀘스트 보상까지 ' + Math.max(0,target-count) + '회'
+    target ? '📜 퀘스트 보상까지 ' + (target-count) + '회' : '📜 오늘의 파밍 퀘스트 완료'
   ].join('\n');
 }
 
@@ -3258,14 +3481,9 @@ function calculateCombatDamage(profile, battle, rawDamage) {
 }
 
 function getFarmBoxKey(grade) {
-  if (grade.startsWith('EX')) return 'EX';
-  if (grade.startsWith('SSS')) return 'SSS';
-  if (grade.startsWith('SS')) return 'SS';
-  if (grade.startsWith('S')) return 'S';
-  if (grade.startsWith('A')) return 'A';
-  if (grade.startsWith('B')) return 'B';
-  if (grade.startsWith('C')) return 'C';
-  return 'D';
+  if(grade==='EX+등급')return 'EX+';
+  const base=String(grade||'').replace(/\+?등급$/, '');
+  return ['E','D','C','B','A','S','EX'].includes(base) ? base : 'E';
 }
 
 function addBoxToInventory(profile, boxKey) {
@@ -3282,14 +3500,9 @@ function addBoxToInventory(profile, boxKey) {
 }
 
 function getHuntBoxKey(grade) {
-  if (grade.startsWith('EX')) return 'EX';
-  if (grade.startsWith('SSS')) return 'SSS';
-  if (grade.startsWith('SS')) return 'SS';
-  if (grade.startsWith('S')) return 'S';
-  if (grade.startsWith('A')) return 'A';
-  if (grade.startsWith('B')) return 'B';
-  if (grade.startsWith('C')) return 'C';
-  return 'D';
+  if(grade==='EX+등급')return 'EX+';
+  const base=String(grade||'').replace(/\+?등급$/, '');
+  return ['E','D','C','B','A','S','EX'].includes(base) ? base : 'E';
 }
 
 function createFarmMonster(grade) {
@@ -3310,8 +3523,8 @@ function createFarmMonster(grade) {
 }
 
 
-// 등급마다 5%p 감소하되 최상위 등급도 도전할 수 있도록 기존 최저 확률 0.1%를 유지한다.
-const FARM_SUCCESS_CAPS = FARM_GRADE_STEPS.map((_, i) => Math.max(0.1, 80 - i * 5));
+// E부터 EX+까지 사용자 지정 처치 확률.
+const FARM_SUCCESS_CAPS = [80,75,70,65,50,45,30,25,10,5,1,0.5,0.1,0.01];
 function getFarmGradeIndex(index) {
   return Math.max(0, Math.min(Math.floor(Number(index) || 0), FARM_GRADE_STEPS.length - 1));
 }
@@ -3324,18 +3537,12 @@ function formatFarmChance(chance) {
   return chance.toFixed(2);
 }
 
-// 기본 현금: 공격력의 1/10을 10원 단위로 버림. 이후 파밍 표시 배율을 한 번 적용한다.
-function getFarmBaseCashReward(profile) {
-  return Math.floor(Math.max(0, getAttackPower(profile)) / 100) * 10;
-}
-function getFarmCashReward(profile) {
-  return Math.floor(getFarmBaseCashReward(profile) * getGoldMultiplier(profile) * (profile.speedMultiplier || 1));
-}
-function getFarmExpReward(profile) {
-  const baseExp = Math.max(1, Math.floor(getFarmBaseCashReward(profile) / 10));
-  const expBonus = 1 + getImprintTotalBonus(profile, 'expBoost') / 100;
-  const singleExp = Math.round(baseExp * getGoldMultiplier(profile) * expBonus);
-  return singleExp * (profile.speedMultiplier || 1);
+// 해당 등급 파밍 상자의 현금 범위만 사용한다. 별도 금괴/보석 이벤트는 유지한다.
+function getFarmCashReward(profile, battle) {
+  const grade = FARM_GRADE_STEPS[getFarmGradeIndex(battle ? battle.currentGradeIndex : 0)];
+  const box = FARM_BOX_INFO[getFarmBoxKey(grade)];
+  const cash = rand(Math.floor(box.minCash/10),Math.floor(box.maxCash/10));
+  return Math.floor(cash * getGoldMultiplier(profile) * (1+getAvatarCashBonus(profile))) * (profile.speedMultiplier || 1);
 }
 
 function rollShadowLoot(profile, cash, gem, random = Math.random) {
@@ -3353,23 +3560,23 @@ function resolveProgressionFarmTurn(profile, battle) {
 
   if (eventRoll < 0.01) {
     battle.accumulatedSupplyItem = (battle.accumulatedSupplyItem || 0) + speed;
-    return { text: `📦 [재화] 보급 +${speed}개`, imageUrl: null };
+    return { text: `📦 [재화] 보급 +${speed}개`, imageUrl: `${BASE_URL}/SUPPLY_FARM.png` };
   }
   if (eventRoll < 1.01) {
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const gold = applyCreatureGoldBonus(Math.max(1, rand(ampInfo.minGold, ampInfo.maxGold)), profile) * speed;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + gold;
-    return { text: `🧈 [재화] 금괴 +${gold.toLocaleString()}개`, imageUrl: null };
+    return { text: `🧈 [재화] 금괴 +${gold.toLocaleString()}개`, imageUrl: `${BASE_URL}/GOLD_FARM.png` };
   }
   if (eventRoll < 3.01) {
     const keys = Math.max(1, speed);
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keys;
-    return { text: `🔑 [재화] 비밀열쇠 +${keys}개`, imageUrl: null };
+    return { text: `🔑 [재화] 비밀열쇠 +${keys}개`, imageUrl: `${BASE_URL}/KEY_FARM.png` };
   }
   if (eventRoll < 10) {
-    const cash = getFarmCashReward(profile);
+    const cash = getFarmCashReward(profile, battle) * 10;
     battle.accumulatedCash += cash;
-    battle.accumulatedExp = (battle.accumulatedExp || 0) + getFarmExpReward(profile);
+
     return { text: `🎰 [재화] 잭팟 현금 +${won(cash)}`, imageUrl: null };
   }
 
@@ -3405,12 +3612,13 @@ function resolveProgressionFarmTurn(profile, battle) {
       killed = Math.random() < 0.5;
     }
   }
-  // 성공/MISS 모두 현금과 EXP를 누적하고, 실제 지급은 사망 시 한 번만 한다.
-  const cash = getFarmCashReward(profile);
+  // 성공/MISS 모두 현금을 누적한다. EXP는 종료 시 누적 현금의 1/10로 계산한다.
+  const cash = getFarmCashReward(profile, battle);
   battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
-  battle.accumulatedExp = (battle.accumulatedExp || 0) + getFarmExpReward(profile);
+
   const lines = ['[' + grade + '] ' + monster.fullName,
-    '처치 확률 : ' + formatFarmChance(successChance) + '%'];
+    '처치 확률 : ' + (critical ? formatFarmChance(normalSuccessChance)+'% → ' : '') + formatFarmChance(successChance) + '%'];
+  const attackLabel = critical ? '[치명타]' : '[공격]';
   const encounter = { grade, fullName: monster.fullName, gradeIndex };
   if (killed) {
     const gem = Math.floor(applyCreatureGemBonus(monster.rewardGem || 0, profile) * 0.5) * speed;
@@ -3418,7 +3626,7 @@ function resolveProgressionFarmTurn(profile, battle) {
     battle.highestGradeIndex = Math.max(Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1, gradeIndex);
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
     battle.farmMonster = null;
-    lines.push('[공격] ' + damage);
+    lines.push(attackLabel + ' ' + damage);
     if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
     if (gem > 0) lines.push('💎 보석 +' + gem + '개');
     const stolen = rollShadowLoot(profile, cash, gem);
@@ -3433,70 +3641,24 @@ function resolveProgressionFarmTurn(profile, battle) {
   const hpLoss = Math.min(battle.hp, hit.finalDamage);
   battle.hp = Math.max(0, battle.hp - hpLoss);
   checkDeath(battle);
-  lines.push('[공격] MISS | HP -' + hpLoss, ...hit.armorNotes);
+  lines.push(attackLabel + ' MISS | HP -' + hpLoss, ...hit.armorNotes);
   if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
   return { text: lines.join('\n'), imageUrl: monster.image || null, missed: true, encounter };
 }
 
 function claimFarmMilestones(profile) {
-  const resultMessages = [];
-  const count = profile.farmData.count;
-  const lastClaimed = profile.farmData.lastClaimedFarmQuest || 0;
-  const dice = rand(1, 6);
-  let farmQuestRewardMsgs = [];
-
-  if (count >= 10 && lastClaimed < 10) {
-    let qCash = applyCreatureCashBonus(5000 * dice, profile);
-    profile.cash += qCash;
-    profile.farmData.lastClaimedFarmQuest = 10;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (10회) : 현금 +${won(qCash)}`);
+  const messages = [], dice = rand(1,6);
+  const rewards = [[100,5000,0],[250,10000,0],[500,15000,1],[1000,20000,2],[1500,25000,3],[2000,25000,3]];
+  for (const [count,cash,gold] of rewards) {
+    if (profile.farmData.count < count || (profile.farmData.lastClaimedFarmQuest || 0) >= count) continue;
+    const qCash = applyCreatureCashBonus(cash*dice,profile);
+    const qGold = gold ? applyCreatureGoldBonus(gold*dice,profile) : 0;
+    profile.cash += qCash; profile.gold = (profile.gold || 0)+qGold;
+    profile.farmData.lastClaimedFarmQuest = count;
+    messages.push('퀘스트 달성 보상 ('+count+'회) :\n현금 +'+won(qCash)+(qGold ? ' 및 금괴 +'+qGold+'개' : ''));
   }
-  if (count >= 25 && profile.farmData.lastClaimedFarmQuest < 25) {
-    let qCash = applyCreatureCashBonus(10000 * dice, profile);
-    profile.cash += qCash;
-    profile.farmData.lastClaimedFarmQuest = 25;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (25회) : 현금 +${won(qCash)}`);
-  }
-  if (count >= 50 && profile.farmData.lastClaimedFarmQuest < 50) {
-    let qCash = applyCreatureCashBonus(15000 * dice, profile);
-    let qGold = applyCreatureGoldBonus(1 * dice, profile);
-    profile.cash += qCash;
-    profile.gold += qGold;
-    profile.farmData.lastClaimedFarmQuest = 50;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (50회) : 현금 +${won(qCash)} 및 금괴 +${qGold}개`);
-  }
-  if (count >= 100 && profile.farmData.lastClaimedFarmQuest < 100) {
-    let qCash = applyCreatureCashBonus(20000 * dice, profile);
-    let qGold = applyCreatureGoldBonus(1 * dice, profile);
-    profile.cash += qCash;
-    profile.gold += qGold;
-    profile.farmData.lastClaimedFarmQuest = 100;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (100회) : 현금 +${won(qCash)} 및 금괴 +${qGold}개`);
-  }
-  if (count >= 150 && profile.farmData.lastClaimedFarmQuest < 150) {
-    let qCash = applyCreatureCashBonus(25000 * dice, profile);
-    let qGold = applyCreatureGoldBonus(1 * dice, profile);
-    profile.cash += qCash;
-    profile.gold += qGold;
-    profile.farmData.lastClaimedFarmQuest = 150;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (150회) : 현금 +${won(qCash)} 및 금괴 +${qGold}개`);
-  }
-  if (count >= 200 && profile.farmData.lastClaimedFarmQuest < 200) {
-    let qCash = applyCreatureCashBonus(30000 * dice, profile);
-    let qGold = applyCreatureGoldBonus(2 * dice, profile);
-    profile.cash += qCash;
-    profile.gold += qGold;
-    profile.farmData.lastClaimedFarmQuest = 200;
-    farmQuestRewardMsgs.push(`퀘스트 달성 보상 (200회) : 현금 +${won(qCash)} 및 금괴 +${qGold}개`);
-  }
-
-  if (farmQuestRewardMsgs.length > 0) {
-    resultMessages.push(farmQuestRewardMsgs.join('\n'));
-  }
-
-  resultMessages.push(...claimDailyPassMissions(profile));
-
-  return resultMessages;
+  messages.push(...claimDailyPassMissions(profile));
+  return messages;
 }
 
 function processEnhance(profile) {
@@ -4148,13 +4310,35 @@ function processUseKey(profile, countArg) {
 
   rewardLines.push(``, resourceText(profile));
 
-  return { text: rewardLines.join('\n'), imageUrl: null };
+  return { text: rewardLines.join('\n'), imageUrl: totalSupplyItem > 0 ? BASE_URL+'/SUPPLY_FARM.png' : null };
 }
 
+const RAID_BOX_NAME = '레이드 상자';
+const RAID_TITLE = '거신을 쓰러뜨린 자';
+const RAID_AVATAR = '심연의 레이드 군주';
+function addRaidBox(profile) {
+  if (!Array.isArray(profile.inventory)) profile.inventory=[];
+  profile.inventory.push({category:'box',boxSource:'raid',name:RAID_BOX_NAME,desc:'레이드 전용 칭호와 아바타를 각각 50% 확률로 획득합니다.'});
+}
+function openRaidBoxes(profile,count) {
+  if (!Array.isArray(profile.ownedTitles))profile.ownedTitles=[];
+  if (!Array.isArray(profile.ownedAvatars))profile.ownedAvatars=[];
+  let titleHits=0,avatarHits=0;
+  for(let i=0;i<count;i++){if(Math.random()<0.5)titleHits++;if(Math.random()<0.5)avatarHits++;}
+  const lines=['🎁 레이드 상자 '+count+'개 개봉'];
+  for(const [hits,list,name,label] of [[titleHits,profile.ownedTitles,RAID_TITLE,'칭호'],[avatarHits,profile.ownedAvatars,RAID_AVATAR,'아바타']]) {
+    if(!hits)continue;
+    if(list.includes(name))lines.push(label+' : '+name+' (이미 보유, 중복 획득 '+hits+'회)');
+    else {list.push(name);lines.push(label+' 획득 : '+name+(hits>1 ? ' (추가 중복 '+(hits-1)+'회)' : ''));}
+  }
+  if(!titleHits&&!avatarHits)lines.push('이번 상자에서는 칭호·아바타를 획득하지 못했습니다.');
+  lines.push('칭호·아바타는 각각 독립 확률 50%입니다.');
+  return {text:lines.join('\n')};
+}
 function getBoxCatalog() {
   const farmEntries = Object.entries(FARM_BOX_INFO).map(([key, data]) => ({ id: `FARM_${key}`, source: 'farm', key, ...data }));
   const huntEntries = Object.entries(HUNT_BOX_INFO).map(([key, data]) => ({ id: `HUNT_${key}`, source: 'hunt', key, ...data }));
-  return [...farmEntries, ...huntEntries];
+  return [...farmEntries, ...huntEntries, {id:'RAID',source:'raid',name:RAID_BOX_NAME}];
 }
 
 function processUpdatedBoxesCommand(profile, arg) {
@@ -4171,7 +4355,7 @@ function processUpdatedBoxesCommand(profile, arg) {
     const lines = [`📦 [보유 상자 목록]`];
     catalog.forEach((box, index) => {
       const count = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt'))).length;
-      lines.push(`${index + 1}. [${box.source === 'farm' ? '파밍' : '사냥'}] ${box.name}: ${count}개`);
+      lines.push(`${index + 1}. [${box.source === 'farm' ? '파밍' : box.source === 'raid' ? '레이드' : '사냥'}] ${box.source === 'hunt' ? box.key+'등급 ' : ''}${box.name}: ${count}개`);
     });
     lines.push(``, `💡 사용법: /상자 [번호] [개수] (예: /상자 1 2)`);
     return { text: lines.join('\n') };
@@ -4202,6 +4386,8 @@ function processUpdatedBoxesCommand(profile, arg) {
     }
     return true;
   });
+
+  if(box.source === 'raid') return openRaidBoxes(profile,openCount);
 
   let totalCash = 0;
   let totalGold = 0;
@@ -4240,7 +4426,7 @@ function processUpdatedBoxesCommand(profile, arg) {
   profile.gold = (profile.gold || 0) + totalGold;
   profile.gem = (profile.gem || 0) + totalGem;
   const lines = [
-    `🎁 [${box.source === 'farm' ? '파밍' : '사냥'} · ${box.name} 개봉 완료! (${openCount}개)]`,
+    `🎁 [${box.source === 'farm' ? '파밍' : box.source === 'raid' ? '레이드' : '사냥'} · ${box.name} 개봉 완료! (${openCount}개)]`,
     `• 획득 현금 : +${won(totalCash)}`,
     `• 획득 금괴 : +${totalGold.toLocaleString()}개`,
     `• 획득 보석 : +${totalGem.toLocaleString()}개`
@@ -4253,7 +4439,7 @@ function processUpdatedBoxesCommand(profile, arg) {
 function getJobInfoText(jobCode, skillLevel = 1) {
   const chance = skillLevel * 1; 
   if (jobCode === 'berserker') {
-    return `🪓 버서커 : 파밍 도중 레이드를 마주할 확률 ${chance}%, 레이드 체력 1% 미만 시 ${chance}% 확률로 즉시 처형, 레이드 체력의 1% 피해를 입힐 확률 ${chance}%`;
+    return `🪓 버서커 : 파밍·사냥 중 레이드 조우 확률 0.1%, 레이드 체력 1% 미만 시 ${chance}% 확률로 즉시 처형, 레이드 체력의 1% 피해를 입힐 확률 ${chance}%`;
   } else if (jobCode === 'swordmaster') {
     return `⚡ 소드마스터 : 공격력 ${chance}% 증가, 매일 랜덤 직업 변경 확률 ${chance}%`;
   } else if (jobCode === 'shadow') {
@@ -4339,7 +4525,7 @@ function processJobSkill(profile, arg, context = {}) {
   } else if (profile.job === 'battlemage') {
     return processMgsDungeon(profile);
   } else if (profile.job === 'berserker') {
-    return {text:context.sharedRaidPassives === true ? '🪓 버서커: 파밍 중 공동 레이드 조우, 레이드 공격 시 처형·추가 피해 패시브가 적용됩니다.' : '🪓 버서커 레이드 패시브는 DB·서버 연동 대기 중입니다.'};
+    return {text:context.sharedRaidPassives === true ? '🪓 버서커: 파밍·사냥 중 공동 레이드 조우(0.1%), 레이드 공격 시 처형·추가 피해 패시브가 적용됩니다.' : '🪓 버서커 레이드 패시브는 DB·서버 연동 대기 중입니다.'};
   } else if (profile.job === 'swordmaster') {
     const todayStr = getKSTDateString();
     const skillLevel = profile.jobSkillLevel || 1;
@@ -4480,7 +4666,7 @@ function processMgsDungeon(playerState) {
   let totalEarnedGem = 0;
   let spawnedMonsters = [];
 
-  const validGrades = new Set(["B등급", "B+등급", "A등급", "A+등급", "S등급", "S+등급", "SS등급", "SS+등급", "SSS등급", "EX등급"]);
+  const validGrades = new Set(FARM_GRADE_STEPS.filter(g => ['B','A','S','EX'].includes(g.replace(/\+?등급$/, ''))));
   const validMonsterPool = monsters.filter(m => validGrades.has(m.grade));
 
   for (let i = 0; i < targetCount; i++) {
@@ -4523,11 +4709,7 @@ function processMgsDungeon(playerState) {
     playerState.gem = (playerState.gem || 0) + totalEarnedGem;
   }
 
-  const gradeRank = {
-    "EX등급": 14, "SSS등급": 13, "SS+등급": 12, "SS등급": 11,
-    "S+등급": 10, "S등급": 9, "A+등급": 8, "A등급": 7,
-    "B+등급": 6, "B등급": 5
-  };
+  const gradeRank = Object.fromEntries(FARM_GRADE_STEPS.map((g,i)=>[g,i+1]));
 
   spawnedMonsters.sort((a, b) => {
     return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
@@ -4549,7 +4731,7 @@ function processMgsDungeon(playerState) {
 
   let monstersJoined = monsterInfoBlocks.join('\n');
   
-  let summaryLines = [`💵 총 현금 +${won(totalEarnedCash)}`];
+  let summaryLines = totalEarnedCash>0 ? [`💵 총 현금 +${won(totalEarnedCash)}`] : [];
   if (totalEarnedGem > 0) {
     summaryLines.push(`💎 총 보석 : ${totalEarnedGem}개`);
   }
@@ -4594,13 +4776,13 @@ function processGeneralDungeon(profile) {
   let targetGrade = "A등급";
 
   if (roll < 1.0) {
-    targetGrade = "S++등급";
+    targetGrade = "S+등급";
   } else if (roll < 1.0 + 2.0) {
     targetGrade = "S+등급";
   } else if (roll < 1.0 + 2.0 + 7.0) {
     targetGrade = "S등급";
   } else if (roll < 1.0 + 2.0 + 7.0 + 10.0) {
-    targetGrade = "A++등급";
+    targetGrade = "A+등급";
   } else if (roll < 1.0 + 2.0 + 7.0 + 10.0 + 30.0) {
     targetGrade = "A+등급";
   } else {
@@ -4994,6 +5176,8 @@ function processHunt(playerState) {
 
   const lootMult = getLootMultiplier(playerState);
 
+  const startingGem=playerState.gem || 0;
+  let gemEventCount=0;
   let totalEarnedCash = 0;
   let totalEarnedGem = 0;
   let spawnedMonsters = [];
@@ -5002,14 +5186,21 @@ function processHunt(playerState) {
   const tierPrices = { "T1": 1000000, "T2": 2000000, "T3": 3000000, "T4": 4000000, "T5": 5000000, "T6": 6000000 };
 
   for (let i = 0; i < actualHunts; i++) {
-    const monster = getRandomMonsterByProbability(playerState);
+    const drawn=pickMonsterGrade(getMonsterGradeWeights(playerState,true),Math.random());
+    if(drawn==='GEM') {
+      const amp=getAmplifyInfo(playerState.combatLevel || 0);
+      const gems=applyCreatureGemBonus(Math.max(1,rand(amp.minGold,amp.maxGold)),playerState);
+      totalEarnedGem+=gems;gemEventCount++;
+      droppedLootTexts.push('💎 [재화] 보석 +'+gems+'개');
+      continue;
+    }
+    const monster = getRandomMonsterByProbability(playerState,drawn);
     if (!monster) continue;
 
-    let earnedCash = Math.floor(monster.rewardMoney * lootMult);
+    let earnedCash = Math.floor((monster.rewardMoney / 10) * lootMult);
     earnedCash = applyCreatureCashBonus(earnedCash, playerState);
 
-    let earnedGem = monster.rewardGem > 0 ? monster.rewardGem : 0;
-    earnedGem = applyCreatureGemBonus(earnedGem, playerState);
+    let earnedGem = 0; // 보석은 몬스터 보상이 아닌 1% 별도 이벤트로 지급한다.
 
     const stolen = rollShadowLoot(playerState, earnedCash, earnedGem);
     earnedCash += stolen.cash; earnedGem += stolen.gem;
@@ -5023,9 +5214,7 @@ function processHunt(playerState) {
     if (collectionMessage) droppedLootTexts.push(collectionMessage);
 
     let boxDropChance = 0.00001; 
-    if (monster.grade.includes("++")) {
-      boxDropChance = 0.00010; 
-    } else if (monster.grade.includes("+")) {
+    if (monster.grade.includes("+")) {
       boxDropChance = 0.00005; 
     }
 
@@ -5054,7 +5243,7 @@ function processHunt(playerState) {
     else if (g === "B+등급" && Math.random() < lootDropChance) { targetTier = "T3"; isLootDropped = true; }
     else if (g === "A등급" && Math.random() < lootDropChance) { targetTier = "T4"; isLootDropped = true; }
     else if (g === "A+등급" && Math.random() < lootDropChance) { targetTier = "T5"; isLootDropped = true; }
-    else if ((g.startsWith("S") || g.startsWith("SS") || g.startsWith("SSS") || g.startsWith("EX")) && Math.random() < lootDropChance) { targetTier = "T6"; isLootDropped = true; }
+    else if ((g.startsWith("S") || g.startsWith("EX")) && Math.random() < lootDropChance) { targetTier = "T6"; isLootDropped = true; }
 
     if (isLootDropped) {
       const categories = ['hilt', 'guard', 'blade', 'scabbard', 'pommel'];
@@ -5097,16 +5286,7 @@ function processHunt(playerState) {
     playerState.gem = (playerState.gem || 0) + totalEarnedGem;
   }
 
-  const gradeRank = {
-    "EX++등급": 24, "EX+등급": 23, "EX등급": 22,
-    "SSS++등급": 21, "SSS+등급": 20, "SSS등급": 19,
-    "SS++등급": 18, "SS+등급": 17, "SS등급": 16,
-    "S++등급": 15, "S+등급": 14, "S등급": 13,
-    "A++등급": 12, "A+등급": 11, "A등급": 10,
-    "B++등급": 9, "B+등급": 8, "B등급": 7,
-    "C++등급": 6, "C+등급": 5, "C등급": 4,
-    "D++등급": 3, "D+등급": 2, "D등급": 1
-  };
+  const gradeRank = Object.fromEntries(FARM_GRADE_STEPS.map((g,i)=>[g,i+1]));
 
   spawnedMonsters.sort((a, b) => {
     return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
@@ -5213,6 +5393,7 @@ function processHunt(playerState) {
   }
 
   let middleContent = `${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
+  if(!spawnedMonsters.length)middleContent='';
   if (finalRewardLines.length > 0) {
     middleContent = middleContent + '\n' + finalRewardLines.join('\n');
   }
@@ -5223,17 +5404,15 @@ function processHunt(playerState) {
   let questLeftText = `📜 퀘스트 보상까지 ${remainingCount}회`;
 
   let footerLines = [
-    questLeftText,
-    '',
     '💵 현금 : ' + won(playerState.cash),
-    '💎 보석 : ' + (playerState.gem || 0).toLocaleString() + '개',
+    ...((playerState.gem || 0)>startingGem ? ['💎 보석 : '+playerState.gem.toLocaleString()+'개'] : []),
     '',
     '🔘 배율 : x' + lootMult.toFixed(2) + ' | ⏩ 배속 (x' + speed + ')',
-    '사냥 횟수 : (' + playerState.huntData.count + '/' + MAX_HUNT_COUNT + ')',
+    '⚔️ 사냥 횟수 : (' + playerState.huntData.count + '/' + MAX_HUNT_COUNT + ')',
     questLeftText
   ];
 
-  const text = `${middleContent}\n\n${footerLines.join('\n')}`;
+  const text = `${middleContent.trim()}\n\n${footerLines.join('\n')}`;
   
   // 수정사항 3: /사냥 후 선택지 /파밍 제거하고 /사냥으로 통일
   const choices = HUNT_CHOICES;
@@ -5241,9 +5420,10 @@ function processHunt(playerState) {
   const firstMonster = spawnedMonsters.length > 0 ? spawnedMonsters[0] : null;
 
   return {
+    combatPerformed: true,
     text,
     choices,
-    imageUrl: firstMonster?.image ?? null,
+    imageUrl: gemEventCount>0 ? BASE_URL+'/GEM_HUNT.png' : firstMonster?.image ?? null,
     image: firstMonster?.image ?? null,
     thumbnail: firstMonster?.image ?? null,
     url: firstMonster?.image ?? null,
@@ -5361,32 +5541,27 @@ function getJobPassiveRate(profile) {
   const level = Number(profile && profile.jobSkillLevel);
   return Math.max(1, Math.min(10, Number.isFinite(level) ? Math.floor(level) : 1)) / 100;
 }
-function getMonsterGradeWeights(profile) {
-  const factor = profile && profile.job === 'battlemage' ? 1 + getJobPassiveRate(profile) : 1;
-  const rows = [['EX',0.00000001],['SSS',0.00000099],['SS',0.000099],['S',0.0099],['A',0.49],['B',4.5],['C',25]];
-  const weighted = rows.map(([grade,weight])=>[grade,weight*factor]);
-  weighted.push(['D',100-weighted.reduce((sum,row)=>sum+row[1],0)]);
+function getMonsterGradeWeights(profile, includeGemEvent=false) {
+  const factor=profile && profile.job==='battlemage' ? 1+getJobPassiveRate(profile) : 1;
+  const rows=[['EX',0.001],['S',0.099],['A',0.9],['B',4.1],['C',15],['D',25]];
+  const weighted=rows.map(([g,w])=>[g,g==='D'?w:w*factor]);
+  if(includeGemEvent)weighted.unshift(['GEM',1]);
+  weighted.push(['E',100-weighted.reduce((sum,row)=>sum+row[1],0)]);
   return weighted;
 }
 function pickMonsterGrade(weights, roll) {
   let value = roll * 100;
   for (const [grade, weight] of weights) { if (value < weight) return grade; value -= weight; }
-  return 'D';
+  return 'E';
 }
-function getRandomMonsterByProbability(profile = null) {
+function getRandomMonsterByProbability(profile = null, selectedBase = null) {
   const weights = getMonsterGradeWeights(profile);
-  const baseGradeGroup = pickMonsterGrade(weights, Math.random());
-  const isPassiveTriggered = profile && profile.job === 'battlemage' && baseGradeGroup !== 'D';
+  const baseGradeGroup = selectedBase || pickMonsterGrade(weights, Math.random());
+  const isPassiveTriggered = profile && profile.job === 'battlemage' && !['E','D'].includes(baseGradeGroup);
 
   let subRoll = Math.random() * 100;
   let selectedGrade = baseGradeGroup + "등급";
-  if (subRoll < 1.0) {
-    selectedGrade = baseGradeGroup + "++등급";
-  } else if (subRoll < 10.0) {
-    selectedGrade = baseGradeGroup + "+등급";
-  } else {
-    selectedGrade = baseGradeGroup + "등급";
-  }
+  if(subRoll<1.0)selectedGrade=baseGradeGroup+'+등급';
 
   let baseLookupGrade = baseGradeGroup + "등급";
 
@@ -5457,17 +5632,20 @@ function getRaidAttackPower(profile) {
   return power;
 }
 function buildRaidText(profile, result) {
-  const raid = result.raid;
-  const lines = ['👹 협동 레이드', '모든 유저가 같은 보스를 공격합니다.', ''];
-  if (result.busy) lines.push('공격이 몰려 이번 공격은 반영되지 않았습니다. 다시 시도해 주세요.', '');
-  else if (result.attacked) {
-    lines.push('⚔️ 공격력 : ' + result.attackPower.toLocaleString(), '💥 입힌 피해 : ' + result.damage.toLocaleString(), '');
-    if (result.defeated) lines.push('🎉 레이드 보스를 처치했습니다!', '');
-  } else if (raid.hp === 0) lines.push('🏆 이미 처치된 레이드입니다.', '');
-  lines.push('HP : ' + raid.hp.toLocaleString() + ' / ' + raid.maxHp.toLocaleString(),
-    '남은 체력 : ' + (raid.hp / raid.maxHp * 100).toFixed(2) + '%');
-  if (!result.attacked) lines.push('💪 내 공격력 : ' + getRaidAttackPower(profile).toLocaleString());
-  if (raid.hp > 0) lines.push('', '/레이드 또는 /레이드 공격 : 공격', '/레이드 현황 : 체력 확인');
+  const raid=result.raid, pct=Math.max(0,Math.min(100,raid.hp/raid.maxHp*100));
+  const filled=Math.round(pct/10);
+  const lines=['👹 협동 레이드',''];
+  if(result.attacked) {
+    lines.push('💥 피해량 : '+result.damage.toLocaleString());
+    if(result.execute)lines.push('🪓 즉시 처형 발동!');
+    else if(result.percentStrike)lines.push('🪓 최대 체력 1% 추가 피해!');
+    lines.push('💵 현금 +'+result.cashEarned.toLocaleString()+'원','🧈 금괴 +'+result.goldEarned+'개','💎 보석 +'+result.gemEarned+'개','');
+  }
+  if (result.discovered) lines.push('🔎 새로운 레이드를 최초 발견했습니다!','📦 레이드 상자 +1개','');
+  if (result.raidBoxAwarded === 'kill') lines.push('🏆 레이드 처치!','📦 레이드 상자 +1개','');
+  if(raid.hp>0 && pct<5)lines.push('HP ???');
+  else lines.push('HP:'+'█'.repeat(filled)+'░'.repeat(10-filled)+' ('+pct.toFixed(2)+'%)',raid.hp.toLocaleString()+' / '+raid.maxHp.toLocaleString());
+  lines.push('',raid.hp>0 ? '/파밍·/사냥 중 0.1% 확률로 조우합니다.' : '🏆 처치된 레이드입니다. 다음 발견을 기다립니다.');
   return lines.join('\n');
 }
 
@@ -5489,9 +5667,16 @@ function parseAdminGrant(utterance) {
   return { targetId: parts[1], field: ADMIN_RESOURCES[parts[2]], label: parts[2], amount };
 }
 function formatRanking(rows) {
-  return ['🏆 공격력 랭킹 TOP 5', '', ...(rows.length ? rows.map((r, i) =>
-    (i + 1) + '위 · ' + r.nickname + '\n💪 공격력 : ' + r.power.toLocaleString()) : ['등록된 유저가 없습니다.'])].join('\n');
+  return ['🏆 공격력 랭킹 TOP 5','',...(rows.length ? rows.slice(0,5).map((r,i)=>(i+1)+'위· '+r.nickname+' | Lv.'+r.level+'\n💪 공격력 : '+r.power.toLocaleString()+'\n🎯 무기　 : +'+r.enhance+' '+r.weaponName) : ['등록된 유저가 없습니다.'])].join('\n');
 }
+function parseAdminRename(utterance) {
+  const match=String(utterance||'').trim().match(/^\/관리자\s+(\S+)\s+닉네임\s+(.+)$/u);
+  if(!match)return null;
+  const nickname=match[2].normalize('NFKC').trim();
+  if(!nickname || Array.from(nickname).length>60 || /[\x00-\x1f\x7f]/.test(nickname))return null;
+  return {targetId:match[1],nickname};
+}
+
 function formatRaidReward(raid, userId) {
   if (!raid || raid.hp > 0) return '';
   const reward = (raid.rewards || []).find(r => r.userId === userId);
@@ -5508,8 +5693,8 @@ function formatRaidReward(raid, userId) {
 // commit actual damage, contribution, cash and defeat rewards in the SAME transaction.
 const RAID_RULES_VERSION = 1;
 function resolveRaidAttack(profile, raid, options = {}) {
-  const source = options.source || 'command';
-  if (!['command','farm'].includes(source)) throw new Error('잘못된 레이드 공격 경로입니다.');
+  const source = options.source || 'farm';
+  if (!['farm','hunt'].includes(source)) throw new Error('잘못된 레이드 공격 경로입니다.');
   if (!raid || !Number.isSafeInteger(raid.hp) || !Number.isSafeInteger(raid.maxHp) || raid.hp < 0 || raid.maxHp <= 0 || raid.hp > raid.maxHp) throw new Error('레이드 체력 데이터가 올바르지 않습니다.');
   const random = options.random || Math.random;
   const draw = () => { const n=random(); if (!Number.isFinite(n) || n<0 || n>=1) throw new Error('잘못된 레이드 추첨값입니다.'); return n; };
@@ -5517,25 +5702,33 @@ function resolveRaidAttack(profile, raid, options = {}) {
   if (raid.hp === 0) return empty;
   const berserker = profile && profile.job === 'berserker';
   const chance = getJobPassiveRate(profile);
-  if (source === 'farm' && (!berserker || draw() >= chance)) return empty;
+  if (!(options.forceEncounter === true && isGameAdmin(options.actorId)) && draw() >= 0.001) return empty;
   const attackPower = getRaidAttackPower(profile);
   if (attackPower <= 0) return empty;
   const execute = berserker && raid.hp < raid.maxHp * 0.01 && draw() < chance;
   const percentStrike = !execute && berserker && draw() < chance;
   const bonusDamage = percentStrike ? Math.max(1, Math.floor(raid.maxHp * 0.01)) : 0;
   const damage = execute ? raid.hp : Math.min(raid.hp, attackPower + Math.min(raid.hp, bonusDamage));
-  return {version:RAID_RULES_VERSION,source,attacked:true,attackPower,damage,cashEarned:attackPower,execute,percentStrike,defeated:damage===raid.hp};
+  return {version:RAID_RULES_VERSION,source,attacked:true,attackPower,damage,cashEarned:damage,goldEarned:1+Math.floor(draw()*6),gemEarned:1+Math.floor(draw()*6),execute,percentStrike,defeated:damage===raid.hp};
 }
 function formatRaidAttackEffects(result) {
   if (!result || !result.attacked) return '';
-  return [result.source==='farm' ? '🪓 [버서커] 공동 레이드 조우!' : '',
+  return ['👹 공동 레이드 조우!',
     result.execute ? '🪓 즉시 처형 발동!' : result.percentStrike ? '🪓 레이드 최대 체력 1% 추가 피해!' : '',
-    '입힌 피해 : '+result.damage.toLocaleString(), '💵 현금 +'+result.cashEarned.toLocaleString()+'원'].filter(Boolean).join('\n');
+    '피해량 : '+result.damage.toLocaleString(), '💵 현금 +'+result.cashEarned.toLocaleString()+'원', '🧈 금괴 +'+result.goldEarned+'개', '💎 보석 +'+result.gemEarned+'개'].filter(Boolean).join('\n');
 }
 
 function processTurn(state, utterance, context = {}) {
   if (requiresGameAdmin(utterance) && !isGameAdmin(context && context.userId)) {
     return { text: "관리자만 사용할 수 있는 명령어입니다.", choices: [], state: state || {} };
+  }
+  const adminJob = String(utterance||'').trim().match(/^\/관리자\s+전직\s+(\S+)$/);
+  if(adminJob && isGameAdmin(context.userId)) {
+    const profile=createProfile(state && state.profile);
+    const entry=Object.entries(JOB_CATALOG).find(([key,data])=>data[0]===adminJob[1]);
+    if(!entry)return {text:'지원하는 직업명을 입력하세요: '+Object.values(JOB_CATALOG).map(x=>x[0]).join(', '),state:{profile,battle:state && state.battle}};
+    profile.userId=context.userId;profile.job=entry[0];profile.jobEnhance=0;profile.jobSkillLevel=1;profile.hasSeenJobGuide=false;
+    return {text:'🛠️ 관리자 전직 완료: '+entry[1][0]+'\n조건·비용 없이 전직했습니다. 무기 +0 / 스킬 Lv.1',imageUrl:getEnhanceImage('success',0,profile.job),state:{profile,battle:state && state.battle},adminAction:'job'};
   }
   // context.userId는 서버에서 확인한 본인의 MongoDB 조회 키만 전달한다.
   // 명령어 인수나 닉네임으로 ID를 설정하거나 생성하지 않는다.
@@ -5547,8 +5740,8 @@ function processTurn(state, utterance, context = {}) {
   if (userId) turnState.profile = { ...(turnState.profile || {}), userId };
   const result = processTurnInternal(turnState, utterance, context);
   // No offline queue: older servers ignore this field, and unprocessed attacks never accrue.
-  if (context.sharedRaidPassives === true && result && result.category === 'farm' && result.state.profile.job === 'berserker') {
-    result.raidIntent = {version:RAID_RULES_VERSION,source:'farm'};
+  if (context.sharedRaidPassives === true && result && result.combatPerformed) {
+    result.raidIntent = {version:RAID_RULES_VERSION,source:result.category};
   }
   if (context.sharedRaidPassives !== true && result && result.state && result.state.profile && result.state.profile.job === 'berserker' && String(utterance).trim() === '/전직') {
     result.text += '\n⚠️ 레이드 패시브: DB·서버 연동 대기 중';
@@ -5584,6 +5777,15 @@ function processTurnInternal(state, utterance, context = {}) {
   let input = typeof utterance === 'string' ? utterance.trim().replace(/\s+/g, ' ') : '';
   const cleanInput = input.toLowerCase();
 
+  if (cleanInput === '/광고') {
+    const rewards={cash:rand(1,100000),gold:rand(0,5),gem:rand(0,5),keys:rand(0,5)};
+    for(const [field,amount] of Object.entries(rewards)) {
+      const next=Number(profile[field]||0)+amount;
+      if(!Number.isSafeInteger(next))return {text:'재화 저장 한도를 초과했습니다.',state:{profile,battle}};
+    }
+    for(const [field,amount] of Object.entries(rewards))profile[field]=(profile[field]||0)+amount;
+    return {text:['🎁 광고 보상','현재는 광고 없이 보상을 지급합니다.','💵 현금 +'+won(rewards.cash),'🧈 금괴 +'+rewards.gold+'개','💎 보석 +'+rewards.gem+'개','🔑 비밀열쇠 +'+rewards.keys+'개'].join('\n'),choices:[],state:{profile,battle},category:'ad'};
+  }
   if (/^\/레이드(?:\s|$)/.test(cleanInput)) {
     return { text: '협동 레이드는 서버와 DB의 레이드 기능 연결이 필요합니다.', choices: [], state: { profile, battle } };
   }
@@ -5724,7 +5926,8 @@ function processTurnInternal(state, utterance, context = {}) {
       `📜 [사용 가능한 명령어 안내]`,
       `• /랭킹 - 공격력 랭킹`,
       `• /id - 사용자 ID 확인`,
-      `• /레이드 - 협동 레이드 공격 (현황: /레이드 현황)`,
+      `• /레이드 - 공동 레이드 체력 조회`,
+      `• /광고 - 임시 광고 보상 받기`,
       `• /파밍 - 파밍 시작 (기존 전투 기능 대체)`,
       `• /컬렉션 [페이지] - 사냥 몬스터 수집 현황 및 영구 효과`,
       `• /강화 - 무기 강화`,
@@ -5839,10 +6042,11 @@ function processTurnInternal(state, utterance, context = {}) {
       profile.keys = (profile.keys || 0) + (battle.accumulatedKeys || 0);
       profile.supplyItem = (profile.supplyItem || 0) + (battle.accumulatedSupplyItem || 0);
 
+      battle.accumulatedExp = Math.round((battle.accumulatedCash || 0) / 10);
       if (battle.accumulatedExp > 0) {
-        // 누적 시 이미 파밍 배율을 적용했으므로 종료 시 중복 적용하지 않는다.
+        // 이미 배율이 적용된 현금으로 계산한 EXP에 추가 배율을 곱하지 않는다.
         const expResult = addExp(profile, battle.accumulatedExp, 1);
-        // EXP 배율 적용 후 실제 지급량을 종료 내역에 보관한다.
+        // 실제 지급한 정수 EXP를 종료 내역에 보관한다.
         battle.accumulatedExp = expResult.gained;
         if (expResult.msg) displayMsgs.push(expResult.msg);
       }
@@ -5852,7 +6056,7 @@ function processTurnInternal(state, utterance, context = {}) {
         ? FARM_GRADE_STEPS[Math.min(highestIndex, FARM_GRADE_STEPS.length - 1)]
         : '없음';
       // 기존 등급별 상자 매핑을 유지한다. 처치가 없는 경우에도 기본 D 상자를 지급한다.
-      const boxKey = getFarmBoxKey(highestIndex >= 0 ? highestGrade : 'D등급');
+      const boxKey = getFarmBoxKey(highestIndex >= 0 ? highestGrade : 'E등급');
       const boxCount = battle.farmRunCount;
       let boxName;
       for (let i = 0; i < boxCount; i++) boxName = addBoxToInventory(profile, boxKey);
@@ -5883,11 +6087,12 @@ function processTurnInternal(state, utterance, context = {}) {
     }
 
     return {
-      text: [displayMsgs.join('\n\n'), battleStatusBoard({ ...profile, speedMultiplier: battle.farmRunCount }, battle, !!fightResult.encounter)].join('\n\n'),
+      text: [displayMsgs.join('\n\n'), battleStatusBoard({ ...profile, speedMultiplier: battle.farmRunCount }, battle, !!fightResult.encounter), hasEnded ? resourceText(profile) : ''].filter(Boolean).join('\n\n'),
 
       imageUrl: fightResult.imageUrl,
       choices: FARM_CHOICES,
       category: 'farm',
+      combatPerformed: true,
       state: { profile, battle }
     };
   }
@@ -6282,6 +6487,7 @@ function processTurnInternal(state, utterance, context = {}) {
       imageUrl: hResult.imageUrl,
       choices: HUNT_CHOICES,
       category: 'hunt',
+      combatPerformed: hResult.combatPerformed === true,
       state: { profile, battle }
     };
   }
@@ -6361,6 +6567,8 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     isGameAdmin, requiresGameAdmin, parseAdminGrant, ADMIN_RESOURCES, formatRanking, formatRaidReward,
     RAID_RULES_VERSION, resolveRaidAttack, formatRaidAttackEffects,
+    addRaidBox, RAID_BOX_NAME, RAID_TITLE, RAID_AVATAR,
+    parseAdminRename, getCurrentEnhanceLevel,
     JOB_CATALOG, getEnhanceImage, getWeaponInfo,
     RAID_IMAGE: BASE_URL + '/images/raid_1.png',
     getRaidAttackPower,
