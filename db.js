@@ -141,7 +141,11 @@ async function ensureRaid(db) {
 }
 async function getSharedRaid() {
   const db = await database(); await ensureRaid(db);
-  return db.collection('raids').findOne({ _id: RAID_ID });
+  const raid=await db.collection('raids').findOne({ _id: RAID_ID });
+  const leaders=(raid.participants || []).slice().sort((a,b)=>b.damage-a.damage || String(a.userId).localeCompare(String(b.userId))).slice(0,3);
+  raid.topContributors=await Promise.all(leaders.map(async p=>{const doc=await db.collection('sessions').findOne({_id:p.userId});return {...p,nickname:doc?.state?.profile?.nickname || p.nickname || '이름 없는 유저'};}));
+  if(raid.discoveredBy){const doc=await db.collection('sessions').findOne({_id:raid.discoveredBy});raid.discoveredNickname=doc?.state?.profile?.nickname || raid.discoveredNickname;}
+  return raid;
 }
 function distributeRaidRewards(participants) {
   const rows = participants.filter(p => Number.isSafeInteger(p.damage) && p.damage > 0)
@@ -214,7 +218,7 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
         addResources(stored.profile,{cash:hit.cashEarned,gold:hit.goldEarned,gem:hit.gemEarned});
         await users.updateOne({_id:userId},{$set:{state:stored}},{session});
         const participant=raid.participants.find(p=>p.userId===userId);
-        if(participant)participant.damage+=hit.damage;else raid.participants.push({userId,damage:hit.damage});
+        if(participant)participant.damage+=hit.damage;else raid.participants.push({userId,nickname:stored.profile.nickname,damage:hit.damage});
         raid.hp-=hit.damage;raid.attackCount++;raid.updatedAt=new Date();
         if(raid.hp===0) {
           raid.rewards=distributeRaidRewards(raid.participants);
