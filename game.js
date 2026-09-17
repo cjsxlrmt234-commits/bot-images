@@ -89,6 +89,263 @@ const JOB_CATALOG = {
   ]
 };
 const JOB_NAMES = Object.fromEntries(Object.entries(JOB_CATALOG).map(([k,v])=>[k,v[0]]));
+
+
+// 전직 계승형 스킬 시스템: 1차 스킬은 2차 전직 후에도 유지된다.
+const JOB_SKILLS = {
+  warrior: { tier:1, passive:'전투 본능', active:'전력 베기', passiveDesc:'스킬 Lv당 공격력 +1%', activeDesc:'다음 파밍 공격의 처치 확률 증가 (스킬 Lv에 따라 성장)', daily:3 },
+  archer: { tier:1, passive:'약점 조준', active:'집중 사격', passiveDesc:'스킬 Lv당 치명타 확률 +0.5%p', activeDesc:'다음 파밍 공격의 치명타 확률 증가 (스킬 Lv에 따라 성장)', daily:3 },
+  wizard: { tier:1, passive:'마력 증폭', active:'마력 폭주', passiveDesc:'스킬 Lv당 치명타 피해 +2%', activeDesc:'다음 3회 파밍 조우의 처치 확률 증가 (스킬 Lv에 따라 성장)', daily:3 },
+  thief: { tier:1, passive:'행운의 손', active:'그림자 습격', passiveDesc:'스킬 Lv당 파밍 희귀 재화 이벤트 가중치 +1%', activeDesc:'다음 파밍 처치의 현금 보상 증가 (스킬 Lv에 따라 성장)', daily:3 },
+  berserker: { tier:2, passive:'광전사의 피', active:'피의 폭주', passiveDesc:'HP가 낮을수록 파밍 공격력과 처치 보정 증가', activeDesc:'HP 20 소모 후 다음 파밍 처치 확률 증가 (스킬 Lv에 따라 성장)', daily:2 },
+  swordmaster: { tier:2, passive:'검의 경지', active:'일섬', passiveDesc:'스킬 Lv당 카운터 확률 +0.3%p', activeDesc:'다음 파밍 실패 시 카운터 판정을 1회 추가', daily:2 },
+  battlemage: { tier:2, passive:'마력 검술', active:'차원 균열', passiveDesc:'C~EX 계열 출현 가중치가 스킬 Lv만큼 증가', activeDesc:'마검 전용 던전 입장', daily:0 },
+  sniper: { tier:2, passive:'헤드샷', active:'필살 저격', passiveDesc:'치명타 공격의 최종 처치 확률 x1.2', activeDesc:'다음 파밍 처치 확률을 등급별 최소치까지 보정', daily:2 },
+  ranger: { tier:2, passive:'연속 사격', active:'화살비', passiveDesc:'스킬 Lv% 확률로 실패 시 피해 없이 1회 재공격', activeDesc:'다음 파밍 공격을 다회 판정 (스킬 Lv에 따라 공격 횟수 성장)', daily:2 },
+  hawkeye: { tier:2, passive:'매의 눈', active:'천공 추적', passiveDesc:'사냥 +등급 출현 확률 증가', activeDesc:'일정 횟수 사냥에서 등급 재추첨 (스킬 Lv에 따라 횟수 성장)', daily:2 },
+  archmage: { tier:2, passive:'대마력', active:'메테오', passiveDesc:'스킬 Lv당 치명타 피해 +3%', activeDesc:'다음 파밍 공격의 처치 확률 증가 (스킬 Lv에 따라 성장)', daily:2 },
+  elementalist: { tier:2, passive:'원소 순환', active:'원소 폭발', passiveDesc:'파밍 게임마다 화염/냉기/번개/대지 중 하나의 원소 효과', activeDesc:'현재 파밍의 원소 효과 강화 (스킬 Lv에 따라 성장)', daily:2 },
+  necromancer: { tier:2, passive:'영혼 수확', active:'망자의 군세', passiveDesc:'파밍 처치 시 10%+스킬 Lv% 확률로 영혼 +1', activeDesc:'영혼을 소모해 다음 파밍 처치 확률 증가 (스킬 Lv에 따라 비용/효과 성장)', daily:2 },
+  shadow: { tier:2, passive:'약탈', active:'그림자 약탈', passiveDesc:'스킬 Lv% 확률로 처치 현금/보석 보상을 1회 추가 획득', activeDesc:'다음 파밍 처치의 현금 보상 증가 (스킬 Lv에 따라 성장)', daily:2 },
+  assassin: { tier:2, passive:'급소 공격', active:'절명', passiveDesc:'치명타 시 등급 보정된 즉사 판정 추가', activeDesc:'HP 10 소모 후 다음 파밍 치명타 확률 증가 (스킬 Lv에 따라 성장)', daily:2 },
+  dualblade: { tier:2, passive:'쌍검 연격', active:'팬텀 러시', passiveDesc:'스킬 Lv% 확률로 실패 시 피해 없이 1회 재공격', activeDesc:'다음 파밍 공격을 다회 판정 (스킬 Lv에 따라 공격 횟수 성장)', daily:2 }
+};
+
+function getBaseJobCode(profile) {
+  if (!profile) return null;
+  if (profile.firstJob && JOB_CATALOG[profile.firstJob] && JOB_CATALOG[profile.firstJob][1] === 1) return profile.firstJob;
+  const data = JOB_CATALOG[profile.job];
+  if (!data) return null;
+  return data[1] === 1 ? profile.job : data[2];
+}
+function getSecondJobCode(profile) {
+  if (!profile) return null;
+  if (profile.secondJob && JOB_CATALOG[profile.secondJob] && JOB_CATALOG[profile.secondJob][1] === 2) return profile.secondJob;
+  const data = JOB_CATALOG[profile.job];
+  return data && data[1] === 2 ? profile.job : null;
+}
+function getJobSkillLevelFor(profile, jobCode) {
+  if (!jobCode) return 0;
+  const map = profile && profile.jobSkillLevels && typeof profile.jobSkillLevels === 'object' ? profile.jobSkillLevels : {};
+  const fallback = profile && profile.job === jobCode ? profile.jobSkillLevel : 1;
+  return normalizeStoredInt(map[jobCode], normalizeStoredInt(fallback, 1, 1, 10), 1, 10);
+}
+function setJobSkillLevelFor(profile, jobCode, level) {
+  if (!profile.jobSkillLevels || typeof profile.jobSkillLevels !== 'object') profile.jobSkillLevels = {};
+  profile.jobSkillLevels[jobCode] = normalizeStoredInt(level, 1, 1, 10);
+  if (profile.job === jobCode) profile.jobSkillLevel = profile.jobSkillLevels[jobCode];
+}
+function ensureSkillState(profile) {
+  if (!profile.skillState || typeof profile.skillState !== 'object') profile.skillState = {};
+  const st = profile.skillState;
+  if (typeof st.date !== 'string') st.date = '';
+  if (!st.dailyUses || typeof st.dailyUses !== 'object') st.dailyUses = {};
+  if (!st.buffs || typeof st.buffs !== 'object') st.buffs = {};
+  st.souls = normalizeStoredInt(st.souls, 0, 0);
+  const today = getKSTDateString();
+  if (st.date !== today) { st.date = today; st.dailyUses = {}; st.buffs = {}; }
+  return st;
+}
+function getSkillDailyMax(profile, jobCode) {
+  const def = JOB_SKILLS[jobCode];
+  if (!def) return 0;
+  if (jobCode === 'battlemage') return getJobSkillLevelFor(profile, jobCode);
+  return def.daily || 0;
+}
+function getSkillUses(profile, jobCode) {
+  const st = ensureSkillState(profile);
+  return normalizeStoredInt(st.dailyUses[jobCode], 0, 0);
+}
+function consumeSkillUse(profile, jobCode) {
+  const st = ensureSkillState(profile), max = getSkillDailyMax(profile, jobCode), used = getSkillUses(profile, jobCode);
+  if (max > 0 && used >= max) return false;
+  st.dailyUses[jobCode] = used + 1;
+  return true;
+}
+function getInheritedJobCodes(profile) {
+  return [getBaseJobCode(profile), getSecondJobCode(profile)].filter(Boolean);
+}
+
+
+// 업적 시스템: 완료한 업적 1개당 모든 보상성 현금 획득량 +1%.
+const ACHIEVEMENT_DEFS = [
+  { id:'lv10', name:'첫 성장', desc:'캐릭터 Lv.10 달성', type:'level', target:10 },
+  { id:'lv30', name:'숙련된 모험가', desc:'캐릭터 Lv.30 달성', type:'level', target:30 },
+  { id:'lv50', name:'강자의 길', desc:'캐릭터 Lv.50 달성', type:'level', target:50 },
+  { id:'lv100', name:'정점의 모험가', desc:'캐릭터 Lv.100 달성', type:'level', target:100 },
+  { id:'farm100', name:'파밍 입문자', desc:'파밍 게임 100회 완료', type:'games', target:100 },
+  { id:'farm500', name:'파밍 숙련자', desc:'파밍 게임 500회 완료', type:'games', target:500 },
+  { id:'farm1000', name:'파밍의 달인', desc:'파밍 게임 1,000회 완료', type:'games', target:1000 },
+  { id:'enh10', name:'강화의 시작', desc:'모험가 무기 최고 +10 달성', type:'enhance', target:10 },
+  { id:'enh20', name:'강화의 끝', desc:'모험가 무기 최고 +20 달성', type:'enhance', target:20 },
+  { id:'jobenh10', name:'전직 무기 숙련', desc:'전직 무기 최고 +10 달성', type:'jobEnhance', target:10 },
+  { id:'jobenh20', name:'전직 무기 초월', desc:'전직 무기 최고 +20 달성', type:'jobEnhance', target:20 },
+  { id:'refine10', name:'완벽한 제련', desc:'제련 +10 달성', type:'refine', target:10 },
+  { id:'collection10', name:'몬스터 연구가', desc:'몬스터 컬렉션 완성 10종 달성', type:'collection', target:10 },
+  { id:'titles5', name:'칭호 수집가', desc:'칭호 5개 보유', type:'titles', target:5 },
+  ...Object.keys(JOB_SKILLS).map(jobCode => ({
+    id:'master_'+jobCode,
+    name:(JOB_NAMES[jobCode] || jobCode)+' 마스터',
+    desc:(JOB_NAMES[jobCode] || jobCode)+' 스킬 Lv.10 달성',
+    type:'jobMaster', target:10, jobCode
+  }))
+];
+
+function getAchievementCurrent(profile, def) {
+  if (!profile || !def) return 0;
+  switch (def.type) {
+    case 'level': return normalizeStoredInt(profile.level, 1, 1);
+    case 'games': return normalizeStoredInt(profile.gamesPlayed, 0, 0);
+    case 'enhance': return normalizeStoredInt(profile.maxEnhanceHistory ?? profile.enhance, 0, 0);
+    case 'jobEnhance': return normalizeStoredInt(profile.maxJobEnhanceHistory ?? profile.jobEnhance, 0, 0);
+    case 'refine': return normalizeStoredInt(profile.refine, 0, 0);
+    case 'collection': return getMonsterCollectionPoints(profile);
+    case 'titles': return Array.isArray(profile.ownedTitles) ? profile.ownedTitles.length : 0;
+    case 'jobMaster': {
+      const map = profile.jobSkillLevels && typeof profile.jobSkillLevels === 'object' ? profile.jobSkillLevels : {};
+      if (Object.hasOwn(map, def.jobCode)) return normalizeStoredInt(map[def.jobCode], 0, 0, 10);
+      if (profile.job === def.jobCode) return normalizeStoredInt(profile.jobSkillLevel, 0, 0, 10);
+      return 0;
+    }
+    default: return 0;
+  }
+}
+
+function isAchievementCompleted(profile, def) {
+  return getAchievementCurrent(profile, def) >= def.target;
+}
+
+function getCompletedAchievementCount(profile) {
+  return ACHIEVEMENT_DEFS.reduce((n, def) => n + (isAchievementCompleted(profile, def) ? 1 : 0), 0);
+}
+
+function getAchievementCashBonusPct(profile) {
+  return getCompletedAchievementCount(profile); // 업적 1개 = +1%
+}
+
+function applyAchievementCashBonus(amount, profile) {
+  const value = Math.max(0, Number(amount) || 0);
+  return Math.floor(value * (1 + getAchievementCashBonusPct(profile) / 100));
+}
+
+function getAchievementText(profile) {
+  const completed = getCompletedAchievementCount(profile);
+  const lines = [
+    '🏆 [업적]',
+    `완료 : ${completed}/${ACHIEVEMENT_DEFS.length}`,
+    `💵 현금 획득량 보너스 : +${completed}%`,
+    '※ 업적 1개 완료마다 현금 획득량이 영구적으로 +1% 증가합니다.',
+    ''
+  ];
+  ACHIEVEMENT_DEFS.forEach((def, idx) => {
+    const current = getAchievementCurrent(profile, def);
+    const done = current >= def.target;
+    lines.push(`${done ? '✅' : '⬜'} ${idx+1}. ${def.name}`);
+    lines.push(`   ${def.desc} (${Math.min(current,def.target).toLocaleString()}/${def.target.toLocaleString()})`);
+  });
+  return lines.join('\n');
+}
+
+function getActiveSkillParams(profile, jobCode) {
+  const lv = getJobSkillLevelFor(profile, jobCode);
+  switch (jobCode) {
+    case 'warrior': return { chanceMult: 1.30 + lv * 0.02 }; // Lv1 1.32 -> Lv10 1.50
+    case 'archer': return { critBonus: 30 + lv * 2 + (lv >= 10 ? 5 : 0) }; // Lv10 마스터 +5%p
+    case 'wizard': return { chanceMult: 1.05 + lv * 0.005, encounters: 3 + (lv >= 10 ? 1 : 0) }; // Lv10 마스터 지속 +1회
+    case 'thief': return { cashMult: 1.50 + lv * 0.05 }; // 1.55 -> 2.00
+    case 'berserker': return { chanceMult: 1.50 + lv * 0.05, hpCost: 20 }; // 1.55 -> 2.00
+    case 'swordmaster': return { counterBonus: lv }; // 추가 판정 확률에 +1~10%p
+    case 'sniper': return { normalMin: 30 + lv * 2, exMin: 5 + lv * 0.5, exPlusMin: 1 + lv * 0.2 };
+    case 'ranger': return { attacks: (lv >= 6 ? 3 : 2) + (lv >= 10 ? 1 : 0) };
+    case 'hawkeye': return { hunts: 3 + Math.floor((lv - 1) / 3) + (lv >= 10 ? 1 : 0) }; // Lv10 마스터 +1회
+    case 'archmage': return { chanceMult: 1.25 + lv * 0.025 + (lv >= 10 ? 0.10 : 0) }; // Lv10 마스터 +0.10
+    case 'elementalist': return { elementMult: 2 + lv * 0.1 + (lv >= 10 ? 0.25 : 0) }; // Lv10 마스터 +0.25
+    case 'necromancer': return { chanceMult: 1.25 + lv * 0.05, soulCost: (lv >= 10 ? 7 : lv >= 7 ? 8 : lv >= 4 ? 9 : 10) - (lv >= 10 ? 1 : 0) };
+    case 'shadow': return { cashMult: 1.50 + lv * 0.05 + (lv >= 10 ? 0.10 : 0) }; // Lv10 마스터 +0.10
+    case 'assassin': return { critChance: Math.min(100, 55 + lv * 4.5), hpCost: 10 - (lv >= 10 ? 5 : 0) }; // Lv10 마스터 HP 소모 -5
+    case 'dualblade': return { attacks: (lv >= 6 ? 3 : 2) + (lv >= 10 ? 1 : 0) };
+    default: return {};
+  }
+}
+
+
+function isJobSkillMaster(profile, jobCode) {
+  return getJobSkillLevelFor(profile, jobCode) >= 10;
+}
+
+function getMasterEffectDescription(jobCode) {
+  const map = {
+    warrior: '전력 베기 사용 시 15% 확률로 일일 사용 횟수 미소모',
+    archer: '집중 사격 치명타 보너스 +5%p 추가',
+    wizard: '마력 폭주 지속 횟수 +1회',
+    thief: '그림자 습격으로 처치 시 10% 확률로 비밀열쇠 +1',
+    berserker: '피의 폭주 발동 시 20% 확률로 HP 소모 없음',
+    swordmaster: '일섬 추가 카운터 판정 보정 +5%p',
+    battlemage: '차원 균열 최종 현금·보석 보상 +10%',
+    sniper: '필살 저격 사용 시 10% 확률로 일일 사용 횟수 미소모',
+    ranger: '화살비 공격 판정 +1회',
+    hawkeye: '천공 추적 지속 +1회',
+    archmage: '메테오 처치 확률 배율 +0.10',
+    elementalist: '원소 폭발 강화 배율 +0.25',
+    necromancer: '망자의 군세 영혼 소모 -1',
+    shadow: '그림자 약탈 현금 배율 +0.10',
+    assassin: '절명 HP 소모 -5',
+    dualblade: '팬텀 러시 공격 판정 +1회'
+  };
+  return map[jobCode] || '';
+}
+
+function getPendingSkillEffects(profile) {
+  const st = ensureSkillState(profile);
+  const b = st.buffs || {};
+  const rows = [];
+  const add = (label, count, suffix='회 대기') => { if ((Number(count)||0) > 0) rows.push(`${label} ${count}${suffix}`); };
+  add('전력 베기', b.warriorSlash);
+  add('집중 사격', b.archerFocus);
+  add('마력 폭주', b.wizardSurge, '회 남음');
+  add('그림자 습격', b.thiefAmbush);
+  add('피의 폭주', b.berserkerRage);
+  add('일섬', b.swordmasterIssen);
+  add('필살 저격', b.sniperShot);
+  add('화살비', b.rangerRain);
+  add('천공 추적', b.hawkeyeTrack, '회 남음');
+  add('메테오', b.archmageMeteor);
+  add('원소 폭발', b.elementalistBurst);
+  add('망자의 군세', b.necroArmy);
+  add('그림자 약탈', b.shadowPlunder);
+  add('절명', b.assassinExecute);
+  add('팬텀 러시', b.dualRush);
+  return rows;
+}
+
+function formatSkillNumber(value, digits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0';
+  return n.toFixed(digits).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function getActiveSkillDescription(profile, jobCode) {
+  const p = getActiveSkillParams(profile, jobCode);
+  switch (jobCode) {
+    case 'warrior': return `다음 파밍 공격의 처치 확률 x${formatSkillNumber(p.chanceMult)}`;
+    case 'archer': return `다음 파밍 공격의 치명타 확률 +${formatSkillNumber(p.critBonus,1)}%p`;
+    case 'wizard': return `다음 ${p.encounters}회 파밍 조우의 처치 확률 x${formatSkillNumber(p.chanceMult,3)}`;
+    case 'thief': return `다음 파밍 처치의 현금 보상 x${formatSkillNumber(p.cashMult)}`;
+    case 'berserker': return `다음 파밍 시 HP ${p.hpCost} 소모, 처치 확률 x${formatSkillNumber(p.chanceMult)}`;
+    case 'swordmaster': return `다음 파밍 실패 시 카운터 판정 1회 추가 (추가 판정 +${p.counterBonus}%p)`;
+    case 'battlemage': return `마검 전용 던전 입장 (Lv에 따라 일일 횟수·토벌 수 증가)`;
+    case 'sniper': return `다음 파밍 최소 처치 확률 보정 (일반 ${formatSkillNumber(p.normalMin,1)}% / EX ${formatSkillNumber(p.exMin,1)}% / EX+ ${formatSkillNumber(p.exPlusMin,1)}%)`;
+    case 'ranger': return `다음 파밍 공격을 총 ${p.attacks}회 판정해 1회라도 성공하면 처치`;
+    case 'hawkeye': return `다음 ${p.hunts}회 사냥에서 등급을 한 번 더 뽑아 높은 등급 적용`;
+    case 'archmage': return `다음 파밍 공격의 처치 확률 x${formatSkillNumber(p.chanceMult)}`;
+    case 'elementalist': return `현재 파밍의 원소 효과를 다음 1회 x${formatSkillNumber(p.elementMult)} 강화`;
+    case 'necromancer': return `영혼 ${p.soulCost}개 소모, 다음 파밍 처치 확률 x${formatSkillNumber(p.chanceMult)}`;
+    case 'shadow': return `다음 파밍 처치의 현금 보상 x${formatSkillNumber(p.cashMult)}`;
+    case 'assassin': return `다음 파밍 시 HP ${p.hpCost} 소모, 치명타 확률 ${formatSkillNumber(p.critChance,1)}%`;
+    case 'dualblade': return `다음 파밍 공격을 총 ${p.attacks}회 판정`;
+    default: return JOB_SKILLS[jobCode]?.activeDesc || '';
+  }
+}
 //
 // game.js - 카카오 챗봇 호환 전체 통합 스크립트
 //
@@ -312,65 +569,131 @@ const monsters = [
 const gradeRewards = {
   "E등급": {
     "min": 10,
-    "max": 90
+    "max": 100
   },
   "E+등급": {
     "min": 100,
     "max": 200
   },
   "D등급": {
-    "min": 100,
+    "min": 200,
     "max": 300
   },
   "D+등급": {
+    "min": 300,
+    "max": 400
+  },
+  "C등급": {
     "min": 400,
     "max": 1000
   },
-  "C등급": {
-    "min": 2100,
-    "max": 3000
-  },
   "C+등급": {
-    "min": 3100,
-    "max": 4500
+    "min": 1000,
+    "max": 2000
   },
   "B등급": {
-    "min": 6100,
-    "max": 8000
+    "min": 2000,
+    "max": 3000
   },
   "B+등급": {
-    "min": 8100,
-    "max": 10000
+    "min": 3000,
+    "max": 4000
   },
   "A등급": {
-    "min": 15100,
-    "max": 20000,
+    "min": 4000,
+    "max": 10000,
     "gem": 1
   },
   "A+등급": {
-    "min": 20100,
-    "max": 35000,
+    "min": 10000,
+    "max": 20000,
     "gem": 5
   },
   "S등급": {
-    "min": 50100,
-    "max": 100000,
+    "min": 20000,
+    "max": 50000,
     "gem": 10
   },
   "S+등급": {
-    "min": 100100,
-    "max": 500000,
-    "gem": 50
+    "min": 50000,
+    "max": 100000,
+    "gem": 30
   },
   "EX등급": {
-    "min": 50000000,
-    "max": 100000000,
-    "gem": 5000
+    "min": 100000,
+    "max": 1000000,
+    "gem": 50
   },
   "EX+등급": {
-    "min": 100000000,
-    "max": 300000000,
-    "gem": 10000
+    "min": 500000,
+    "max": 1000000,
+    "gem": 100
+  }
+};
+
+// 던전 전용 보상표: 사냥 보상표와 별도로 관리합니다.
+const DUNGEON_GRADE_REWARDS = {
+  "E등급": {
+    "min": 10,
+    "max": 100
+  },
+  "E+등급": {
+    "min": 100,
+    "max": 200
+  },
+  "D등급": {
+    "min": 200,
+    "max": 300
+  },
+  "D+등급": {
+    "min": 300,
+    "max": 400
+  },
+  "C등급": {
+    "min": 400,
+    "max": 1000
+  },
+  "C+등급": {
+    "min": 1000,
+    "max": 2000
+  },
+  "B등급": {
+    "min": 2000,
+    "max": 3000
+  },
+  "B+등급": {
+    "min": 3000,
+    "max": 4000
+  },
+  "A등급": {
+    "min": 4000,
+    "max": 10000,
+    "gem": 1
+  },
+  "A+등급": {
+    "min": 10000,
+    "max": 20000,
+    "gem": 5
+  },
+  "S등급": {
+    "min": 20000,
+    "max": 50000,
+    "gem": 10
+  },
+  "S+등급": {
+    "min": 50000,
+    "max": 100000,
+    "gem": 30
+  },
+  "EX등급": {
+    "min": 100000,
+    "max": 1000000,
+    "gem": 50
+  },
+  "EX+등급": {
+    "min": 500000,
+    "max": 1000000,
+    "gem": 100
   }
 };
 
@@ -378,7 +701,7 @@ const FARM_BOX_INFO = {
   "E": {
     "name": "E등급 상자",
     "minCash": 100,
-    "maxCash": 1000,
+    "maxCash": 500,
     "minGold": 0,
     "maxGold": 0,
     "minGem": 0,
@@ -386,8 +709,8 @@ const FARM_BOX_INFO = {
   },
   "D": {
     "name": "D등급 상자",
-    "minCash": 1000,
-    "maxCash": 5000,
+    "minCash": 500,
+    "maxCash": 1000,
     "minGold": 1,
     "maxGold": 1,
     "minGem": 0,
@@ -396,58 +719,58 @@ const FARM_BOX_INFO = {
   },
   "C": {
     "name": "C등급 상자",
-    "minCash": 5000,
-    "maxCash": 10000,
+    "minCash": 1000,
+    "maxCash": 2000,
     "minGold": 1,
     "maxGold": 1,
     "minGem": 1,
     "maxGem": 1,
-    "goldChance": 0.3,
-    "gemChance": 0.3
+    "goldChance": 0.1,
+    "gemChance": 0.1
   },
   "B": {
     "name": "B등급 상자",
-    "minCash": 10000,
-    "maxCash": 50000,
-    "minGold": 2,
-    "maxGold": 2,
-    "minGem": 2,
-    "maxGem": 2,
+    "minCash": 2000,
+    "maxCash": 3000,
+    "minGold": 1,
+    "maxGold": 1,
+    "minGem": 1,
+    "maxGem": 1,
     "bonusBox": "A",
     "bonusBoxChance": 0.1
   },
   "A": {
     "name": "A등급 상자",
-    "minCash": 50000,
-    "maxCash": 100000,
-    "minGold": 5,
-    "maxGold": 5,
-    "minGem": 5,
-    "maxGem": 5,
-    "bonusBox": "EX+",
+    "minCash": 3000,
+    "maxCash": 10000,
+    "minGold": 1,
+    "maxGold": 1,
+    "minGem": 1,
+    "maxGem": 1,
+    "bonusBox": "S",
     "bonusBoxChance": 0.1,
     "monthlyTitleChance": 1
   },
   "S": {
     "name": "S등급 상자",
-    "minCash": 100000,
-    "maxCash": 200000,
-    "minGold": 7,
-    "maxGold": 7,
-    "minGem": 7,
-    "maxGem": 7,
-    "bonusBox": "EX+",
+    "minCash": 10000,
+    "maxCash": 50000,
+    "minGold": 5,
+    "maxGold": 5,
+    "minGem": 5,
+    "maxGem": 5,
+    "bonusBox": "EX",
     "bonusBoxChance": 0.1,
     "monthlyTitleChance": 1
   },
   "EX": {
     "name": "EX등급 상자",
-    "minCash": 200000,
-    "maxCash": 300000,
-    "minGold": 8,
-    "maxGold": 8,
-    "minGem": 8,
-    "maxGem": 8,
+    "minCash": 50000,
+    "maxCash": 100000,
+    "minGold": 10,
+    "maxGold": 10,
+    "minGem": 10,
+    "maxGem": 10,
     "bonusBox": "EX+",
     "bonusBoxChance": 0.1,
     "monthlyTitleChance": 1
@@ -483,56 +806,56 @@ const HUNT_BOX_INFO = {
     "minCash": 1000,
     "maxCash": 10000,
     "minGem": 1,
-    "maxGem": 5
+    "maxGem": 1
   },
   "D": {
     "name": "은 상자",
-    "minCash": 1000,
-    "maxCash": 50000,
+    "minCash": 10000,
+    "maxCash": 20000,
     "minGem": 1,
-    "maxGem": 10
+    "maxGem": 3
   },
   "C": {
     "name": "금 상자",
-    "minCash": 10000,
-    "maxCash": 100000,
-    "minGem": 5,
-    "maxGem": 15
+    "minCash": 20000,
+    "maxCash": 50000,
+    "minGem": 1,
+    "maxGem": 5
   },
   "B": {
     "name": "사파이어 상자",
-    "minCash": 10000,
-    "maxCash": 500000,
-    "minGem": 5,
-    "maxGem": 20
+    "minCash": 50000,
+    "maxCash": 100000,
+    "minGem": 1,
+    "maxGem": 10
   },
   "A": {
     "name": "에메랄드 상자",
     "minCash": 100000,
-    "maxCash": 1000000,
-    "minGem": 10,
-    "maxGem": 25
+    "maxCash": 200000,
+    "minGem": 1,
+    "maxGem": 15
   },
   "S": {
     "name": "제이다이트 상자",
-    "minCash": 100000,
-    "maxCash": 5000000,
-    "minGem": 10,
-    "maxGem": 30
+    "minCash": 200000,
+    "maxCash": 500000,
+    "minGem": 5,
+    "maxGem": 20
   },
   "EX": {
     "name": "루비 상자",
-    "minCash": 1000000,
-    "maxCash": 10000000,
-    "minGem": 15,
-    "maxGem": 35
+    "minCash": 500000,
+    "maxCash": 1000000,
+    "minGem": 5,
+    "maxGem": 25
   },
   "EX+": {
     "name": "다이아몬드 상자",
     "minCash": 1000000,
-    "maxCash": 50000000,
-    "minGem": 15,
-    "maxGem": 40
+    "maxCash": 5000000,
+    "minGem": 5,
+    "maxGem": 30
   }
 };
 
@@ -546,48 +869,115 @@ const MONTHLY_AVATARS = {
 // 파밍에서 처치할수록 다음 등급으로 도전한다. E→E+→D→D+ 순으로 이어진다.
 const FARM_GRADE_STEPS = ["E등급","E+등급","D등급","D+등급","C등급","C+등급","B등급","B+등급","A등급","A+등급","S등급","S+등급","EX등급","EX+등급"];
 
-const LOOT_DATABASE = {
-  hilt: [
-    { tier: "T1", name: "나무 조각 자루", desc: "거칠게 깎아 만든 임시 나무 자루 — 손에 잡히는 느낌이 엉성하고 쉽게 미끄러집니다." },
-    { tier: "T2", name: "가죽 끈 감은 자루", desc: "낡은 가죽을 촘촘히 감아 마찰력을 높인 입문용 자루 — 무난한 파지감을 제공합니다." },
-    { tier: "T3", name: "철제 보강 자루", desc: "내구성을 높이기 위해 금속 테두리로 마감한 전술형 자루 — 묵직한 안정감을 줍니다." },
-    { tier: "T4", name: "상어 가죽 인체공학 자루", desc: "손가락굴곡에 맞추어 인체공학적으로 성형된 고급 자루 — 최상의 그립감을 선사합니다." },
-    { tier: "T5", name: "미스릴 합금 자루", desc: "초경량 고강도 미스릴로 주조된 하이엔드 자루 — 날렵한 조작과 완벽한 균형감을 자랑합니다." },
-    { tier: "T6", name: "태초의 마력 자루", desc: "고대 신비의 마력이 서려 손에 쥐는 순간 일체감을 주는 궁극의 자루입니다." }
-  ],
-  guard: [
-    { tier: "T1", name: "녹슨 철판 코등이", desc: "대충 덧댄 조악한 철판 조각 — 방어 능력이 거의 없는 최하위 코등이입니다." },
-    { tier: "T2", name: "원형 황동 코등이", desc: "단순한 원형 고리 형태의 기본 코등이 — 상대의 칼날을 가볍게 튕겨내는 입문용입니다." },
-    { tier: "T3", name: "십자형 강철 코등이", desc: "튼튼한 탄소강으로 제작된 클래식한 십자 가드 — 안정적인 공방 일체를 지원합니다." },
-    { tier: "T4", name: "바스켓 hilt 코등이", desc: "손등 전체를 안전하게 감싸 보호하는 바스켓 형태의 전술형 코등이입니다." },
-    { tier: "T5", name: "날개형 정밀 코등이", desc: "상대의 검을 걸어 채기 용이하도록 날개 형태로 날렵하게 가공된 고급 코등이입니다." },
-    { tier: "T6", name: "빛의 장벽 코등이", desc: "물리적 실체와 에너지 방벽이 공존하여 적의 공격을 완벽히 무효화하는 궁극의 코등이입니다." }
-  ],
-  blade: [
-    { tier: "T1", name: "무딘 철제 검신", desc: "날이 제대로 서지 않아 때리는 것인지 베는 것인지 분간이 안 가는 기본 검신입니다." },
-    { tier: "T2", name: "접철식 강철 검신", desc: "여러 번 달구고 두드려 기본적인 예리함을 갖춘 실용적인 검신입니다." },
-    { tier: "T3", name: "열처리 카본 검신", desc: "특수 열처리를 거쳐 단단함과 유연성을 동시에 잡은 대중적인 검신입니다." },
-    { tier: "T4", name: "진은 코팅 명품 검신", desc: "표면을 진은으로 코팅하여 마력 전도율과 베기 성능을 대폭 끌어올린 중급형 검신입니다." },
-    { tier: "T5", name: "다마스쿠스 패턴 검신", desc: "수천 겹의 결이 살아 숨 쉬며 닿는 모든 것을 두 쪽으로 가르는 하이엔드 검신입니다." },
-    { tier: "T6", name: "차원 절단 검신", desc: "시공간의 틈새를 베어내는 초월적인 경지의 궁극의 검신입니다." }
-  ],
-  scabbard: [
-    { tier: "T1", name: "누런 천 검집", desc: "오염된 천 조각을 대충 꿰매어 칼날을 감싼 볼품없는 기본 검집입니다." },
-    { tier: "T2", name: "생가죽 검집", desc: "질긴 짐승의 가죽으로 만들어 비바람으로부터 칼날을 보호하는 입문용 검집입니다." },
-    { tier: "T3", name: "경질 우드 검집", desc: "단단한 원목을 파내어 제작한 깔끔한 실루엣의 표준형 검집입니다." },
-    { tier: "T4", name: "철갑 강화 검집", desc: "외부 충격으로부터 검을 완벽히 보호하는 철제 보강형 검집입니다." },
-    { tier: "T5", name: "룬 문자 각인 검집", desc: "고대의 마법 룬이 새겨져 검의 기운을 증폭시키는 고급 검집입니다." },
-    { tier: "T6", name: "무한 공간 검집", desc: "내부가 이차원으로 연결되어 무게를 상쇄하고 검을 즉시 출현시키는 궁극의 검집입니다." }
-  ],
-  pommel: [
-    { tier: "T1", name: "플라스틱 마개 폼멜", desc: "균형을 전혀 잡아주지 못하는 가벼운 플라스틱 조각 — 멋이 전혀 나지 않습니다." },
-    { tier: "T2", name: "원형 쇳덩이 폼멜", desc: "단순한 무게추 역할만 하는 묵직한 철제 폼멜입니다." },
-    { tier: "T3", name: "각진 보석 폼멜", desc: "작은 마석이 박혀 약간의 안정감을 주는 모던한 폼멜입니다." },
-    { tier: "T4", name: "견고한 타이탄 폼멜", desc: "전체적인 무게 중심을 손잡이 쪽으로 완벽히 잡아주는 전술형 폼멜입니다." },
-    { tier: "T5", name: "정령의 핵 폼멜", desc: "정령의 힘을 품어 검무의 속도를 가속하는 하이엔드 폼멜입니다." },
-    { tier: "T6", name: "우주 응집체 폼멜", desc: "중력을 제어하여 검의 파괴력을 극한으로 끌어올리는 최상위 폼멜입니다." }
-  ]
+const EQUIPMENT_SLOTS = ['helmet','top','bottom','gloves','boots','cape'];
+const EQUIPMENT_SLOT_NAMES = {
+  helmet:'모자', top:'상의', bottom:'하의', gloves:'장갑', boots:'신발', cape:'망토'
 };
+const EQUIPMENT_SLOT_DESCS = {
+  helmet:'머리와 감각을 보호하며 전투 집중력을 높여 줍니다.',
+  top:'상체를 보호하면서 전투의 핵심 움직임을 안정적으로 받쳐 줍니다.',
+  bottom:'하체의 균형과 이동을 보조해 긴 전투에서도 자세가 무너지지 않게 합니다.',
+  gloves:'무기와 마력을 다루는 손의 감각을 끌어올리는 장비입니다.',
+  boots:'발놀림과 기동성을 보조해 전투 중 안정적인 움직임을 돕습니다.',
+  cape:'등 뒤에 흐르는 기운을 정돈해 세트의 힘을 완성하는 상징적인 장비입니다.'
+};
+
+// 직업 테마별 6부위 × T1~T6 전리품 세트. 실제 착용은 없으며, 보유한 서로 다른 부위 수로 세트 효과가 발동한다.
+// 드롭은 현재 직업과 무관하게 warrior/archer/wizard/thief 세트 중 무작위로 결정된다.
+const JOB_GEAR_SETS = {
+  warrior: {
+    T1:{setName:'수련병 철갑 세트',theme:'낡았지만 전장의 기본기를 익히기에 충분한 수련병용 철갑 장비입니다.',items:{helmet:'낡은 철투구',top:'수련병 철흉갑',bottom:'누빈 철각반',gloves:'거친 전투장갑',boots:'징박힌 군화',cape:'해진 붉은 망토'}},
+    T2:{setName:'강철 용병 세트',theme:'실전을 거친 용병들이 애용하는 튼튼하고 실용적인 강철 장비입니다.',items:{helmet:'강철 용병투구',top:'강철 용병흉갑',bottom:'강철 전투각반',gloves:'용병대 건틀릿',boots:'강철 행군화',cape:'용병대 전투망토'}},
+    T3:{setName:'백은 기사 세트',theme:'정제된 백은과 균형 잡힌 판금으로 제작된 정예 기사단의 장비입니다.',items:{helmet:'백은 기사투구',top:'백은 기사흉갑',bottom:'백은 기사각반',gloves:'백은 건틀릿',boots:'백은 기사군화',cape:'백은 서약망토'}},
+    T4:{setName:'룬 수호자 세트',theme:'고대 방호 룬이 새겨져 검격과 마력을 함께 견디도록 설계된 수호 장비입니다.',items:{helmet:'룬 수호투구',top:'룬 수호흉갑',bottom:'룬 수호각반',gloves:'룬 각인 건틀릿',boots:'룬 수호군화',cape:'룬 장벽망토'}},
+    T5:{setName:'천공 성기사 세트',theme:'하늘의 성광과 폭풍의 힘을 두른 최상위 성기사용 장비입니다.',items:{helmet:'천공 성기사투구',top:'천공 성광흉갑',bottom:'천공 심판각반',gloves:'천공 심판건틀릿',boots:'천공 질풍군화',cape:'천공의 성광망토'}},
+    T6:{setName:'종말 신기사 세트',theme:'신역의 금속과 종말의 권능을 융합한 전사 테마 최종 장비입니다.',items:{helmet:'종말신의 투구',top:'아포칼립스 신갑',bottom:'종말신의 각반',gloves:'신벌의 건틀릿',boots:'신역 돌진군화',cape:'종말의 군림망토'}}
+  },
+  archer: {
+    T1:{setName:'숲길 사냥꾼 세트',theme:'가볍고 조용해 초보 사냥꾼이 숲을 누비기 좋은 가죽 장비입니다.',items:{helmet:'낡은 사냥꾼 후드',top:'숲길 가죽조끼',bottom:'사냥꾼 가죽바지',gloves:'활시위 가죽장갑',boots:'숲길 장화',cape:'풀잎 위장망토'}},
+    T2:{setName:'바람추적자 세트',theme:'바람의 흐름을 따라 몸을 가볍게 움직일 수 있도록 만든 기동 장비입니다.',items:{helmet:'바람추적자 후드',top:'바람결 사냥복',bottom:'질풍 가죽하의',gloves:'풍절 사격장갑',boots:'바람걸음 장화',cape:'추적자의 바람망토'}},
+    T3:{setName:'은월 명사수 세트',theme:'은빛 달의 마력을 머금어 정밀한 조준과 야간 사냥에 특화된 장비입니다.',items:{helmet:'은월 명사수 두건',top:'은월 사격복',bottom:'월광 추적하의',gloves:'은깃 명사수장갑',boots:'은월 잠행화',cape:'월영 사냥망토'}},
+    T4:{setName:'폭풍매 사수 세트',theme:'폭풍매의 깃과 번개 결정을 엮어 만든 고속 사격 전용 장비입니다.',items:{helmet:'폭풍매 전투후드',top:'뇌풍 사수갑',bottom:'폭풍매 기동하의',gloves:'뇌전 사격장갑',boots:'질풍매 장화',cape:'폭풍깃 날개망토'}},
+    T5:{setName:'별사냥꾼 세트',theme:'별의 궤적을 읽어 먼 거리의 적까지 추적하도록 만든 전설급 사냥 장비입니다.',items:{helmet:'별사냥꾼 관측후드',top:'성운 추적갑',bottom:'별궤적 사냥하의',gloves:'성궁 조준장갑',boots:'유성 추적화',cape:'성운의 사냥망토'}},
+    T6:{setName:'태양신 궁수 세트',theme:'태양신의 빛과 궤도를 품어 모든 표적을 꿰뚫는 궁수 테마 최종 장비입니다.',items:{helmet:'태양신의 월계후드',top:'아폴론 광휘갑',bottom:'태양궤도 전투하의',gloves:'신궁의 황금장갑',boots:'광속 추적화',cape:'태양신의 광휘망토'}}
+  },
+  wizard: {
+    T1:{setName:'견습 마도사 세트',theme:'기초 주문을 안정적으로 유지하도록 만든 초급 마도사의 천 장비입니다.',items:{helmet:'견습 마도사 모자',top:'견습 주문로브',bottom:'마력수련 하의',gloves:'초급 촉매장갑',boots:'마도학원 구두',cape:'견습생 마력망토'}},
+    T2:{setName:'룬 학자 세트',theme:'주문식과 룬 문자를 새겨 마력 흐름을 정교하게 다듬은 학자용 장비입니다.',items:{helmet:'룬 학자 모자',top:'룬문자 연구로브',bottom:'룬 회로하의',gloves:'룬 촉매장갑',boots:'마력회로 구두',cape:'룬 학술망토'}},
+    T3:{setName:'원소 현자 세트',theme:'불·물·바람·대지의 원소 균형을 유지하도록 제작된 상급 마도 장비입니다.',items:{helmet:'원소 현자의 관',top:'사원소 현자로브',bottom:'원소순환 하의',gloves:'원소결정 장갑',boots:'원소보행 장화',cape:'사원소 조화망토'}},
+    T4:{setName:'아르카나 마도사 세트',theme:'고대 비전식과 차원 마력을 제어하는 고위 마도사의 아르카나 장비입니다.',items:{helmet:'아르카나 마도관',top:'비전식 아르카나로브',bottom:'차원문양 하의',gloves:'비전 촉매장갑',boots:'차원보행 구두',cape:'아르카나 차원망토'}},
+    T5:{setName:'성운 대마도사 세트',theme:'성운과 별빛의 마력을 직접 끌어와 주문을 증폭시키는 전설급 마도 장비입니다.',items:{helmet:'성운 대마도사의 관',top:'코스모스 대마도사로브',bottom:'성좌회로 하의',gloves:'성운집속 장갑',boots:'별빛 부유화',cape:'코스모스 성운망토'}},
+    T6:{setName:'오메가 아르카눔 세트',theme:'모든 마법 계통과 세계의 근원식을 하나로 통합한 마법사 테마 최종 장비입니다.',items:{helmet:'오메가 지혜의 관',top:'아르카눔 근원로브',bottom:'세계식 마도하의',gloves:'신언의 마력장갑',boots:'시공초월 마도화',cape:'오메가 차원망토'}}
+  },
+  thief: {
+    T1:{setName:'뒷골목 잠입자 세트',theme:'소리와 빛을 최소화한 초보 잠입자용 가죽 장비입니다.',items:{helmet:'낡은 잠입자 두건',top:'뒷골목 잠입복',bottom:'검은 가죽하의',gloves:'소매치기 장갑',boots:'무소음 가죽화',cape:'해진 그림자망토'}},
+    T2:{setName:'밤그림자 도적 세트',theme:'어둠 속에서 실루엣을 흐리게 만들어 은밀한 접근을 돕는 장비입니다.',items:{helmet:'밤그림자 두건',top:'야행 잠입갑',bottom:'밤그림자 하의',gloves:'암행 손장갑',boots:'그림자 보행화',cape:'밤안개 망토'}},
+    T3:{setName:'독안개 암살자 세트',theme:'맹독과 연막을 다루는 암살자의 기습 전투에 맞춰 설계된 장비입니다.',items:{helmet:'독안개 암살두건',top:'맹독 암살갑',bottom:'독영 기동하의',gloves:'독니 암살장갑',boots:'연무 잠행화',cape:'독안개 은신망토'}},
+    T4:{setName:'월식 추적자 세트',theme:'달빛마저 삼키는 어둠의 직물을 사용해 흔적을 지우는 고급 잠행 장비입니다.',items:{helmet:'월식 추적두건',top:'월영 잠행갑',bottom:'월식 기동하의',gloves:'월식 절명장갑',boots:'무월 추적화',cape:'월식 은폐망토'}},
+    T5:{setName:'공허 팬텀 세트',theme:'공허의 틈을 스치듯 이동하며 모습을 흐리는 전설급 도적 장비입니다.',items:{helmet:'공허 팬텀 후드',top:'팬텀 차원갑',bottom:'공허유영 하의',gloves:'팬텀 절단장갑',boots:'공허도약 장화',cape:'팬텀 잔상망토'}},
+    T6:{setName:'무영 종결자 세트',theme:'존재의 흔적과 기척까지 지워 버리는 도적 테마 최종 장비입니다.',items:{helmet:'무영의 종결두건',top:'언씬 엔드 암살갑',bottom:'제로아워 잠행하의',gloves:'신살의 무영장갑',boots:'시간정지 잠행화',cape:'존재소거 망토'}}
+  }
+};
+
+function getGearItem(gearJob, tier, slot) {
+  const set = JOB_GEAR_SETS[gearJob] && JOB_GEAR_SETS[gearJob][tier];
+  const name = set && set.items && set.items[slot];
+  if (!set || !name || !EQUIPMENT_SLOT_NAMES[slot]) return null;
+  return {
+    category:'gear', gearJob, slot, categoryName:EQUIPMENT_SLOT_NAMES[slot], tier,
+    setName:set.setName, name,
+    desc:`${set.theme} ${EQUIPMENT_SLOT_DESCS[slot]}`
+  };
+}
+
+function getOwnedGearItems(profile) {
+  return (profile && Array.isArray(profile.inventory) ? profile.inventory : []).filter(x => x && x.category === 'gear');
+}
+
+function getEquipmentSetBonuses(profile) {
+  // 같은 직업 테마 + 같은 티어 + 서로 다른 부위를 보유해야 2/4/6세트가 발동한다.
+  // 착용 개념은 없으며 현재 플레이 직업과도 무관하다.
+  const groups = {};
+  for (const item of getOwnedGearItems(profile)) {
+    if (!item || !JOB_GEAR_SETS[item.gearJob] || !/^T[1-6]$/.test(item.tier || '') || !EQUIPMENT_SLOTS.includes(item.slot)) continue;
+    const key = `${item.gearJob}:${item.tier}`;
+    if (!groups[key]) groups[key] = new Set();
+    groups[key].add(item.slot);
+  }
+  const result = { cashPct:0, critRate:0, counterRate:0, critDmg:0, active:[], groups:{} };
+  for (const [key, slots] of Object.entries(groups)) {
+    const [gearJob,tier] = key.split(':');
+    const n = Number(tier.replace('T','')) || 0;
+    const count = slots.size;
+    result.groups[key] = count;
+    const setName = JOB_GEAR_SETS[gearJob][tier].setName;
+    if (count >= 2) { result.cashPct += n/100; result.active.push(`[${tier}] ${setName} 2세트: 현금 +${n}%`); }
+    if (count >= 4) { result.critRate += n; result.active.push(`[${tier}] ${setName} 4세트: 치명타 +${n}%p`); }
+    if (count >= 6) {
+      if (gearJob === 'warrior') { const v=n*0.5; result.counterRate += v; result.active.push(`[${tier}] ${setName} 6세트: 카운터 +${v}%p`); }
+      else if (gearJob === 'archer') { const v=n*0.5; result.critRate += v; result.active.push(`[${tier}] ${setName} 6세트: 추가 치명타 +${v}%p`); }
+      else if (gearJob === 'wizard') { const v=n*3; result.critDmg += v; result.active.push(`[${tier}] ${setName} 6세트: 치명타 피해 +${v}%`); }
+      else if (gearJob === 'thief') { const v=n*2; result.cashPct += v/100; result.active.push(`[${tier}] ${setName} 6세트: 추가 현금 +${v}%`); }
+    }
+  }
+  return result;
+}
+
+function getEquipmentSetProgressLines(profile) {
+  const bonuses = getEquipmentSetBonuses(profile);
+  const lines=[];
+  for (const gearJob of ['warrior','archer','wizard','thief']) {
+    for (let n=1;n<=6;n++) {
+      const tier='T'+n;
+      const count=bonuses.groups[`${gearJob}:${tier}`] || 0;
+      if (count <= 0) continue;
+      const setName=JOB_GEAR_SETS[gearJob][tier].setName;
+      lines.push(`[${tier}] ${setName} : ${count}/6부위${count>=6?' ✅ 6세트':count>=4?' ✅ 4세트':count>=2?' ✅ 2세트':''}`);
+    }
+  }
+  return lines;
+}
+
 
 const WEAPON_TIERS = [
   ['썩은 목검', '썩은 나무를 깎아 만든 낡은 목검'],
@@ -604,7 +994,7 @@ const WEAPON_TIERS = [
   ['서리송곳니', '얼음 짐승의 송곳니를 닮은 검'],
   ['폭풍 군주검', '폭풍 군주의 권능을 품은 장검'],
   ['폭풍의 천궁', '하늘의 폭풍을 화살에 싣는 활'],
-  ['퐁풍현자의 봉', '거센 바람과 천둥을 다스리는 현자의 봉'],
+  ['폭풍현자의 봉', '거센 바람과 천둥을 다스리는 현자의 봉'],
   ['질풍 암살도', '질풍처럼 스쳐 지나가는 암살자의 검'],
   ['붉은 귀왕의 송곳니', '붉은 귀왕의 분노가 깃든 마검'],
   ['혈귀왕의 마궁', '혈귀왕의 피를 머금은 저주의 활'],
@@ -2057,6 +2447,29 @@ const JOB_ENHANCE_TABLE = [
   { cost: 4000000, success: 0.05, keep: 0.75, drop: 0.05, destroy: 0.15, gemCost: 60 },
 ];
 
+
+// 2차 전직 전용 강화표
+// - 1차 전직 대비 현금 비용 5배
+// - 성공률은 단계별 3%p 하향(최저 2%)
+// - 낮아진 성공률만큼 유지 확률에 가산하여 하락/파괴 확률은 기존과 동일하게 유지
+// - +0 → +1부터 보석 5개, 이후 단계마다 5개씩 증가
+const SECOND_JOB_ENHANCE_TABLE = JOB_ENHANCE_TABLE.map((row, index) => {
+  const success = Math.max(0.02, Number((row.success - 0.03).toFixed(2)));
+  const shifted = row.success - success;
+  return {
+    ...row,
+    cost: row.cost * 5,
+    success,
+    keep: Number((row.keep + shifted).toFixed(2)),
+    gemCost: (index + 1) * 5
+  };
+});
+
+function getActiveEnhanceTable(profile) {
+  if (!profile || !profile.job) return ENHANCE_TABLE;
+  return getJobTier(profile) === 2 ? SECOND_JOB_ENHANCE_TABLE : JOB_ENHANCE_TABLE;
+}
+
 const REFINE_STARS = [
   ' ',        // 0성
   '☆',        // 1성
@@ -2295,7 +2708,8 @@ function getCollectionCombatPower(profile) {
 
 function applyCreatureCashBonus(amount, profile) {
   const cBonus = getCreatureBonus(profile);
-  return Math.floor(amount * (1 + cBonus.cashPct + getAvatarCashBonus(profile)));
+  const baseReward = Math.floor(amount * (1 + cBonus.cashPct + getAvatarCashBonus(profile) + getEquipmentSetBonuses(profile).cashPct));
+  return applyAchievementCashBonus(baseReward, profile);
 }
 
 function applyCreatureGoldBonus(goldAmount, profile) {
@@ -2311,14 +2725,8 @@ function applyCreatureGemBonus(gemAmount, profile) {
 }
 
 function getLootMultiplier(profile) {
-  if (!profile || !profile.inventory || profile.inventory.length === 0) return 1.00;
-  let totalMultiplier = 1.00;
-  profile.inventory.forEach(item => {
-    const tierNum = { T1: 1, T2: 2, T3: 3, T4: 4, T5: 5, T6: 6 }[item && item.tier];
-    if (!tierNum) return;
-    totalMultiplier += 0.10 * tierNum;
-  });
-  return Number(totalMultiplier.toFixed(2));
+  // 장비는 개별 부위 배율 없이 같은 세트 2/4/6부위 보유 효과만 적용한다.
+  return 1;
 }
 
 function getJobTier(profile) {
@@ -2326,7 +2734,9 @@ function getJobTier(profile) {
   return Object.hasOwn(JOB_CATALOG, job) ? JOB_CATALOG[job][1] : (job ? 1 : 0);
 }
 function getWeaponBaseMultiplier(profile) {
-  return Number(((1 + getJobTier(profile)) + normalizeWeaponLevel(getCurrentEnhanceLevel(profile)) * 0.05).toFixed(2));
+  const tier = getJobTier(profile);
+  const perLevel = tier === 2 ? 0.08 : 0.05;
+  return Number(((1 + tier) + normalizeWeaponLevel(getCurrentEnhanceLevel(profile)) * perLevel).toFixed(2));
 }
 function getGoldMultiplier(profile) {
   const currentEnhance = getCurrentEnhanceLevel(profile);
@@ -2421,11 +2831,12 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
   let baseMult, baseCrit, baseCritDmg, baseCounter, baseFullCounter;
 
   if (getJobTier(profile) === 2) {
-    baseMult = (3.00 + lvl * 0.05).toFixed(2);
-    baseCrit = 30.00 + lvl * 0.50;
-    baseCritDmg = 40.00 + lvl;
-    baseCounter = 3.00 + lvl * 0.10;
-    baseFullCounter = 1.50 + lvl * 0.10;
+    // 2차 전직 무기는 강화 비용/난이도가 높은 대신 단계당 성장폭도 더 크다.
+    baseMult = (3.00 + lvl * 0.08).toFixed(2);
+    baseCrit = 30.00 + lvl * 0.80;
+    baseCritDmg = 40.00 + lvl * 1.50;
+    baseCounter = 3.00 + lvl * 0.15;
+    baseFullCounter = 1.50 + lvl * 0.12;
   } else if (isJob) {
     baseMult = (2.00 + (lvl * 0.05)).toFixed(2);
     baseCrit = 10.00 + (lvl * 1.00);
@@ -2447,9 +2858,14 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
   const imprintCritWeight = getImprintTotalBonus(profile, 'critWeight');
 
   const collectionBonus = getMonsterCollectionBonus(profile);
-  const numCrit = Math.min(100, (baseCrit + imprintCritRate) * (1 + ampInfo.critWeight + (imprintCritWeight / 100)) + collectionBonus.critRate);
-  const numCounter = baseCounter + collectionBonus.counterRate;
-  baseCritDmg += collectionBonus.critDmg;
+  const baseJob = getBaseJobCode(profile);
+  const secondJob = getSecondJobCode(profile);
+  const archerCrit = baseJob === 'archer' ? getJobSkillLevelFor(profile, 'archer') * 0.5 : 0;
+  const swordCounter = secondJob === 'swordmaster' ? getJobSkillLevelFor(profile, 'swordmaster') * 0.3 : 0;
+  const gearSetBonus = getEquipmentSetBonuses(profile);
+  const numCrit = Math.min(100, (baseCrit + imprintCritRate + archerCrit) * (1 + ampInfo.critWeight + (imprintCritWeight / 100)) + collectionBonus.critRate + gearSetBonus.critRate);
+  const numCounter = baseCounter + collectionBonus.counterRate + swordCounter + gearSetBonus.counterRate;
+  baseCritDmg += collectionBonus.critDmg + gearSetBonus.critDmg;
   const numFullCounter = baseFullCounter;
   // 공격은 평타/치명타만 판정한다. 카운터/풀카운터는 피격 직전 별도 판정한다.
   const numNormal = 100 - numCrit;
@@ -2513,13 +2929,8 @@ function getAttackPower(profile) {
   const refineBonusMult = 1 + (refineLvl * 0.02);
   const imprintCombatBoost = getImprintTotalBonus(profile, 'combatBoost') / 100;
   
-  let smBonus = 0;
-  if (profile.job === 'swordmaster') {
-    const sLvl = profile.jobSkillLevel || 1;
-    smBonus = sLvl * 0.01;
-  }
-
-  return Math.floor(basePower * refineBonusMult * (1 + imprintCombatBoost + smBonus));
+  const warriorBonus = getBaseJobCode(profile) === 'warrior' ? getJobSkillLevelFor(profile, 'warrior') * 0.01 : 0;
+  return Math.floor(basePower * refineBonusMult * (1 + imprintCombatBoost + warriorBonus));
 }
 
 // 파밍 표시와 기존 공격력 계산을 같은 값으로 유지한다.
@@ -2532,7 +2943,9 @@ function getCriticalMultiplier(profile, stats = getEnhanceStats(getCurrentEnhanc
   const enhanceBonus = parseFloat(stats.critDmg) || 0;
   const refineBonus = Math.max(0, Number(profile.refine) || 0);
   const imprintBonus = getImprintTotalBonus(profile, 'critDmg');
-  return 2 + (enhanceBonus + refineBonus + imprintBonus) / 100;
+  const wizardBonus = getBaseJobCode(profile) === 'wizard' ? getJobSkillLevelFor(profile, 'wizard') * 2 : 0;
+  const archmageBonus = getSecondJobCode(profile) === 'archmage' ? getJobSkillLevelFor(profile, 'archmage') * 3 : 0;
+  return 2 + (enhanceBonus + refineBonus + imprintBonus + wizardBonus + archmageBonus) / 100;
 }
 
 function addExp(profile, baseAmount, rewardMultiplier = getExpMultiplier(profile)) {
@@ -2721,6 +3134,7 @@ function processPassClaimRewards(profile) {
     return { text: `⚠️ 현재 수령할 수 있는 시즌 패스 보상이 없습니다.` };
   }
 
+  totalCash = applyAchievementCashBonus(totalCash, profile);
   profile.cash += totalCash;
   profile.gold = (profile.gold || 0) + totalGold;
   profile.gem = (profile.gem || 0) + totalGem;
@@ -2742,7 +3156,15 @@ function processPassClaimRewards(profile) {
   return { text: rewardSummary.join('\n') };
 }
 
-const CURRENT_DATA_VERSION = 3;
+const CURRENT_DATA_VERSION = 5;
+
+// 저장소(DB/웹 state)에서 들어온 숫자형 데이터를 안전한 정수로 정규화한다.
+function normalizeStoredInt(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = Math.trunc(parsed);
+  return Math.min(max, Math.max(min, normalized));
+}
 
 function migrateProfileData(profile) {
   if (!profile || typeof profile !== 'object') profile = {};
@@ -2755,6 +3177,22 @@ function migrateProfileData(profile) {
   profile.mgsDungeonData.count = Math.max(0, Number(profile.mgsDungeonData.count) || 0);
   if (!Array.isArray(profile.ownedAvatars)) profile.ownedAvatars = [];
   if (typeof profile.equippedAvatar !== 'string') profile.equippedAvatar = '';
+  const jobData = JOB_CATALOG[profile.job];
+  if (jobData) {
+    if (jobData[1] === 1) {
+      profile.firstJob = profile.firstJob || profile.job;
+      profile.secondJob = null;
+    } else if (jobData[1] === 2) {
+      profile.firstJob = profile.firstJob || jobData[2];
+      profile.secondJob = profile.secondJob || profile.job;
+    }
+  }
+  if (!profile.jobSkillLevels || typeof profile.jobSkillLevels !== 'object') profile.jobSkillLevels = {};
+  if (profile.job && !profile.jobSkillLevels[profile.job]) profile.jobSkillLevels[profile.job] = normalizeStoredInt(profile.jobSkillLevel, 1, 1, 10);
+  if (profile.firstJob && !profile.jobSkillLevels[profile.firstJob]) profile.jobSkillLevels[profile.firstJob] = 1;
+  if (profile.secondJob && !profile.jobSkillLevels[profile.secondJob]) profile.jobSkillLevels[profile.secondJob] = profile.job === profile.secondJob ? normalizeStoredInt(profile.jobSkillLevel, 1, 1, 10) : 1;
+  profile.jobSkillLevel = profile.job ? getJobSkillLevelFor(profile, profile.job) : 1;
+  ensureSkillState(profile);
   if (!Number.isInteger(profile.equippedAvatarIndex) || profile.equippedAvatarIndex < 0 || profile.equippedAvatarIndex >= profile.ownedAvatars.length) {
     profile.equippedAvatarIndex = profile.equippedAvatar ? profile.ownedAvatars.indexOf(profile.equippedAvatar) : -1;
   }
@@ -2769,29 +3207,34 @@ function createProfile(existing = {}) {
     : generateRandomNickname();
 
   let profile = {
-    version: safeObj.version ?? CURRENT_DATA_VERSION,
+    version: normalizeStoredInt(safeObj.version, CURRENT_DATA_VERSION, 0),
     gradeSchemaVersion: 2,
     // 서버가 MongoDB 조회에 사용하는 사용자 ID. 기존 저장 키와 별도로 보존한다.
     userId: typeof safeObj.userId === 'string' ? safeObj.userId.trim() : '',
     monsterCollection: normalizeMonsterCollection(safeObj.monsterCollection),
-    cash: safeObj.cash ?? 0,
-    gold: safeObj.gold ?? 0,
-    gem: safeObj.gem ?? 0,
-    keys: safeObj.keys ?? 0,
-    enhance: safeObj.enhance ?? 0,
-    jobEnhance: safeObj.jobEnhance ?? 0,
-    totalEnhanceCost: safeObj.totalEnhanceCost ?? 0,       // 모험가 시절 일반무기 누적 강화 비용
-    totalJobEnhanceCost: safeObj.totalJobEnhanceCost ?? 0, // 전직 이후 전직무기 누적 강화 비용
-    refine: safeObj.refine ?? 0,
-    level: safeObj.level ?? 1,
-    exp: safeObj.exp ?? 0,
-    combatLevel: safeObj.combatLevel ?? 0,
-    job: safeObj.job ?? null,               
-    jobSkillLevel: safeObj.jobSkillLevel ?? 1, 
+    cash: normalizeStoredInt(safeObj.cash, 0, 0),
+    gold: normalizeStoredInt(safeObj.gold, 0, 0),
+    gem: normalizeStoredInt(safeObj.gem, 0, 0),
+    keys: normalizeStoredInt(safeObj.keys, 0, 0),
+    enhance: normalizeStoredInt(safeObj.enhance, 0, 0),
+    jobEnhance: normalizeStoredInt(safeObj.jobEnhance, 0, 0),
+    totalEnhanceCost: normalizeStoredInt(safeObj.totalEnhanceCost, 0, 0),       // 모험가 시절 일반무기 누적 강화 비용
+    totalJobEnhanceCost: normalizeStoredInt(safeObj.totalJobEnhanceCost, 0, 0), // 전직 이후 전직무기 누적 강화 비용
+    refine: normalizeStoredInt(safeObj.refine, 0, 0),
+    level: normalizeStoredInt(safeObj.level, 1, 1),
+    exp: normalizeStoredInt(safeObj.exp, 0, 0),
+    combatLevel: normalizeStoredInt(safeObj.combatLevel, 0, 0),
+    job: safeObj.job ?? null,
+    firstJob: typeof safeObj.firstJob === 'string' ? safeObj.firstJob : null,
+    secondJob: typeof safeObj.secondJob === 'string' ? safeObj.secondJob : null,
+    jobSkillLevel: normalizeStoredInt(safeObj.jobSkillLevel, 1, 1, 10),
+    jobSkillLevels: safeObj.jobSkillLevels && typeof safeObj.jobSkillLevels === 'object' ? { ...safeObj.jobSkillLevels } : {},
+    skillState: safeObj.skillState && typeof safeObj.skillState === 'object' ? JSON.parse(JSON.stringify(safeObj.skillState)) : { date:'', dailyUses:{}, buffs:{}, souls:0 },
     creature: safeObj.creature ?? null,
     imprints: normalizeImprints(safeObj.imprints), 
     imprintLocks: safeObj.imprintLocks && typeof safeObj.imprintLocks === 'object' ? { ...safeObj.imprintLocks } : { I: false, II: false, III: false, IV: false, V: false }, 
     inventory: Array.isArray(safeObj.inventory) ? safeObj.inventory.filter(item => item && typeof item === 'object').map(item => ({ ...item })) : [],
+    equippedGear: safeObj.equippedGear && typeof safeObj.equippedGear === 'object' ? JSON.parse(JSON.stringify(safeObj.equippedGear)) : {},
     nickname: nickname,
     title: safeObj.title ?? '',
     ownedTitles: Array.isArray(safeObj.ownedTitles) ? [...safeObj.ownedTitles] : [],
@@ -2799,17 +3242,25 @@ function createProfile(existing = {}) {
     ownedAvatars: Array.isArray(safeObj.ownedAvatars) ? [...new Set(safeObj.ownedAvatars.filter(x => typeof x === 'string' && x))] : [],
     equippedAvatar: typeof safeObj.equippedAvatar === 'string' ? safeObj.equippedAvatar : '',
     equippedAvatarIndex: -1, // 중복 제거 후 장착 이름으로 다시 계산
-    supplyItem: safeObj.supplyItem ?? safeObj.monthItems ?? 0,
-    gamesPlayed: safeObj.gamesPlayed ?? 0,
-    maxEnhanceHistory: safeObj.maxEnhanceHistory ?? (safeObj.enhance ?? 0),
-    maxJobEnhanceHistory: safeObj.maxJobEnhanceHistory ?? (safeObj.jobEnhance ?? 0),
+    supplyItem: normalizeStoredInt(safeObj.supplyItem ?? safeObj.monthItems, 0, 0),
+    gamesPlayed: normalizeStoredInt(safeObj.gamesPlayed, 0, 0),
+    maxEnhanceHistory: normalizeStoredInt(safeObj.maxEnhanceHistory ?? safeObj.enhance, 0, 0),
+    maxJobEnhanceHistory: normalizeStoredInt(safeObj.maxJobEnhanceHistory ?? safeObj.jobEnhance, 0, 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
     farmData: safeObj.farmData && typeof safeObj.farmData === 'object' ? { ...safeObj.farmData } : { date: "", count: 0, lastClaimedFarmQuest: 0 },
     huntData: safeObj.huntData && typeof safeObj.huntData === 'object' ? { ...safeObj.huntData } : { date: "", count: 0, lastClaimedHuntQuest: 0 },
     pvpData: safeObj.pvpData && typeof safeObj.pvpData === 'object' ? { ...safeObj.pvpData } : { date: "", count: 0 },
     dungeonData: safeObj.dungeonData && typeof safeObj.dungeonData === 'object' ? { ...safeObj.dungeonData } : { date: "", count: 0 },
-    speedMultiplier: safeObj.speedMultiplier ?? 1,
-    vault: safeObj.vault && typeof safeObj.vault === 'object' ? { ...safeObj.vault } : { level: 0, amount: 0, lastTime: 0 },
+    speedMultiplier: normalizeStoredInt(safeObj.speedMultiplier, 1, 1, 1000),
+    adminSpeedMode: safeObj.adminSpeedMode === true,
+    vault: safeObj.vault && typeof safeObj.vault === 'object'
+      ? {
+          ...safeObj.vault,
+          level: normalizeStoredInt(safeObj.vault.level, 0, 0),
+          amount: normalizeStoredInt(safeObj.vault.amount, 0, 0),
+          lastTime: normalizeStoredInt(safeObj.vault.lastTime, 0, 0)
+        }
+      : { level: 0, amount: 0, lastTime: 0 },
     helpSeen: safeObj.helpSeen && typeof safeObj.helpSeen === 'object' ? { ...safeObj.helpSeen } : {},
     seasonPass: safeObj.seasonPass && typeof safeObj.seasonPass === 'object' ? { ...safeObj.seasonPass } : { month: "", level: 1, exp: 0, claimedRewards: [], lastAttendanceDate: "", lastDailyDate: "", dailyFarmExpClaimed: false, dailyHuntExpClaimed: false },
     raidData: safeObj.raidData && typeof safeObj.raidData === 'object' ? { ...safeObj.raidData } : { hp: 100000000 },
@@ -3032,8 +3483,8 @@ function activeAbilityText(profile) {
   add('치명타 확률 가중치 (위 확률에 반영)', amp.critWeight * 100 + imprint('critWeight'));
   add('강화 성공 확률 보정', amp.successBonus + imprint('enhanceSuccess'), '%p');
   add('강화 비용 감소', Math.min(100, imprint('enhanceCostDown')));
-  const swordBonus = p.job === 'swordmaster' ? (p.jobSkillLevel || 1) * 0.01 : 0;
-  const attackIncrease = ((1 + (p.refine || 0) * 0.02) * (1 + imprint('combatBoost') / 100 + swordBonus) - 1) * 100;
+  const warriorBonus = getBaseJobCode(p) === 'warrior' ? getJobSkillLevelFor(p,'warrior') * 0.01 : 0;
+  const attackIncrease = ((1 + (p.refine || 0) * 0.02) * (1 + imprint('combatBoost') / 100 + warriorBonus) - 1) * 100;
   add('공격력 증가 (현재 공격력에 반영)', attackIncrease);
   add('칭호·아바타 수집 공격력 (현재 공격력에 반영)', getCollectionCombatPower(p), '');
   add('받는 피해 감소 (최소 피해 1)', imprint('damageReduce'), '');
@@ -3063,7 +3514,10 @@ function profileText(profile, detailed = false) {
   const totalMult = getGoldMultiplier(p).toFixed(2);
 
   const jobNames = JOB_NAMES;
-  const jobDisplay = p.job ? `${jobNames[p.job] || p.job} (Lv.${p.jobSkillLevel || 1})` : '모험가';
+  const firstJobCode = getBaseJobCode(p), secondJobCode = getSecondJobCode(p);
+  const jobDisplay = p.job ? (secondJobCode
+    ? `${jobNames[firstJobCode]} Lv.${getJobSkillLevelFor(p,firstJobCode)} → ${jobNames[secondJobCode]} Lv.${getJobSkillLevelFor(p,secondJobCode)}`
+    : `${jobNames[firstJobCode] || p.job} (Lv.${getJobSkillLevelFor(p,firstJobCode)})`) : '모험가';
   const displayTitle = p.equippedTitle || p.title || '없음';
   const displayAvatar = p.equippedAvatar || '없음';
   const creatureDisplay = p.creature ? (CREATURE_GRADES[p.creature]?.name || p.creature) : '없음';
@@ -3337,7 +3791,7 @@ function processSupply(profile, countArg = "1") {
       }
     } else if (roll < 10) {
       if (profile.ownedAvatars.includes(currentMonthAvatar)) {
-        totalCash += 1000000;
+        totalCash += applyAchievementCashBonus(1000000, profile);
         gainedAvatars.push(`중복 아바타: '${currentMonthAvatar}' → 현금 1,000,000원 대체`);
       } else {
         profile.ownedAvatars.push(currentMonthAvatar);
@@ -3407,7 +3861,9 @@ function createBattle(profile) {
     accumulatedGem: 0,
     accumulatedKeys: 0,  
     accumulatedSupplyItem: 0,
-    accumulatedExp: 0
+    accumulatedExp: 0,
+    eliteNext: false,
+    element: getSecondJobCode(profile) === 'elementalist' ? ['fire','frost','lightning','earth'][rand(0,3)] : null
   };
 }
 
@@ -3416,7 +3872,7 @@ function battleStatusBoard(profile, battle, showMonster = true) {
   const lines = [];
   if (showMonster) {
     const grade = FARM_GRADE_STEPS[getFarmGradeIndex(b.currentGradeIndex)];
-    lines.push('[' + grade + '] 몬스터 처치 확률 : ' + formatFarmChance(getFarmSuccessChance(b.currentGradeIndex, profile)) + '%');
+    lines.push('[' + grade + '] 몬스터 기본 처치 확률 : ' + formatFarmChance(getFarmSuccessChance(b.currentGradeIndex)) + '%');
   }
   lines.push('HP:' + makeHpBar(b.hp),
     '🛡️ 투구 : Lv.' + (b.helmetLevel || 0) + ' |🦺 갑옷 : Lv.' + (b.vestLevel || 0),
@@ -3505,16 +3961,22 @@ function getHuntBoxKey(grade) {
   return ['E','D','C','B','A','S','EX'].includes(base) ? base : 'E';
 }
 
+function getMonsterImage(image,grade) {
+  if(typeof image!=='string')return null;
+  return String(grade).includes('+') ? image.replace(/(\.(?:png|jpg|jpeg|webp))(?=[?#]|$)/i,'+$1') : image;
+}
 function createFarmMonster(grade) {
   const baseGrade = grade.replace(/[+등급]/g, '');
   const candidates = getMonstersByGrade(`${baseGrade}등급`);
-  const baseMonster = candidates.length > 0 ? candidates[rand(0, candidates.length - 1)] : getRandomMonsterByProbability({});
+  const baseMonster = candidates.length > 0 ? candidates[rand(0, candidates.length - 1)] : monsters[0];
   const prefixList = grade.includes('+') ? (prefixes[grade] || []) : [];
   const prefix = prefixList.length > 0 ? prefixList[rand(0, prefixList.length - 1)] : '';
-  const rewardMoney = getRewardMoney(grade);
-  const rewardGem = getRewardGem(grade);
+  // 파밍 보상은 getFarmCashReward에서 상자 현금 범위로만 계산합니다.
+  const rewardMoney = 0;
+  const rewardGem = 0;
   return {
     ...(baseMonster || {}),
+    image: getMonsterImage(baseMonster && baseMonster.image,grade),
     grade,
     fullName: prefix ? `${prefix} ${baseMonster.name}` : baseMonster.name,
     rewardMoney,
@@ -3528,7 +3990,7 @@ const FARM_SUCCESS_CAPS = [80,75,70,65,50,45,30,25,10,5,1,0.5,0.1,0.01];
 function getFarmGradeIndex(index) {
   return Math.max(0, Math.min(Math.floor(Number(index) || 0), FARM_GRADE_STEPS.length - 1));
 }
-function getFarmSuccessChance(gradeIndex, profile, damage) {
+function getFarmSuccessChance(gradeIndex) {
   const i = getFarmGradeIndex(gradeIndex);
   // 등급별 고정 확률. 추후 확률 옵션은 이 지점에서 별도로 적용한다.
   return FARM_SUCCESS_CAPS[i];
@@ -3537,12 +3999,68 @@ function formatFarmChance(chance) {
   return chance.toFixed(2);
 }
 
+
+// 랜덤 파밍 이벤트 전체 발생률은 항상 1%.
+// 이벤트를 추가/삭제해도 1% 관문을 먼저 통과한 뒤 등록된 이벤트 중 하나를 균등 추첨하므로
+// 각 이벤트의 개별 확률만 자동 재분배되고 총 발생률은 변하지 않는다.
+const FARM_RANDOM_EVENT_TOTAL_RATE = 0.01;
+const FARM_RANDOM_EVENTS = [
+  { id:'treasure_goblin', name:'보물 고블린' },
+  { id:'healing_spring', name:'회복의 샘' },
+  { id:'sealed_door', name:'봉인된 문' },
+  { id:'wandering_merchant', name:'떠돌이 상인' },
+  { id:'elite_invasion', name:'정예 몬스터 난입' }
+];
+
+function rollFarmRandomEvent(random = Math.random) {
+  if (!Array.isArray(FARM_RANDOM_EVENTS) || FARM_RANDOM_EVENTS.length === 0) return null;
+  if (random() >= FARM_RANDOM_EVENT_TOTAL_RATE) return null;
+  const index = Math.min(FARM_RANDOM_EVENTS.length - 1, Math.floor(random() * FARM_RANDOM_EVENTS.length));
+  return FARM_RANDOM_EVENTS[index];
+}
+
 // 해당 등급 파밍 상자의 현금 범위만 사용한다. 별도 금괴/보석 이벤트는 유지한다.
-function getFarmCashReward(profile, battle) {
+function getFarmCashReward(profile, battle, elementEffectMult = 1) {
   const grade = FARM_GRADE_STEPS[getFarmGradeIndex(battle ? battle.currentGradeIndex : 0)];
   const box = FARM_BOX_INFO[getFarmBoxKey(grade)];
   const cash = rand(Math.floor(box.minCash/10),Math.floor(box.maxCash/10));
-  return Math.floor(cash * getGoldMultiplier(profile) * (1+getAvatarCashBonus(profile))) * (profile.speedMultiplier || 1);
+  let elementalCash = 1;
+  if (getSecondJobCode(profile) === 'elementalist' && battle && battle.element === 'earth') elementalCash += 0.10 * Math.max(1, Number(elementEffectMult) || 1);
+  return applyAchievementCashBonus(Math.floor(cash * getGoldMultiplier(profile) * (1+getAvatarCashBonus(profile)+getEquipmentSetBonuses(profile).cashPct) * elementalCash) * (profile.speedMultiplier || 1), profile);
+}
+
+function resolveFarmRandomEvent(profile, battle, event) {
+  if (!event || !battle) return null;
+  const speed = Math.max(1, Math.floor(Number(profile && profile.speedMultiplier) || 1));
+  switch (event.id) {
+    case 'treasure_goblin': {
+      const cash = getFarmCashReward(profile, battle) * 5;
+      battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
+      return { text:`💰 [랜덤 이벤트] 보물 고블린 등장!\n도망치기 전에 보물을 빼앗았습니다.\n💵 현금 +${won(cash)}`, imageUrl:null };
+    }
+    case 'healing_spring': {
+      const before = Math.max(0, Number(battle.hp) || 0);
+      battle.hp = Math.min(100, before + 30);
+      const healed = battle.hp - before;
+      return { text:`⛲ [랜덤 이벤트] 회복의 샘 발견!\nHP +${healed} (${before} → ${battle.hp})`, imageUrl:null };
+    }
+    case 'sealed_door': {
+      const keys = speed;
+      battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keys;
+      return { text:`🚪 [랜덤 이벤트] 봉인된 문 발견!\n문틈에서 비밀열쇠를 발견했습니다.\n🔑 비밀열쇠 +${keys.toLocaleString()}개`, imageUrl:null };
+    }
+    case 'wandering_merchant': {
+      const supply = speed;
+      battle.accumulatedSupplyItem = (battle.accumulatedSupplyItem || 0) + supply;
+      return { text:`🧙 [랜덤 이벤트] 떠돌이 상인 등장!\n모험을 응원하며 보급품을 건넸습니다.\n📦 보급 +${supply.toLocaleString()}개`, imageUrl:null };
+    }
+    case 'elite_invasion': {
+      battle.eliteNext = true;
+      return { text:`⚠️ [랜덤 이벤트] 정예 몬스터 난입!\n다음 실제 몬스터는 처치 확률 x0.8, 처치 현금 x2가 적용됩니다.`, imageUrl:null };
+    }
+    default:
+      return null;
+  }
 }
 
 function rollShadowLoot(profile, cash, gem, random = Math.random) {
@@ -3556,88 +4074,184 @@ function rollShadowLoot(profile, cash, gem, random = Math.random) {
 }
 function resolveProgressionFarmTurn(profile, battle) {
   const speed = profile.speedMultiplier || 1;
-  const eventRoll = Math.random() * 100;
+  const skillState = ensureSkillState(profile);
+  const buffs = skillState.buffs;
+  const baseJob = getBaseJobCode(profile);
+  const secondJob = getSecondJobCode(profile);
+  const elementBurstActive = secondJob === 'elementalist' && (buffs.elementalistBurst || 0) > 0;
+  const elementEffectMult = elementBurstActive ? getActiveSkillParams(profile, 'elementalist').elementMult : 1;
 
-  if (eventRoll < 0.01) {
+  // 랜덤 파밍 이벤트는 전체 1% 고정. 이벤트 수가 늘어나면 1% 안에서 자동 균등 분배된다.
+  const randomFarmEvent = rollFarmRandomEvent();
+  if (randomFarmEvent) {
+    const eventResult = resolveFarmRandomEvent(profile, battle, randomFarmEvent);
+    if (eventResult) return eventResult;
+  }
+
+  // 도적 1차 패시브는 기존 희귀 재화 이벤트의 상대 가중치를 소폭 높인다.
+  const thiefEventMult = baseJob === 'thief' ? 1 + getJobSkillLevelFor(profile, 'thief') * 0.01 : 1;
+  const eventRoll = Math.random() * 100;
+  if (eventRoll < 0.01 * thiefEventMult) {
     battle.accumulatedSupplyItem = (battle.accumulatedSupplyItem || 0) + speed;
     return { text: `📦 [재화] 보급 +${speed}개`, imageUrl: `${BASE_URL}/SUPPLY_FARM.png` };
   }
-  if (eventRoll < 1.01) {
+  if (eventRoll < 1.01 * thiefEventMult) {
     const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
     const gold = applyCreatureGoldBonus(Math.max(1, rand(ampInfo.minGold, ampInfo.maxGold)), profile) * speed;
     battle.accumulatedGold = (battle.accumulatedGold || 0) + gold;
     return { text: `🧈 [재화] 금괴 +${gold.toLocaleString()}개`, imageUrl: `${BASE_URL}/GOLD_FARM.png` };
   }
-  if (eventRoll < 3.01) {
+  if (eventRoll < 3.01 * thiefEventMult) {
     const keys = Math.max(1, speed);
     battle.accumulatedKeys = (battle.accumulatedKeys || 0) + keys;
     return { text: `🔑 [재화] 비밀열쇠 +${keys}개`, imageUrl: `${BASE_URL}/KEY_FARM.png` };
   }
-  if (eventRoll < 10) {
+  if (eventRoll < 10 * thiefEventMult) {
     const cash = getFarmCashReward(profile, battle) * 10;
     battle.accumulatedCash += cash;
-
     return { text: `🎰 [재화] 잭팟 현금 +${won(cash)}`, imageUrl: null };
   }
 
   const gradeIndex = getFarmGradeIndex(battle.currentGradeIndex);
   const grade = FARM_GRADE_STEPS[gradeIndex];
-  // 실패 시 같은 몬스터를 유지하고, 프로필 백업에도 함께 저장한다.
-  if (!battle.farmMonster || battle.farmMonster.grade !== grade) {
-    battle.farmMonster = createFarmMonster(grade);
-  }
+  if (!battle.farmMonster || battle.farmMonster.grade !== grade) battle.farmMonster = createFarmMonster(grade);
   const monster = battle.farmMonster;
+  const originalMonster = monsters.find(m => m.name === monster.name);
+  if (originalMonster) monster.image = getMonsterImage(originalMonster.image, grade);
+
   const stats = getEnhanceStats(getCurrentEnhanceLevel(profile), profile.combatLevel || 0, profile);
-  const critical = Math.random() * 100 < Math.max(0, Math.min(100, stats.numCrit));
-  const damage = getCombatPower(profile);
-  // 기본 확률 × (2 + 치명타 피해 증가율), 최종 한도 100%.
-  // 등급별 값은 일반공격 기본 확률이다.
-  const normalSuccessChance = getFarmSuccessChance(gradeIndex, profile);
-  const successChance = Math.min(
-    100,
-    normalSuccessChance * (critical ? getCriticalMultiplier(profile, stats) : 1)
-  );
-  let killed = Math.random() * 100 < successChance;
+  const activationMessages = [];
+  let critChance = Math.max(0, Math.min(100, stats.numCrit));
+  if (buffs.archerFocus > 0) { const ap=getActiveSkillParams(profile,'archer'); critChance = Math.min(100, critChance + ap.critBonus); buffs.archerFocus--; activationMessages.push('🏹 [집중 사격 발동]\n치명타 확률 +'+formatSkillNumber(ap.critBonus,1)+'%p 적용'); }
+  if (buffs.assassinExecute > 0) { const ap=getActiveSkillParams(profile,'assassin'); critChance = Math.max(critChance, ap.critChance); buffs.assassinExecute--; battle.hp = Math.max(1, battle.hp - ap.hpCost); activationMessages.push('🔪 [절명 발동]\nHP -'+ap.hpCost+' | 치명타 확률 최소 '+formatSkillNumber(ap.critChance,1)+'% 적용'); }
+  if (secondJob === 'elementalist' && battle.element === 'lightning') critChance = Math.min(100, critChance + 10 * elementEffectMult);
+  const critical = Math.random() * 100 < critChance;
+
+  let damage = getCombatPower(profile);
+  let berserkerHpBonus = 0;
+  if (secondJob === 'berserker') {
+    const hp = Math.max(0, Number(battle.hp) || 0);
+    berserkerHpBonus = hp <= 25 ? 0.20 : hp <= 50 ? 0.10 : hp <= 75 ? 0.05 : 0;
+    damage = Math.floor(damage * (1 + berserkerHpBonus));
+  }
+  if (secondJob === 'elementalist' && battle.element === 'fire') damage = Math.floor(damage * (1 + 0.10 * elementEffectMult));
+
+  const normalSuccessChance = getFarmSuccessChance(gradeIndex);
+  const eliteActive = battle.eliteNext === true;
+  let successChance = normalSuccessChance * (critical ? getCriticalMultiplier(profile, stats) : 1);
+  if (eliteActive) {
+    successChance *= 0.8;
+    activationMessages.push('⚠️ [정예 몬스터]\n처치 확률 x0.8 | 처치 성공 시 현금 x2');
+  }
+  if (berserkerHpBonus > 0) successChance *= (1 + berserkerHpBonus);
+  if (secondJob === 'elementalist' && battle.element === 'fire') successChance *= (1 + 0.10 * elementEffectMult);
+  if (baseJob === 'wizard' && buffs.wizardSurge > 0) { const ap=getActiveSkillParams(profile,'wizard'); successChance *= ap.chanceMult; buffs.wizardSurge--; activationMessages.push('🔮 [마력 폭주 발동]\n처치 확률 x'+formatSkillNumber(ap.chanceMult,3)+' 적용 · 남은 강화 '+buffs.wizardSurge+'회'); }
+  if (buffs.warriorSlash > 0) { const ap=getActiveSkillParams(profile,'warrior'); successChance *= ap.chanceMult; buffs.warriorSlash--; activationMessages.push('🔥 [전력 베기 발동]\n처치 확률 x'+formatSkillNumber(ap.chanceMult)+' 적용'); if ((buffs.warriorMasterRefund||0)>0) { buffs.warriorMasterRefund--; activationMessages.push('👑 [마스터 효과 발동]\n이번 전력 베기는 일일 사용 횟수를 소모하지 않습니다.'); } }
+  if (secondJob === 'berserker' && buffs.berserkerRage > 0) { const ap=getActiveSkillParams(profile,'berserker'); const noHpCost=isJobSkillMaster(profile,'berserker') && Math.random()<0.20; if (!noHpCost) battle.hp = Math.max(1, battle.hp - ap.hpCost); successChance *= ap.chanceMult; buffs.berserkerRage--; activationMessages.push('🩸 [피의 폭주 발동]\n'+(noHpCost?'HP 소모 없음':'HP -'+ap.hpCost)+' | 처치 확률 x'+formatSkillNumber(ap.chanceMult)+' 적용'); if(noHpCost) activationMessages.push('👑 [마스터 효과 발동]\n광전사의 피가 HP 소모를 무효화했습니다.'); }
+  if (secondJob === 'sniper' && critical) successChance *= 1.2;
+  if (secondJob === 'sniper' && buffs.sniperShot > 0) {
+    const ap=getActiveSkillParams(profile,'sniper');
+    const minByGrade = grade === 'EX+등급' ? ap.exPlusMin : grade === 'EX등급' ? ap.exMin : ap.normalMin;
+    successChance = Math.max(successChance, minByGrade); buffs.sniperShot--; activationMessages.push('🎯 [필살 저격 발동]\n최소 처치 확률 '+formatSkillNumber(minByGrade,1)+'% 보정 적용');
+    if ((buffs.sniperMasterRefund||0)>0) { buffs.sniperMasterRefund--; activationMessages.push('👑 [마스터 효과 발동]\n이번 필살 저격은 일일 사용 횟수를 소모하지 않습니다.'); }
+  }
+  if (secondJob === 'archmage' && buffs.archmageMeteor > 0) { const ap=getActiveSkillParams(profile,'archmage'); successChance *= ap.chanceMult; buffs.archmageMeteor--; activationMessages.push('☄️ [메테오 발동]\n처치 확률 x'+formatSkillNumber(ap.chanceMult)+' 적용'); }
+  if (secondJob === 'necromancer' && buffs.necroArmy > 0) { const ap=getActiveSkillParams(profile,'necromancer'); successChance *= ap.chanceMult; buffs.necroArmy--; activationMessages.push('☠️ [망자의 군세 발동]\n처치 확률 x'+formatSkillNumber(ap.chanceMult)+' 적용'); }
+  if (elementBurstActive) { buffs.elementalistBurst--; activationMessages.push('🌈 [원소 폭발 발동]\n현재 원소 효과 x'+formatSkillNumber(elementEffectMult)+' 강화'); }
+  successChance = Math.min(100, successChance);
+
+  function rollKill() { return Math.random() * 100 < successChance; }
+  let killed = rollKill();
+  let specialLabel = '';
+
+  // 레인저/듀얼블레이드 액티브: 3연속 공격 판정, 보상은 1회만 지급.
+  if (!killed && ((secondJob === 'ranger' && buffs.rangerRain > 0) || (secondJob === 'dualblade' && buffs.dualRush > 0))) {
+    const activeJob = secondJob === 'ranger' ? 'ranger' : 'dualblade';
+    const attacks = getActiveSkillParams(profile, activeJob).attacks;
+    if (activeJob === 'ranger') { buffs.rangerRain--; activationMessages.push('🌧️ [화살비 발동]\n총 '+attacks+'회 공격 판정'); } else { buffs.dualRush--; activationMessages.push('⚔️ [팬텀 러시 발동]\n총 '+attacks+'회 공격 판정'); }
+    for (let i=1; i<attacks && !killed; i++) killed = rollKill();
+    if (killed) specialLabel = activeJob === 'ranger' ? '화살비' : '팬텀 러시';
+  }
+  // 패시브 재공격: 실패해도 추가 판정 자체로 HP 피해는 발생하지 않는다.
+  if (!killed && secondJob === 'ranger' && Math.random() < getJobSkillLevelFor(profile,'ranger') / 100) {
+    killed = rollKill(); if (killed) { specialLabel = '연속 사격'; activationMessages.push('🏹 [연속 사격 발동]\n추가 공격으로 처치 성공'); }
+  }
+  if (!killed && secondJob === 'dualblade' && Math.random() < getJobSkillLevelFor(profile,'dualblade') / 100) {
+    killed = rollKill(); if (killed) { specialLabel = '쌍검 연격'; activationMessages.push('⚔️ [쌍검 연격 발동]\n추가 공격으로 처치 성공'); }
+  }
+
+  // 어쌔신 급소 공격: 고등급일수록 즉사 확률을 강하게 제한한다.
+  if (!killed && critical && secondJob === 'assassin') {
+    const baseRate = getJobSkillLevelFor(profile,'assassin') * 0.02;
+    const gradeFactor = grade.startsWith('EX+') ? 0.1 : grade.startsWith('EX') ? 0.2 : grade.startsWith('S') ? 0.5 : 1;
+    if (Math.random() < baseRate * gradeFactor) { killed = true; specialLabel = '급소 공격'; activationMessages.push('🗡️ [급소 공격 발동]\n즉사 판정 성공'); }
+  }
+
   let counter = '';
   if (!killed) {
-    // 반격 직전에 한 번 추첨한다. 풀카운터와 카운터는 중복되지 않는다.
-    const roll = Math.random() * 100;
-    const fullRate = Math.max(0, Math.min(100, stats.numFullCounter));
-    const counterRate = Math.max(0, Math.min(100 - fullRate, stats.numCounter));
-    if (roll < fullRate) {
-      counter = '풀카운터';
-      killed = true;
-    } else if (roll < fullRate + counterRate) {
-      counter = '카운터';
+    const rollCounter = () => {
+      const roll = Math.random() * 100;
+      const issenBonus = secondJob === 'swordmaster' && (buffs.swordmasterIssen || 0) > 0 ? getActiveSkillParams(profile,'swordmaster').counterBonus + (isJobSkillMaster(profile,'swordmaster') ? 5 : 0) : 0;
+      const fullRate = Math.max(0, Math.min(100, stats.numFullCounter + issenBonus * 0.25));
+      const counterRate = Math.max(0, Math.min(100 - fullRate, stats.numCounter + issenBonus * 0.75));
+      if (roll < fullRate) return '풀카운터';
+      if (roll < fullRate + counterRate) return '카운터';
+      return '';
+    };
+    counter = rollCounter();
+    if (!counter && secondJob === 'swordmaster' && buffs.swordmasterIssen > 0) { buffs.swordmasterIssen--; const ib=getActiveSkillParams(profile,'swordmaster').counterBonus+(isJobSkillMaster(profile,'swordmaster')?5:0); activationMessages.push('⚡ [일섬 발동]\n카운터 판정 1회 추가 · 추가 판정 +'+ib+'%p'+(isJobSkillMaster(profile,'swordmaster')?' 👑':'')); counter = rollCounter(); }
+    if (counter === '풀카운터') {
+      // 풀카운터도 EX/EX+ 희소성을 완전히 우회하지 못하도록 등급별 상한을 둔다.
+      const fullChance = grade === 'EX+등급' ? 5 : grade === 'EX등급' ? 10 : grade === 'S+등급' ? 25 : grade === 'S등급' ? 50 : grade.startsWith('A') ? 75 : 100;
+      killed = Math.random() * 100 < fullChance;
+    } else if (counter === '카운터') {
       killed = Math.random() < 0.5;
     }
   }
-  // 성공/MISS 모두 현금을 누적한다. EXP는 종료 시 누적 현금의 1/10로 계산한다.
-  const cash = getFarmCashReward(profile, battle);
-  battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
 
+  let cash = getFarmCashReward(profile, battle, elementEffectMult);
+  let thiefAmbushMasterTriggered = false;
+  if (killed && (buffs.thiefAmbush > 0 || (secondJob === 'shadow' && buffs.shadowPlunder > 0))) {
+    let cashMult = 1;
+    if (buffs.thiefAmbush > 0) { const ap=getActiveSkillParams(profile,'thief'); cashMult *= ap.cashMult; buffs.thiefAmbush--; activationMessages.push('🌑 [그림자 습격 발동]\n처치 현금 보상 x'+formatSkillNumber(ap.cashMult)+' 적용'); if(isJobSkillMaster(profile,'thief') && Math.random()<0.10) thiefAmbushMasterTriggered=true; }
+    if (buffs.shadowPlunder > 0) { const ap=getActiveSkillParams(profile,'shadow'); cashMult *= ap.cashMult; buffs.shadowPlunder--; activationMessages.push('🗡️ [그림자 약탈 발동]\n처치 현금 보상 x'+formatSkillNumber(ap.cashMult)+' 적용'); }
+    cash = Math.floor(cash * cashMult);
+  }
+  if (killed && eliteActive) cash = Math.floor(cash * 2);
+  // 정예 효과는 다음 실제 몬스터 1회에만 적용된다. 재화/랜덤 이벤트 턴에서는 소모되지 않는다.
+  if (eliteActive) battle.eliteNext = false;
+
+  const chanceChanged = Math.abs(successChance - normalSuccessChance) > 1e-9;
+  const chanceText = chanceChanged
+    ? formatFarmChance(normalSuccessChance) + '% → ' + formatFarmChance(successChance) + '%'
+    : formatFarmChance(successChance) + '%';
   const lines = ['[' + grade + '] ' + monster.fullName,
-    '처치 확률 : ' + (critical ? formatFarmChance(normalSuccessChance)+'% → ' : '') + formatFarmChance(successChance) + '%'];
-  const attackLabel = critical ? '[치명타]' : '[공격]';
+    '처치 확률 : ' + chanceText];
+  if (activationMessages.length) lines.push('', ...activationMessages);
+  const attackLabel = specialLabel ? '['+specialLabel+']' : counter ? '[' + counter + ']' : (critical ? '[치명타]' : '[공격]');
   const encounter = { grade, fullName: monster.fullName, gradeIndex };
   if (killed) {
-    const gem = Math.floor(applyCreatureGemBonus(monster.rewardGem || 0, profile) * 0.5) * speed;
-    battle.accumulatedGem = (battle.accumulatedGem || 0) + gem;
     battle.highestGradeIndex = Math.max(Number.isInteger(battle.highestGradeIndex) ? battle.highestGradeIndex : -1, gradeIndex);
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
     battle.farmMonster = null;
+    battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
     lines.push(attackLabel + ' ' + damage);
     if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
-    if (gem > 0) lines.push('💎 보석 +' + gem + '개');
-    const stolen = rollShadowLoot(profile, cash, gem);
+    if (thiefAmbushMasterTriggered) { battle.accumulatedKeys=(battle.accumulatedKeys||0)+1; lines.push('👑 [마스터 효과 발동] 그림자 습격으로 비밀열쇠 +1개'); }
+    const stolen = rollShadowLoot(profile, cash, 0);
     battle.accumulatedCash += stolen.cash;
-    battle.accumulatedGem += stolen.gem;
-    if (stolen.text) lines.push(stolen.text);
+    if (stolen.text) lines.push('🗡️ [약탈 발동] '+stolen.text.replace(/^🗡️ \[섀도우 약탈\]\s*/,''));
+    if (secondJob === 'necromancer' && Math.random() < (0.10 + getJobSkillLevelFor(profile,'necromancer')/100)) {
+      skillState.souls = (skillState.souls || 0) + 1;
+      lines.push('☠️ [영혼 수확] 영혼 +1 (보유 '+skillState.souls+'개)');
+    }
     return { text: lines.join('\n'), imageUrl: monster.image || null, encounter };
   }
-  // 기존 카운터의 피해 무효화를 유지한다.
-  const hit = counter ? { finalDamage: 0, armorNotes: [] }
-    : calculateCombatDamage(profile, battle, rand(20, 30));
+
+  battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
+  let rawIncoming = rand(20,30);
+  if (secondJob === 'elementalist' && battle.element === 'frost') rawIncoming = Math.max(1, Math.floor(rawIncoming * Math.max(0, 1 - 0.10 * elementEffectMult)));
+  const hit = counter ? { finalDamage: 0, armorNotes: [] } : calculateCombatDamage(profile, battle, rawIncoming);
   const hpLoss = Math.min(battle.hp, hit.finalDamage);
   battle.hp = Math.max(0, battle.hp - hpLoss);
   checkDeath(battle);
@@ -3676,7 +4290,7 @@ function processEnhance(profile) {
   const currentLevel = profile[currentEnhanceKey];
   const [wName] = getWeaponInfo(currentLevel, profile.job);
 
-  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
+  const activeTable = getActiveEnhanceTable(profile);
 
   if (currentLevel >= activeTable.length) {
     const stats = getEnhanceStats(currentLevel, profile.combatLevel || 0, profile);
@@ -3799,7 +4413,7 @@ function calculateExpectedCost(targetLevel, isJob, profile) {
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
-  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
+  const activeTable = getActiveEnhanceTable(profile);
 
   let totalExpectedCost = 0;
 
@@ -3932,7 +4546,7 @@ function processMultiEnhance(profile, count) {
   const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
-  const activeTable = isJob ? JOB_ENHANCE_TABLE : ENHANCE_TABLE;
+  const activeTable = getActiveEnhanceTable(profile);
 
   for (let i = 0; i < targetCount; i++) {
     if (profile[currentEnhanceKey] >= activeTable.length) break; 
@@ -4437,19 +5051,57 @@ function processUpdatedBoxesCommand(profile, arg) {
 }
 
 function getJobInfoText(jobCode, skillLevel = 1) {
-  const chance = skillLevel * 1; 
-  if (jobCode === 'berserker') {
-    return `🪓 버서커 : 파밍·사냥 중 레이드 조우 확률 0.1%, 레이드 체력 1% 미만 시 ${chance}% 확률로 즉시 처형, 레이드 체력의 1% 피해를 입힐 확률 ${chance}%`;
-  } else if (jobCode === 'swordmaster') {
-    return `⚡ 소드마스터 : 공격력 ${chance}% 증가, 매일 랜덤 직업 변경 확률 ${chance}%`;
-  } else if (jobCode === 'shadow') {
-    const maxBet = skillLevel * 1000000;
-    return `🗡️ 섀도우 : 몬스터 처치 시 ${chance}% 확률로 해당 현금·보석 보상을 한 번 더 획득, /스킬 [금액] 커맨드 사용 가능 (최대 약탈 걸기: ${won(maxBet)})`;
-  } else if (jobCode === 'battlemage') {
-    const huntCount = skillLevel * 10;
-    return `🔮 마검사 : C~EX 각 등급 출현 확률이 기존 대비 ${chance}% 증가, /스킬 커맨드로 마검 전용 던전 입장 가능 (${skillLevel}회 사용 가능, B등급 이상 몬스터 ${huntCount}마리 연속 처치)`;
+  const def = JOB_SKILLS[jobCode];
+  if (!def) return '';
+  const fakeProfile={job:jobCode,firstJob:def.tier===1?jobCode:(JOB_CATALOG[jobCode]?.[2]||null),secondJob:def.tier===2?jobCode:null,jobSkillLevel:skillLevel,jobSkillLevels:{[jobCode]:skillLevel}};
+  return `${def.tier}차 ${JOB_NAMES[jobCode]} Lv.${skillLevel}\n패시브 [${def.passive}] ${def.passiveDesc}\n액티브 [${def.active}] ${getActiveSkillDescription(fakeProfile,jobCode)}`;
+}
+
+function getJobSkillOverview(profile) {
+  if (!profile.job) return '⚠️ 전직 후 스킬을 사용할 수 있습니다.';
+  ensureSkillState(profile);
+  const lines = ['✨ [전직 스킬]'];
+  const first = getBaseJobCode(profile), second = getSecondJobCode(profile);
+  if (first) {
+    const lv=getJobSkillLevelFor(profile,first), max=getSkillDailyMax(profile,first), used=getSkillUses(profile,first);
+    lines.push('', `① ${JOB_NAMES[first]} Lv.${lv}`, `패시브: ${JOB_SKILLS[first].passive} - ${JOB_SKILLS[first].passiveDesc}`, `액티브: ${JOB_SKILLS[first].active} - ${getActiveSkillDescription(profile,first)}`, `사용: ${used}/${max}회 · /스킬 1`);
   }
-  return '';
+  if (second) {
+    const lv=getJobSkillLevelFor(profile,second), max=getSkillDailyMax(profile,second), used=getSkillUses(profile,second);
+    lines.push('', `② ${JOB_NAMES[second]} Lv.${lv}`, `패시브: ${JOB_SKILLS[second].passive} - ${JOB_SKILLS[second].passiveDesc}`, `액티브: ${JOB_SKILLS[second].active} - ${getActiveSkillDescription(profile,second)}`, second==='battlemage' ? `사용: 마검 던전 ${profile.mgsDungeonData?.count||0}/${lv}회 · /스킬 2` : `사용: ${used}/${max}회 · /스킬 2`);
+  }
+  if (second==='necromancer') lines.push('', `☠️ 영혼 : ${profile.skillState?.souls||0}개`);
+  lines.push('', '강화: /전직 스킬 강화 1차 또는 /전직 스킬 강화 2차');
+  return lines.join('\n');
+}
+
+function getSkillTreeText(profile) {
+  checkAndResetMgsDungeonLimit(profile);
+  if (!profile.job) return '🌳 [스킬트리]\n⚠️ 전직 후 스킬트리를 확인할 수 있습니다.';
+  ensureSkillState(profile);
+  const first = getBaseJobCode(profile);
+  const second = getSecondJobCode(profile);
+  const lines = ['🌳 [스킬트리]', '※ 2차 전직 후에도 1차 패시브·액티브는 계속 유지됩니다.'];
+  const addJob = (jobCode, slot) => {
+    if (!jobCode || !JOB_SKILLS[jobCode]) return;
+    const lv = getJobSkillLevelFor(profile, jobCode);
+    const def = JOB_SKILLS[jobCode];
+    const max = getSkillDailyMax(profile, jobCode);
+    const used = getSkillUses(profile, jobCode);
+    lines.push('', `${slot} ${JOB_NAMES[jobCode]} · Skill Lv.${lv}${lv >= 10 ? ' 👑' : ''}`,
+      `🟢 패시브 [${def.passive}]`, def.passiveDesc,
+      `🔴 액티브 [${def.active}]`, getActiveSkillDescription(profile,jobCode),
+      jobCode === 'battlemage' ? `⏱ 사용 : 마검 던전 ${profile.mgsDungeonData?.count||0}/${lv}회` : `⏱ 오늘 사용 : ${used}/${max}회`,
+      `▶ 사용 : /스킬 ${slot === '① 1차' ? '1' : '2'}`);
+    if (lv >= 10) lines.push(`👑 마스터 효과 : ${getMasterEffectDescription(jobCode)}`);
+  };
+  addJob(first, '① 1차');
+  addJob(second, '② 2차');
+  if (second === 'necromancer') lines.push('', `☠️ 보유 영혼 : ${profile.skillState?.souls||0}개`);
+  const pendingEffects = getPendingSkillEffects(profile);
+  lines.push('', `✨ 대기 중 효과 : ${pendingEffects.length ? pendingEffects.join(' · ') : '없음'}`);
+  lines.push('', '⬆️ 강화 : /전직 스킬 강화 1차', second ? '⬆️ 강화 : /전직 스킬 강화 2차' : '');
+  return lines.filter(Boolean).join('\n');
 }
 
 function processJobCommand(profile, targetJob) {
@@ -4457,93 +5109,103 @@ function processJobCommand(profile, targetJob) {
   const costFactor = current && current[1] === 1 ? 10 : 1;
   const requiredCash = JOB_UNLOCK_CASH * costFactor;
   const requiredGold = JOB_UNLOCK_GOLD * costFactor;
-  const choices = Object.entries(JOB_CATALOG).filter(([key, data]) => !current ? data[1] === 1 : current[1] === 1 && data[1] === 2 && data[2] === current[2]);
+  const choices = Object.entries(JOB_CATALOG).filter(([key, data]) => !current ? data[1] === 1 : current[1] === 1 && data[1] === 2 && data[2] === getBaseJobCode(profile));
   if (!targetJob) return { text: [current ? current[1]+'차 직업 : '+current[0] : '1차 전직 안내',
     choices.length ? '조건: '+(current ? '1차 전직무기' : '일반무기')+' +20 / 현금 '+won(requiredCash)+' / 금괴 '+requiredGold+'개' : '2차 전직을 완료했습니다.',
-    ...choices.map(([key,data]) => '/전직 '+data[0]), current ? getJobInfoText(profile.job, profile.jobSkillLevel || 1) : ''].filter(Boolean).join('\n'),
+    ...choices.map(([key,data]) => '/전직 '+data[0]), current ? getJobSkillOverview(profile) : ''].filter(Boolean).join('\n'),
     choices: choices.map(([key,data]) => ({label:'/전직 '+data[0],action:'/전직 '+data[0]})) };
   const selected = choices.find(([key,data])=>data[0]===targetJob);
   if (!selected) return {text:'현재 직업에서 선택할 수 없는 전직입니다. /전직으로 가능한 직업을 확인하세요.'};
   if ((current ? profile.jobEnhance : profile.enhance) < 20) return {text:'전직하려면 현재 무기를 +20까지 강화해야 합니다.'};
   if (profile.cash < requiredCash || profile.gold < requiredGold) return {text:'전직 비용이 부족합니다. 현금 '+won(requiredCash)+' / 금괴 '+requiredGold+'개가 필요합니다.'};
   profile.cash -= requiredCash; profile.gold -= requiredGold;
-  profile.job = selected[0]; profile.jobEnhance = 0; profile.jobSkillLevel = 1; profile.hasSeenJobGuide = false;
-  return {text:'🎉 '+selected[1][1]+'차 전직 완료: '+selected[1][0]+'\n전직무기 +0부터 강화할 수 있습니다.', imageUrl:getEnhanceImage('success',0,profile.job)};
+  if (selected[1][1] === 1) {
+    profile.firstJob = selected[0]; profile.secondJob = null; profile.job = selected[0];
+  } else {
+    profile.firstJob = getBaseJobCode(profile) || selected[1][2]; profile.secondJob = selected[0]; profile.job = selected[0];
+  }
+  if (!profile.jobSkillLevels || typeof profile.jobSkillLevels !== 'object') profile.jobSkillLevels={};
+  if (!profile.jobSkillLevels[profile.job]) profile.jobSkillLevels[profile.job]=1;
+  profile.jobSkillLevel = getJobSkillLevelFor(profile,profile.job);
+  profile.jobEnhance = 0; profile.hasSeenJobGuide = false;
+  return {text:'🎉 '+selected[1][1]+'차 전직 완료: '+selected[1][0]+'\n'+(selected[1][1]===2 ? '1차 전직 스킬은 그대로 유지됩니다.\n' : '')+'전직무기 +0부터 강화할 수 있습니다.\n\n'+getJobSkillOverview(profile), imageUrl:getEnhanceImage('success',0,profile.job)};
 }
 function processJobChange(profile, targetJob) {
   const current=JOB_CATALOG[profile.job];
   const selected=Object.entries(JOB_CATALOG).find(([key,data])=>data[0]===targetJob);
-  if (!current || current[1]!==2 || !selected || selected[1][1]!==2 || selected[1][2]!==current[2] || selected[0]===profile.job)
+  if (!current || current[1]!==2 || !selected || selected[1][1]!==2 || selected[1][2]!==getBaseJobCode(profile) || selected[0]===profile.job)
     return {text:'2차 전직 후 같은 계열의 다른 2차 직업으로만 변경할 수 있습니다.'};
   if(profile.cash<JOB_CHANGE_CASH || profile.gold<JOB_CHANGE_GOLD || profile.gem<JOB_CHANGE_GEM) return {text:'직업 변경 비용: 현금 '+won(JOB_CHANGE_CASH)+' / 금괴 '+JOB_CHANGE_GOLD+'개 / 보석 '+JOB_CHANGE_GEM+'개'};
-  profile.cash-=JOB_CHANGE_CASH;profile.gold-=JOB_CHANGE_GOLD;profile.gem-=JOB_CHANGE_GEM;profile.job=selected[0];
-  return {text:'직업 변경 완료: '+selected[1][0]+' (강화와 스킬 레벨 유지)'};
+  const transferredSkillLevel = getJobSkillLevelFor(profile, profile.job);
+  profile.cash-=JOB_CHANGE_CASH;profile.gold-=JOB_CHANGE_GOLD;profile.gem-=JOB_CHANGE_GEM;
+  profile.secondJob=selected[0]; profile.job=selected[0];
+  // 같은 계열 2차 직업 변경은 강화 비용이 동일하므로 현재 2차 스킬 레벨을 그대로 이전한다.
+  setJobSkillLevelFor(profile, selected[0], transferredSkillLevel);
+  profile.jobSkillLevel=transferredSkillLevel;
+  // 유료 직업 변경 시 오늘의 스킬 사용 횟수와 예약 버프는 모두 초기화한다.
+  const st = ensureSkillState(profile);
+  st.dailyUses = {};
+  st.buffs = {};
+  profile.mgsDungeonData = { date: getKSTDateString(), count: 0 };
+  return {text:'직업 변경 완료: '+selected[1][0]+'\n2차 스킬 레벨 Lv.'+transferredSkillLevel+' 그대로 이전 완료\n1차 스킬 레벨도 그대로 유지됩니다.\n✨ 직업 변경으로 오늘의 스킬 사용 횟수와 대기 중 버프가 초기화되었습니다.\n\n'+getJobSkillOverview(profile)};
 }
 
-function processUpgradeJobSkill(profile, context = {}) {
-  if (profile.job === 'berserker' && context.sharedRaidPassives !== true) return {text:'버서커 레이드 패시브는 DB·서버 연동 대기 중입니다. 연결 전에는 스킬 강화 비용을 소모하지 않습니다.'};
-  if (!['berserker','swordmaster','battlemage','shadow'].includes(profile.job)) return {text:'이 직업은 아직 전용 스킬이 없어 스킬 강화 비용을 소모하지 않습니다.'};
-  if (!profile.job) {
-    return { text: `⚠️ 전직하지 않은 상태에서는 전직 스킬을 강화할 수 없습니다. [/전직]을 먼저 해주세요.` };
-  }
-
-  const currentLevel = profile.jobSkillLevel || 1;
-  if (currentLevel >= 10) {
-    return { text: `✨ 전직 스킬이 이미 최고 레벨(Lv.10 MAX)에 도달했습니다!` };
-  }
-
+function processUpgradeJobSkill(profile, context = {}, target = '') {
+  if (!profile.job) return { text: `⚠️ 전직하지 않은 상태에서는 전직 스킬을 강화할 수 없습니다. [/전직]을 먼저 해주세요.` };
+  const first=getBaseJobCode(profile), second=getSecondJobCode(profile);
+  const t=String(target||'').trim();
+  let jobCode = (/^(1|1차|일차|첫)/.test(t) ? first : /^(2|2차|이차|둘)/.test(t) ? second : (second || first));
+  if (!jobCode) return {text:'강화할 전직 스킬이 없습니다.'};
+  const currentLevel = getJobSkillLevelFor(profile,jobCode);
+  if (currentLevel >= 10) return { text: `✨ ${JOB_NAMES[jobCode]} 스킬이 이미 최고 레벨(Lv.10 MAX)에 도달했습니다!` };
   const goldCost = currentLevel * 500;
-  if ((profile.gold || 0) < goldCost) {
-    return { text: `금괴가 부족합니다!\n(Lv.${currentLevel}➔Lv.${currentLevel + 1} 강화 필요: 금괴 ${goldCost.toLocaleString()}개 | 보유: 금괴 ${(profile.gold || 0).toLocaleString()}개)` };
-  }
-
+  if ((profile.gold || 0) < goldCost) return { text: `금괴가 부족합니다!\n(${JOB_NAMES[jobCode]} Lv.${currentLevel}➔Lv.${currentLevel + 1} 필요: 금괴 ${goldCost.toLocaleString()}개 | 보유: ${(profile.gold || 0).toLocaleString()}개)` };
   profile.gold -= goldCost;
-  profile.jobSkillLevel = currentLevel + 1;
-
-  const jobNames = JOB_NAMES;
-
-  return { 
-    text: [
-      `전직 스킬 승급 성공!`,
-      `${jobNames[profile.job]} 스킬 레벨: Lv.${currentLevel} ➔ Lv.${profile.jobSkillLevel}`,
-      `(소모: 금괴 ${goldCost.toLocaleString()}개)`,
-      getJobInfoText(profile.job, profile.jobSkillLevel),
-      ``,
-      resourceText(profile)
-    ].join('\n')
-  };
+  setJobSkillLevelFor(profile,jobCode,currentLevel+1);
+  return {text:[`✨ 전직 스킬 승급 성공!`,`${JOB_NAMES[jobCode]} 스킬 레벨: Lv.${currentLevel} ➔ Lv.${currentLevel+1}`,`(소모: 금괴 ${goldCost.toLocaleString()}개)`,getJobInfoText(jobCode,currentLevel+1),'',resourceText(profile)].join('\n')};
 }
 
-// 통합 /스킬 핸들러 (전직별 스킬 실행)
 function processJobSkill(profile, arg, context = {}) {
-  if (!profile.job) {
-    return { text: `⚠️ 전직 후에 액티브 스킬을 사용할 수 있습니다. [/전직] 명령어로 전직해 보세요.` };
-  }
-
-  if (profile.job === 'shadow') {
-    return processShadowBattle(profile, arg);
-  } else if (profile.job === 'battlemage') {
-    return processMgsDungeon(profile);
-  } else if (profile.job === 'berserker') {
-    return {text:context.sharedRaidPassives === true ? '🪓 버서커: 파밍·사냥 중 공동 레이드 조우(0.1%), 레이드 공격 시 처형·추가 피해 패시브가 적용됩니다.' : '🪓 버서커 레이드 패시브는 DB·서버 연동 대기 중입니다.'};
-  } else if (profile.job === 'swordmaster') {
-    const todayStr = getKSTDateString();
-    const skillLevel = profile.jobSkillLevel || 1;
-    const jobNames = JOB_NAMES;
-
-    if (profile.lastSmSkillDate !== todayStr) {
-      profile.lastSmSkillDate = todayStr;
-      if (Math.random() < (skillLevel * 0.01)) {
-        const otherJobs = ['berserker', 'battlemage'];
-        const chosen = otherJobs[rand(0, otherJobs.length - 1)];
-        profile.job = chosen;
-        return { text: `⚡ [소드마스터 스킬 발동!] 자정이 지나 최초 /스킬 입력에 따라 직업이 '${jobNames[chosen]}' (으)로 변경되었습니다!` };
-      }
+  if (!profile.job) return { text: `⚠️ 전직 후에 액티브 스킬을 사용할 수 있습니다. [/전직] 명령어로 전직해 보세요.` };
+  ensureSkillState(profile);
+  const input=String(arg||'').trim();
+  if (!input) return {text:getJobSkillOverview(profile)};
+  if (/^대결\s+/.test(input) && getSecondJobCode(profile)==='shadow') return processShadowBattle(profile,input.replace(/^대결\s+/,''));
+  const first=getBaseJobCode(profile), second=getSecondJobCode(profile);
+  const jobCode=/^(1|1차)(\s|$)/.test(input) ? first : /^(2|2차)(\s|$)/.test(input) ? second : null;
+  if (!jobCode) return {text:'사용법: /스킬 1 (1차 액티브) 또는 /스킬 2 (2차 액티브)\n\n'+getJobSkillOverview(profile)};
+  const st=ensureSkillState(profile), buffs=st.buffs, lv=getJobSkillLevelFor(profile,jobCode), def=JOB_SKILLS[jobCode];
+  if (!def) return {text:'사용할 수 있는 스킬이 없습니다.'};
+  if (jobCode==='battlemage') return processMgsDungeon(profile);
+  if (!consumeSkillUse(profile,jobCode)) return {text:`⚠️ 오늘의 [${def.active}] 사용 횟수를 모두 소모했습니다. (${getSkillUses(profile,jobCode)}/${getSkillDailyMax(profile,jobCode)})`};
+  switch(jobCode) {
+    case 'warrior':
+      buffs.warriorSlash=(buffs.warriorSlash||0)+1;
+      if (isJobSkillMaster(profile,'warrior') && Math.random() < 0.15) { st.dailyUses[jobCode]=Math.max(0,(st.dailyUses[jobCode]||1)-1); buffs.warriorMasterRefund=(buffs.warriorMasterRefund||0)+1; }
+      break;
+    case 'archer': buffs.archerFocus=(buffs.archerFocus||0)+1; break;
+    case 'wizard': buffs.wizardSurge=(buffs.wizardSurge||0)+getActiveSkillParams(profile,'wizard').encounters; break;
+    case 'thief': buffs.thiefAmbush=(buffs.thiefAmbush||0)+1; break;
+    case 'berserker': buffs.berserkerRage=(buffs.berserkerRage||0)+1; break;
+    case 'swordmaster': buffs.swordmasterIssen=(buffs.swordmasterIssen||0)+1; break;
+    case 'sniper':
+      buffs.sniperShot=(buffs.sniperShot||0)+1;
+      if (isJobSkillMaster(profile,'sniper') && Math.random() < 0.10) { st.dailyUses[jobCode]=Math.max(0,(st.dailyUses[jobCode]||1)-1); buffs.sniperMasterRefund=(buffs.sniperMasterRefund||0)+1; }
+      break;
+    case 'ranger': buffs.rangerRain=(buffs.rangerRain||0)+1; break;
+    case 'hawkeye': buffs.hawkeyeTrack=(buffs.hawkeyeTrack||0)+getActiveSkillParams(profile,'hawkeye').hunts; break;
+    case 'archmage': buffs.archmageMeteor=(buffs.archmageMeteor||0)+1; break;
+    case 'elementalist': buffs.elementalistBurst=(buffs.elementalistBurst||0)+1; break;
+    case 'necromancer': {
+      const ap=getActiveSkillParams(profile,'necromancer');
+      if ((st.souls||0) < ap.soulCost) { st.dailyUses[jobCode]=Math.max(0,(st.dailyUses[jobCode]||1)-1); return {text:`⚠️ 영혼이 부족합니다. [망자의 군세]에는 영혼 ${ap.soulCost}개가 필요합니다. (보유 ${st.souls||0}개)`}; }
+      st.souls-=ap.soulCost; buffs.necroArmy=(buffs.necroArmy||0)+1; break;
     }
-    return { text: `⚡ 소드마스터 스킬 상태: 오늘 이미 전직 체크가 완료되었거나 조건에 해당하지 않습니다. (현재 소드마스터 상태이며 내일 자정 이후 변경 기회 부여)` };
+    case 'shadow': buffs.shadowPlunder=(buffs.shadowPlunder||0)+1; break;
+    case 'assassin': buffs.assassinExecute=(buffs.assassinExecute||0)+1; break;
+    case 'dualblade': buffs.dualRush=(buffs.dualRush||0)+1; break;
   }
-
-  return { text: `⚠️ 사용할 수 있는 스킬이 없습니다.` };
+  return {text:`✨ [${JOB_NAMES[jobCode]} · ${def.active}] 발동!\n${getActiveSkillDescription(profile,jobCode)}\n오늘 사용: ${getSkillUses(profile,jobCode)}/${getSkillDailyMax(profile,jobCode)}회`};
 }
 
 function processShadowBattle(profile, betArg) {
@@ -4551,7 +5213,7 @@ function processShadowBattle(profile, betArg) {
     return { text: `⚠️ 섀도우 직업만 스킬 약탈을 사용할 수 있습니다.` };
   }
 
-  const sLvl = profile.jobSkillLevel || 1;
+  const sLvl = getJobSkillLevelFor(profile,'shadow');
   const maxBet = sLvl * 1000000;
   const input = String(betArg == null ? '' : betArg).trim();
   if (!/^[1-9]\d*$/.test(input) || !Number.isSafeInteger(Number(input))) {
@@ -4575,11 +5237,12 @@ function processShadowBattle(profile, betArg) {
 
   const isSuccess = Math.random() < 0.5;
   if (isSuccess) {
-    profile.cash += reqPctAmount;
+    const achievementWin = applyAchievementCashBonus(reqPctAmount, profile);
+    profile.cash += achievementWin;
     return {
       text: [
         `🗡️ [섀도우 대결 약탈 성공! (50%)]`,
-        `상대와의 대결에서 승리하여 공격력 비율 재화 +${won(reqPctAmount)}을(를) 획득했습니다!`,
+        `상대와의 대결에서 승리하여 공격력 비율 재화 +${won(achievementWin)}을(를) 획득했습니다!`,
         `(대결받는 상대의 재화는 변동되지 않습니다.)`,
         ``,
         resourceText(profile)
@@ -4625,7 +5288,7 @@ function processPvpBattle(profile) {
   let isWin = myDmg >= enemyDmg;
 
   if (isWin) {
-    const rewardCash = myPower * 10;
+    const rewardCash = applyAchievementCashBonus(myPower * 10, profile);
     profile.cash += rewardCash;
     outcomeMsg = `🎉 [대결 승리!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n보상 획득: 현금 +${won(rewardCash)} (본인 공격력 * 10)`;
   } else {
@@ -4650,7 +5313,7 @@ function checkAndResetMgsDungeonLimit(profile) {
 }
 
 function processMgsDungeon(playerState) {
-  const sLvl = playerState.jobSkillLevel || 1;
+  const sLvl = getJobSkillLevelFor(playerState, 'battlemage');
   checkAndResetMgsDungeonLimit(playerState);
 
   if (playerState.mgsDungeonData.count >= sLvl) {
@@ -4670,17 +5333,17 @@ function processMgsDungeon(playerState) {
   const validMonsterPool = monsters.filter(m => validGrades.has(m.grade));
 
   for (let i = 0; i < targetCount; i++) {
-    let monster = getRandomMonsterByProbability(playerState);
+    let monster = getRandomMonsterByProbability(playerState,null,'dungeon');
     let attempts = 0;
     while ((!monster || !validGrades.has(monster.grade)) && attempts < 100) {
-      monster = getRandomMonsterByProbability(playerState);
+      monster = getRandomMonsterByProbability(playerState,null,'dungeon');
       attempts++;
     }
 
     if (!monster || !validGrades.has(monster.grade)) {
       const baseM = validMonsterPool[rand(0, validMonsterPool.length - 1)];
-      const rewardMoney = getRewardMoney(baseM.grade);
-      const rewardGem = getRewardGem(baseM.grade);
+      const rewardMoney = getDungeonRewardMoney(baseM.grade);
+      const rewardGem = getDungeonRewardGem(baseM.grade);
       monster = {
         ...baseM,
         prefix: "",
@@ -4702,8 +5365,16 @@ function processMgsDungeon(playerState) {
     totalEarnedGem += earnedGem;
 
     spawnedMonsters.push(monster);
+    if (isAdminIndependentHunt) {
+      independentHuntLines.push(`[${i+1}회] [${monster.grade}] ${monster.fullName} | 현금 +${won(earnedCash)}${earnedGem > 0 ? ` | 보석 +${earnedGem}개` : ''}`);
+    }
   }
 
+  const battlemageMaster = isJobSkillMaster(playerState,'battlemage');
+  if (battlemageMaster) {
+    totalEarnedCash = Math.floor(totalEarnedCash * 1.10);
+    totalEarnedGem = Math.floor(totalEarnedGem * 1.10);
+  }
   playerState.cash = (playerState.cash || 0) + totalEarnedCash;
   if (totalEarnedGem > 0) {
     playerState.gem = (playerState.gem || 0) + totalEarnedGem;
@@ -4711,12 +5382,14 @@ function processMgsDungeon(playerState) {
 
   const gradeRank = Object.fromEntries(FARM_GRADE_STEPS.map((g,i)=>[g,i+1]));
 
-  spawnedMonsters.sort((a, b) => {
-    return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
-  });
+  if (!isAdminIndependentHunt) {
+    spawnedMonsters.sort((a, b) => {
+      return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
+    });
+  }
 
   let monsterInfoBlocks = [];
-  spawnedMonsters.forEach((m, idx) => {
+  if (!isAdminIndependentHunt) spawnedMonsters.forEach((m, idx) => {
     const displayGradeHeader = `[${m.grade}] `;
     if (idx === 0) {
       monsterInfoBlocks.push(
@@ -4736,8 +5409,8 @@ function processMgsDungeon(playerState) {
     summaryLines.push(`💎 총 보석 : ${totalEarnedGem}개`);
   }
 
-  let headerText = `🔮 [마검 전용 던전 토벌 완료! (${targetCount}마리)] (오늘 사용: ${playerState.mgsDungeonData.count}/${sLvl}회)`;
-  let middleContent = `${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
+  let headerText = `🔮 [마검 전용 던전 토벌 완료! (${targetCount}마리)] (오늘 사용: ${playerState.mgsDungeonData.count}/${sLvl}회)` + (battlemageMaster ? `\n👑 [마스터 효과] 최종 현금·보석 보상 +10%` : '');
+  let middleContent = `${isAdminIndependentHunt ? `🎯 [관리자 독립 사냥 ${actualHunts}회]\n` : ''}${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
 
   let footerLines = [
     `🔘 배율 x${lootMult.toFixed(2)} (마검 던전 전용)`,
@@ -4804,11 +5477,11 @@ function processGeneralDungeon(profile) {
   const fullName = prefix ? `${prefix} ${baseMonster.name}` : baseMonster.name;
   const lootMult = getLootMultiplier(profile);
 
-  let rewardMoney = getRewardMoney(targetGrade);
+  let rewardMoney = getDungeonRewardMoney(targetGrade);
   rewardMoney = Math.floor(rewardMoney * lootMult * 1.5);
   rewardMoney = applyCreatureCashBonus(rewardMoney, profile);
 
-  let rewardGem = getRewardGem(targetGrade);
+  let rewardGem = getDungeonRewardGem(targetGrade);
   rewardGem = applyCreatureGemBonus(rewardGem, profile);
 
   profile.cash = (profile.cash || 0) + rewardMoney;
@@ -4830,7 +5503,7 @@ function processGeneralDungeon(profile) {
       ``,
       resourceText(profile)
     ].join('\n'),
-    imageUrl: baseMonster.image || null,
+    imageUrl: getMonsterImage(baseMonster.image,targetGrade),
     choices: END_BATTLE_CHOICES
   };
 }
@@ -5127,7 +5800,7 @@ function processWarehouse(profile) {
   });
 
   const sortedItems = Object.values(grouped);
-  const categoryOrder = { 'box': 0, 'costume': 0, 'hilt': 1, 'guard': 2, 'blade': 3, 'scabbard': 4, 'pommel': 5 };
+  const categoryOrder = { 'box':0, 'costume':0, 'gear':1, 'hilt':90, 'guard':91, 'blade':92, 'scabbard':93, 'pommel':94 };
 
   sortedItems.sort((a, b) => {
     const catDiff = (categoryOrder[a.category] ?? 99) - (categoryOrder[b.category] ?? 99);
@@ -5142,11 +5815,23 @@ function processWarehouse(profile) {
       lines.push(`${index + 1}. [상자] ${item.name}${countStr}`);
     } else if (item.category === 'costume') {
       lines.push(`${index + 1}. [특별] ${item.name}${countStr}`);
+    } else if (item.category === 'gear') {
+      const original = profile.inventory.find(x=>x&&x.category==='gear'&&x.tier===item.tier&&x.name===item.name);
+      const setName = original && original.setName ? original.setName : '세트 전리품';
+      const slotName = original && original.slot ? (EQUIPMENT_SLOT_NAMES[original.slot] || original.slot) : (item.categoryName || '장비');
+      lines.push(`${index + 1}. [${item.tier}] [${slotName}] ${item.name}${countStr}\n   ${setName}`);
     } else {
       let multiplierVal = (tierOrder[item.tier] * 0.10).toFixed(2);
       lines.push(`${index + 1}. [${item.tier}] ${item.name}${countStr}\n배율 x${multiplierVal}`);
     }
   });
+  const progress = getEquipmentSetProgressLines(profile);
+  const set = getEquipmentSetBonuses(profile);
+  if (progress.length) {
+    lines.push('', '🧩 [세트 보유 현황]', ...progress);
+    lines.push('', '✨ [현재 적용 중인 세트 효과]', ...(set.active.length ? set.active : ['없음']));
+    lines.push('※ 같은 티어·같은 세트의 서로 다른 부위 2/4/6개 보유 시 자동 적용됩니다.');
+  }
   return lines.join('\n');
 }
 
@@ -5182,25 +5867,35 @@ function processHunt(playerState) {
   let totalEarnedGem = 0;
   let spawnedMonsters = [];
   let droppedLootTexts = [];
+  let independentHuntLines = [];
+  const isAdminIndependentHunt = playerState.adminSpeedMode === true;
 
   const tierPrices = { "T1": 1000000, "T2": 2000000, "T3": 3000000, "T4": 4000000, "T5": 5000000, "T6": 6000000 };
 
   for (let i = 0; i < actualHunts; i++) {
-    const drawn=pickMonsterGrade(getMonsterGradeWeights(playerState,true),Math.random());
+    let drawn=pickMonsterGrade(getMonsterGradeWeights(playerState,true),Math.random());
+    const huntSkillState = ensureSkillState(playerState);
+    if (getSecondJobCode(playerState)==='hawkeye' && huntSkillState.buffs.hawkeyeTrack > 0 && drawn !== 'GEM') {
+      const secondDraw = pickMonsterGrade(getMonsterGradeWeights(playerState,false),Math.random());
+      const rank = {E:0,D:1,C:2,B:3,A:4,S:5,EX:6};
+      if ((rank[secondDraw]||0) > (rank[drawn]||0)) drawn = secondDraw;
+      huntSkillState.buffs.hawkeyeTrack--;
+    }
     if(drawn==='GEM') {
       const amp=getAmplifyInfo(playerState.combatLevel || 0);
       const gems=applyCreatureGemBonus(Math.max(1,rand(amp.minGold,amp.maxGold)),playerState);
       totalEarnedGem+=gems;gemEventCount++;
-      droppedLootTexts.push('💎 [재화] 보석 +'+gems+'개');
+      if (isAdminIndependentHunt) independentHuntLines.push(`[${i+1}회] 💎 보석 이벤트 | 보석 +${gems}개`);
+      else droppedLootTexts.push('💎 [재화] 보석 +'+gems+'개');
       continue;
     }
     const monster = getRandomMonsterByProbability(playerState,drawn);
     if (!monster) continue;
 
-    let earnedCash = Math.floor((monster.rewardMoney / 10) * lootMult);
+    let earnedCash = Math.floor(monster.rewardMoney * lootMult);
     earnedCash = applyCreatureCashBonus(earnedCash, playerState);
 
-    let earnedGem = 0; // 보석은 몬스터 보상이 아닌 1% 별도 이벤트로 지급한다.
+    let earnedGem = applyCreatureGemBonus(monster.rewardGem || 0, playerState);
 
     const stolen = rollShadowLoot(playerState, earnedCash, earnedGem);
     earnedCash += stolen.cash; earnedGem += stolen.gem;
@@ -5210,6 +5905,9 @@ function processHunt(playerState) {
     totalEarnedGem += earnedGem;
 
     spawnedMonsters.push(monster);
+    if (isAdminIndependentHunt) {
+      independentHuntLines.push(`[${i+1}회] [${monster.grade}] ${monster.fullName} | 현금 +${won(earnedCash)}${earnedGem > 0 ? ` | 보석 +${earnedGem}개` : ''}`);
+    }
     const collectionMessage = recordHuntCollection(playerState, monster);
     if (collectionMessage) droppedLootTexts.push(collectionMessage);
 
@@ -5246,37 +5944,23 @@ function processHunt(playerState) {
     else if ((g.startsWith("S") || g.startsWith("EX")) && Math.random() < lootDropChance) { targetTier = "T6"; isLootDropped = true; }
 
     if (isLootDropped) {
-      const categories = ['hilt', 'guard', 'blade', 'scabbard', 'pommel'];
-      const chosenCategory = categories[rand(0, categories.length - 1)];
-      const tierList = LOOT_DATABASE[chosenCategory];
-      const itemData = tierList.find(i => i.tier === targetTier) || tierList[0];
-
-      const categoryNames = {
-        hilt: '자루',
-        guard: '코등이',
-        blade: '검신',
-        scabbard: '검집',
-        pommel: '폼멜'
-      };
-      const catName = categoryNames[chosenCategory];
-
-      if (!playerState.inventory) playerState.inventory = [];
-      
-      const alreadyHas = playerState.inventory.some(inv => inv.category === chosenCategory && inv.tier === itemData.tier && inv.name === itemData.name);
-      if (alreadyHas) {
-        let refundAmount = tierPrices[itemData.tier] || 1000000;
-        refundAmount = applyCreatureCashBonus(refundAmount, playerState);
-        playerState.cash += refundAmount;
-        droppedLootTexts.push(`🎉 [전리품 중복 대체] [${itemData.tier}] ${itemData.name} 전리품을 획득했으나 이미 보유 중이므로, 재화로 교체되어 현금 +${won(refundAmount)}이(가) 지급되었습니다!`);
-      } else {
-        playerState.inventory.push({
-          category: chosenCategory,
-          categoryName: catName,
-          tier: itemData.tier,
-          name: itemData.name,
-          desc: itemData.desc
-        });
-        droppedLootTexts.push(`🎉 [전리품 획득!] [${itemData.tier}] ${catName} - ${itemData.name}을(를) 획득했습니다! (/전리품에서 확인)`);
+      const gearJobs = ['warrior','archer','wizard','thief'];
+      const chosenGearJob = gearJobs[rand(0, gearJobs.length - 1)];
+      const chosenSlot = EQUIPMENT_SLOTS[rand(0, EQUIPMENT_SLOTS.length - 1)];
+      const itemData = getGearItem(chosenGearJob, targetTier, chosenSlot);
+      if (itemData) {
+        if (!playerState.inventory) playerState.inventory = [];
+        const alreadyHas = playerState.inventory.some(inv => inv.category==='gear' && inv.gearJob===chosenGearJob && inv.slot===chosenSlot && inv.tier===targetTier);
+        if (alreadyHas) {
+          let refundAmount = tierPrices[itemData.tier] || 1000000;
+          refundAmount = applyCreatureCashBonus(refundAmount, playerState);
+          playerState.cash += refundAmount;
+          droppedLootTexts.push(`🎉 [전리품 중복 대체] [${itemData.tier}] ${itemData.name}을(를) 이미 보유 중이므로 현금 +${won(refundAmount)}이 지급되었습니다!`);
+        } else {
+          playerState.inventory.push({...itemData});
+          const ownedCount = new Set(playerState.inventory.filter(inv=>inv.category==='gear' && inv.gearJob===chosenGearJob && inv.tier===targetTier).map(inv=>inv.slot)).size;
+          droppedLootTexts.push(`🎉 [세트 전리품 획득!] [${itemData.tier}] ${itemData.categoryName} - ${itemData.name}\n세트: ${itemData.setName} (${ownedCount}/6부위)\n※ 착용 없이 보유만으로 세트 효과가 적용됩니다.\n(/전리품에서 확인)`);
+        }
       }
     }
   }
@@ -5385,14 +6069,16 @@ function processHunt(playerState) {
     finalRewardLines.push(droppedLootTexts.join('\n'));
   }
 
-  let monstersJoined = monsterInfoBlocks.join('\n');
+  let monstersJoined = isAdminIndependentHunt
+    ? independentHuntLines.join('\n')
+    : monsterInfoBlocks.join('\n');
   
   let summaryLines = [`💵 총 현금 +${won(totalEarnedCash)}`];
   if (totalEarnedGem > 0) {
     summaryLines.push(`💎 총 보석 : ${totalEarnedGem}개`);
   }
 
-  let middleContent = `${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
+  let middleContent = `${isAdminIndependentHunt ? `🎯 [관리자 독립 사냥 ${actualHunts}회]\n` : ''}${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
   if(!spawnedMonsters.length)middleContent='';
   if (finalRewardLines.length > 0) {
     middleContent = middleContent + '\n' + finalRewardLines.join('\n');
@@ -5445,6 +6131,7 @@ function processSpeedCommand(profile, arg, battle = null) {
   }
 
   profile.speedMultiplier = speedVal;
+  profile.adminSpeedMode = false;
   const ongoingFarm = battle && battle.mode === '파밍' && battle.alive && !battle.finished && battle.farmRunCount;
   const timing = ongoingFarm
     ? `진행 중 파밍은 x${battle.farmRunCount}로 유지되며, 다음 파밍 게임부터 x${speedVal}이 적용됩니다. 사냥은 다음 명령부터 적용됩니다.`
@@ -5542,7 +6229,7 @@ function getJobPassiveRate(profile) {
   return Math.max(1, Math.min(10, Number.isFinite(level) ? Math.floor(level) : 1)) / 100;
 }
 function getMonsterGradeWeights(profile, includeGemEvent=false) {
-  const factor=profile && profile.job==='battlemage' ? 1+getJobPassiveRate(profile) : 1;
+  const factor=profile && getSecondJobCode(profile)==='battlemage' ? 1+getJobSkillLevelFor(profile,'battlemage')/100 : 1;
   const rows=[['EX',0.001],['S',0.099],['A',0.9],['B',4.1],['C',15],['D',25]];
   const weighted=rows.map(([g,w])=>[g,g==='D'?w:w*factor]);
   if(includeGemEvent)weighted.unshift(['GEM',1]);
@@ -5554,14 +6241,15 @@ function pickMonsterGrade(weights, roll) {
   for (const [grade, weight] of weights) { if (value < weight) return grade; value -= weight; }
   return 'E';
 }
-function getRandomMonsterByProbability(profile = null, selectedBase = null) {
+function getRandomMonsterByProbability(profile = null, selectedBase = null, rewardSource = 'hunt') {
   const weights = getMonsterGradeWeights(profile);
   const baseGradeGroup = selectedBase || pickMonsterGrade(weights, Math.random());
-  const isPassiveTriggered = profile && profile.job === 'battlemage' && !['E','D'].includes(baseGradeGroup);
+  const isPassiveTriggered = profile && getSecondJobCode(profile) === 'battlemage' && !['E','D'].includes(baseGradeGroup);
 
   let subRoll = Math.random() * 100;
   let selectedGrade = baseGradeGroup + "등급";
-  if(subRoll<1.0)selectedGrade=baseGradeGroup+'+등급';
+  const plusChance = getSecondJobCode(profile)==='hawkeye' ? 1 + getJobSkillLevelFor(profile,'hawkeye') * 0.1 : 1;
+  if(subRoll<plusChance)selectedGrade=baseGradeGroup+'+등급';
 
   let baseLookupGrade = baseGradeGroup + "등급";
 
@@ -5579,11 +6267,12 @@ function getRandomMonsterByProbability(profile = null, selectedBase = null) {
     }
   }
 
-  const rewardMoney = getRewardMoney(selectedGrade);
-  const rewardGem = getRewardGem(selectedGrade);
+  const rewardMoney = rewardSource === 'dungeon' ? getDungeonRewardMoney(selectedGrade) : getRewardMoney(selectedGrade);
+  const rewardGem = rewardSource === 'dungeon' ? getDungeonRewardGem(selectedGrade) : (gradeRewards[selectedGrade]?.gem || 0);
 
   return {
     ...baseMonster,
+    image: getMonsterImage(baseMonster.image,selectedGrade),
     grade: selectedGrade,
     prefix: prefix,
     fullName: prefix ? `${prefix} ${baseMonster.name}` : baseMonster.name,
@@ -5604,9 +6293,12 @@ function getRewardMoney(grade) {
   return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
 }
 
-function getRewardGem(grade) {
-  const range = gradeRewards[grade];
-  return range && range.gem ? range.gem : 0;
+function getDungeonRewardMoney(grade) {
+  const range=DUNGEON_GRADE_REWARDS[grade] || {min:200,max:500};
+  return rand(range.min,range.max);
+}
+function getDungeonRewardGem(grade) {
+  return DUNGEON_GRADE_REWARDS[grade]?.gem || 0;
 }
 
 function startGame(existingProfile) {
@@ -5645,6 +6337,10 @@ function buildRaidText(profile, result) {
   if (result.raidBoxAwarded === 'kill') lines.push('🏆 레이드 처치!','📦 레이드 상자 +1개','');
   if(raid.hp>0 && pct<5)lines.push('HP ???');
   else lines.push('HP:'+'█'.repeat(filled)+'░'.repeat(10-filled)+' ('+pct.toFixed(2)+'%)',raid.hp.toLocaleString()+' / '+raid.maxHp.toLocaleString());
+  lines.push('', '🔎 최초 발견자 : '+(raid.discoveredNickname || '아직 없음'), '', '🏆 누적 피해량 TOP 3');
+  const leaders=(raid.topContributors || raid.participants || []).slice().sort((a,b)=>b.damage-a.damage || String(a.userId).localeCompare(String(b.userId))).slice(0,3);
+  if(!leaders.length)lines.push('아직 참여자가 없습니다.');
+  leaders.forEach((p,i)=>lines.push((i+1)+'위 · '+(p.nickname || '이름 없는 유저')+' | 피해량 : '+Number(p.damage || 0).toLocaleString()));
   lines.push('',raid.hp>0 ? '/파밍·/사냥 중 0.1% 확률로 조우합니다.' : '🏆 처치된 레이드입니다. 다음 발견을 기다립니다.');
   return lines.join('\n');
 }
@@ -5700,8 +6396,8 @@ function resolveRaidAttack(profile, raid, options = {}) {
   const draw = () => { const n=random(); if (!Number.isFinite(n) || n<0 || n>=1) throw new Error('잘못된 레이드 추첨값입니다.'); return n; };
   const empty = {version:RAID_RULES_VERSION,source,attacked:false,damage:0,cashEarned:0,execute:false,percentStrike:false};
   if (raid.hp === 0) return empty;
-  const berserker = profile && profile.job === 'berserker';
-  const chance = getJobPassiveRate(profile);
+  const berserker = profile && getSecondJobCode(profile) === 'berserker';
+  const chance = berserker ? getJobSkillLevelFor(profile,'berserker')/100 : 0;
   if (!(options.forceEncounter === true && isGameAdmin(options.actorId)) && draw() >= 0.001) return empty;
   const attackPower = getRaidAttackPower(profile);
   if (attackPower <= 0) return empty;
@@ -5722,12 +6418,36 @@ function processTurn(state, utterance, context = {}) {
   if (requiresGameAdmin(utterance) && !isGameAdmin(context && context.userId)) {
     return { text: "관리자만 사용할 수 있는 명령어입니다.", choices: [], state: state || {} };
   }
+  const adminSpeed = String(utterance||'').trim().match(/^\/관리자\s+배속\s+(\d+)$/);
+  if (adminSpeed && isGameAdmin(context && context.userId)) {
+    const speedVal = Number(adminSpeed[1]);
+    const profile = createProfile(state && state.profile);
+    const battle = state && state.battle;
+    if (!Number.isSafeInteger(speedVal) || speedVal < 1 || speedVal > 1000) {
+      return { text: '⚠️ 관리자 배속은 1~1000 사이의 정수만 설정할 수 있습니다.\n예: /관리자 배속 1000', state: { profile, battle } };
+    }
+    profile.speedMultiplier = speedVal;
+    profile.adminSpeedMode = true;
+    const ongoingFarm = battle && battle.mode === '파밍' && battle.alive && !battle.finished && battle.farmRunCount;
+    const timing = ongoingFarm
+      ? `진행 중 파밍은 x${battle.farmRunCount}로 유지되며 다음 파밍 게임부터 x${speedVal}이 적용됩니다.`
+      : '다음 파밍 및 사냥부터 적용됩니다.';
+    return {
+      text: `🛠️ [관리자 배속] x${speedVal} 설정 완료\n• 파밍 : 1회 판정 결과의 재화를 x${speedVal}로 적용\n• 사냥 : 최대 ${speedVal}회를 각각 독립 시행\n${timing}`,
+      choices: [],
+      category: 'adminSpeed',
+      state: { profile, battle },
+      adminAction: 'speed'
+    };
+  }
   const adminJob = String(utterance||'').trim().match(/^\/관리자\s+전직\s+(\S+)$/);
   if(adminJob && isGameAdmin(context.userId)) {
     const profile=createProfile(state && state.profile);
     const entry=Object.entries(JOB_CATALOG).find(([key,data])=>data[0]===adminJob[1]);
     if(!entry)return {text:'지원하는 직업명을 입력하세요: '+Object.values(JOB_CATALOG).map(x=>x[0]).join(', '),state:{profile,battle:state && state.battle}};
-    profile.userId=context.userId;profile.job=entry[0];profile.jobEnhance=0;profile.jobSkillLevel=1;profile.hasSeenJobGuide=false;
+    profile.userId=context.userId; profile.job=entry[0]; profile.jobEnhance=0; profile.hasSeenJobGuide=false;
+    if(entry[1][1]===1){profile.firstJob=entry[0];profile.secondJob=null;}else{profile.firstJob=entry[1][2];profile.secondJob=entry[0];}
+    if(!profile.jobSkillLevels||typeof profile.jobSkillLevels!=='object')profile.jobSkillLevels={}; profile.jobSkillLevels[entry[0]]=profile.jobSkillLevels[entry[0]]||1; if(profile.firstJob)profile.jobSkillLevels[profile.firstJob]=profile.jobSkillLevels[profile.firstJob]||1; profile.jobSkillLevel=getJobSkillLevelFor(profile,entry[0]);
     return {text:'🛠️ 관리자 전직 완료: '+entry[1][0]+'\n조건·비용 없이 전직했습니다. 무기 +0 / 스킬 Lv.1',imageUrl:getEnhanceImage('success',0,profile.job),state:{profile,battle:state && state.battle},adminAction:'job'};
   }
   // context.userId는 서버에서 확인한 본인의 MongoDB 조회 키만 전달한다.
@@ -5743,7 +6463,7 @@ function processTurn(state, utterance, context = {}) {
   if (context.sharedRaidPassives === true && result && result.combatPerformed) {
     result.raidIntent = {version:RAID_RULES_VERSION,source:result.category};
   }
-  if (context.sharedRaidPassives !== true && result && result.state && result.state.profile && result.state.profile.job === 'berserker' && String(utterance).trim() === '/전직') {
+  if (context.sharedRaidPassives !== true && result && result.state && result.state.profile && getSecondJobCode(result.state.profile) === 'berserker' && String(utterance).trim() === '/전직') {
     result.text += '\n⚠️ 레이드 패시브: DB·서버 연동 대기 중';
   }
   // /초기화에서도 계정 식별자는 삭제하지 않는다.
@@ -5943,7 +6663,9 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /아바타 - 아바타 정보 및 보유 목록 확인`,
       `• /크리처 - 현재 크리처 정보 및 등급 확인`,
       `• /전직 [직업명] - 전직 안내 및 직업 전직`,
-      `• /스킬 - 액티브 스킬 사용`,
+      `• /스킬 - 보유 스킬 확인 (/스킬 1: 1차, /스킬 2: 2차 액티브)`,
+      `• /스킬트리 - 1차·2차 패시브/액티브 상세 확인`,
+      `• /업적 - 업적 진행도와 누적 현금 보너스 확인`,
       `• /대결 - 1대1 대결`,
       `• /던전 - 고등급 던전 입장`,
       `• /각인 - 각인 정보 확인`,
@@ -6055,7 +6777,7 @@ function processTurnInternal(state, utterance, context = {}) {
       const highestGrade = highestIndex >= 0
         ? FARM_GRADE_STEPS[Math.min(highestIndex, FARM_GRADE_STEPS.length - 1)]
         : '없음';
-      // 기존 등급별 상자 매핑을 유지한다. 처치가 없는 경우에도 기본 D 상자를 지급한다.
+      // 기존 등급별 상자 매핑을 유지한다. 처치가 없는 경우에도 기본 E 상자를 지급한다.
       const boxKey = getFarmBoxKey(highestIndex >= 0 ? highestGrade : 'E등급');
       const boxCount = battle.farmRunCount;
       let boxName;
@@ -6344,7 +7066,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
   // 18. /전직 스킬 강화 명령어
   if (command === '/전직 스킬 강화' || command === '/전직스킬강화') {
-    const jUpgrade = processUpgradeJobSkill(profile, context);
+    const jUpgrade = processUpgradeJobSkill(profile, context, arg);
     return {
       text: jUpgrade.text,
       imageUrl: null,
@@ -6354,7 +7076,29 @@ function processTurnInternal(state, utterance, context = {}) {
     };
   }
 
-  // 19. /스킬 명령어
+  // 19. /업적 명령어
+  if (command === '/업적' || command === '/업적목록') {
+    return {
+      text: getAchievementText(profile),
+      imageUrl: null,
+      choices: END_BATTLE_CHOICES,
+      category: 'achievement',
+      state: { profile, battle }
+    };
+  }
+
+  // 20. /스킬트리 명령어
+  if (command === '/스킬트리') {
+    return {
+      text: getSkillTreeText(profile),
+      imageUrl: null,
+      choices: END_BATTLE_CHOICES,
+      category: 'skillTree',
+      state: { profile, battle }
+    };
+  }
+
+  // 20. /스킬 명령어
   if (command === '/스킬') {
     const sResult = processJobSkill(profile, arg, context);
     return {
@@ -6366,7 +7110,7 @@ function processTurnInternal(state, utterance, context = {}) {
     };
   }
 
-  // 20. /대결 명령어
+  // 21. /대결 명령어
   if (command === '/대결') {
     const pResult = processPvpBattle(profile);
     return {
@@ -6569,7 +7313,7 @@ if (typeof module !== 'undefined' && module.exports) {
     RAID_RULES_VERSION, resolveRaidAttack, formatRaidAttackEffects,
     addRaidBox, RAID_BOX_NAME, RAID_TITLE, RAID_AVATAR,
     parseAdminRename, getCurrentEnhanceLevel,
-    JOB_CATALOG, getEnhanceImage, getWeaponInfo,
+    JOB_CATALOG, JOB_SKILLS, getEnhanceImage, getWeaponInfo,
     RAID_IMAGE: BASE_URL + '/images/raid_1.png',
     getRaidAttackPower,
     buildRaidText,
