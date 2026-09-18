@@ -81,8 +81,9 @@ app.post('/skill', async (req, res) => {
     const adminRaidCommand=utterance === '/관리자 레이드';
     const adminJobCommand=/^\/관리자\s+전직\s+\S+$/.test(utterance);
     const adminSpeedCommand=/^\/관리자\s+배속\s+\d+$/.test(utterance);
+    const adminAttackCommand=/^\/관리자\s+공격력\s+\d+$/.test(utterance);
     // game.js 내부에서 처리하는 관리자 전용 명령은 재화 지급 파서가 가로채지 않도록 통과시킨다.
-    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand) {
+    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !adminAttackCommand) {
       const rename=parseAdminRename(utterance);
       if(rename) {
         stage='관리자 닉네임 변경';
@@ -90,7 +91,7 @@ app.post('/skill', async (req, res) => {
         return res.json(await buildSafeResponse(!result.found ? '해당 UID의 계정이 없습니다.' : result.duplicate ? '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.' : '✅ 닉네임 변경 완료\n'+result.nickname,[]));
       }
       const grant = parseAdminGrant(utterance);
-      if (!grant) return res.json(await buildSafeResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명 · /관리자 배속 1~1000', []));
+      if (!grant) return res.json(await buildSafeResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명 · /관리자 배속 1~1000 · /관리자 공격력 수치', []));
       stage = '관리자 재화 지급';
       const paid = await grantAdminResource(userId, grant.targetId, grant.field, grant.amount);
       return res.json(await buildSafeResponse(paid.found ? '✅ 지급 완료\n대상: ' + grant.targetId + '\n' + grant.label + ' +' + grant.amount.toLocaleString() + (grant.field === 'cash' ? '원' : '개') : '해당 UID의 게임 계정이 없습니다. UID를 확인해 주세요.', []));
