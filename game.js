@@ -2920,6 +2920,8 @@ function getWeaponAttackPower(profile) {
 
 function getAttackPower(profile) {
   if (!profile) return 0;
+  // 관리자 공격력 오버라이드가 설정되어 있으면 모든 공격력 표시/전투 계산에 그대로 사용한다.
+  if (Number.isSafeInteger(profile.adminAttackPower) && profile.adminAttackPower >= 0) return profile.adminAttackPower;
   const combatLv = profile.combatLevel || 0;
   const enhance = getCurrentEnhanceLevel(profile);
   const lvl = profile.level || 1;
@@ -3253,6 +3255,8 @@ function createProfile(existing = {}) {
     dungeonData: safeObj.dungeonData && typeof safeObj.dungeonData === 'object' ? { ...safeObj.dungeonData } : { date: "", count: 0 },
     speedMultiplier: normalizeStoredInt(safeObj.speedMultiplier, 1, 1, 1000),
     adminSpeedMode: safeObj.adminSpeedMode === true,
+    // 관리자 전용 공격력 고정값. null이면 기존 성장식 공격력을 사용한다.
+    adminAttackPower: Number.isSafeInteger(safeObj.adminAttackPower) && safeObj.adminAttackPower >= 0 ? safeObj.adminAttackPower : null,
     vault: safeObj.vault && typeof safeObj.vault === 'object'
       ? {
           ...safeObj.vault,
@@ -5775,63 +5779,66 @@ function checkAndResetHuntLimit(playerState) {
   }
 }
 
-function processWarehouse(profile) {
+function processWarehouse(profile, arg = '') {
   if (!profile.inventory) profile.inventory = [];
-  if (profile.inventory.length === 0) {
-    return `🎒 [전리품 및 상자 목록]\n현재 보유 중인 전리품이나 상자가 없습니다. 사냥을 통해 전리품과 상자를 획득해 보세요!`;
+
+  // /전리품은 T1~T6 세트 전리품 전용 화면이다.
+  // 상자는 /상자에서, 기타 특별 아이템은 각 전용 명령에서 확인한다.
+  const gearItems = getOwnedGearItems(profile);
+  const tierOrder = { T1:1, T2:2, T3:3, T4:4, T5:5, T6:6 };
+  const allGearCountPerTier = 4 * EQUIPMENT_SLOTS.length; // 직업 테마 4종 × 6부위 = 티어당 24개
+
+  const ownedUniqueByTier = {};
+  for (let n=1;n<=6;n++) ownedUniqueByTier['T'+n] = new Set();
+  for (const item of gearItems) {
+    if (!item || !/^T[1-6]$/.test(item.tier || '') || !item.gearJob || !item.slot) continue;
+    ownedUniqueByTier[item.tier].add(`${item.gearJob}:${item.slot}`);
   }
 
-  const tierOrder = { "T1": 1, "T2": 2, "T3": 3, "T4": 4, "T5": 5, "T6": 6 };
+  const lines = ['🎒 [T1~T6 전리품]'];
+  lines.push('※ /전리품에는 세트 장비만 표시됩니다. 상자는 /상자에서 확인하세요.', '');
+  lines.push('📊 [티어별 수집 현황]');
+  for (let n=1;n<=6;n++) {
+    const tier='T'+n;
+    lines.push(`${tier} : ${ownedUniqueByTier[tier].size}/${allGearCountPerTier}`);
+  }
 
-  const grouped = {};
-  profile.inventory.forEach(item => {
-    const key = `${item.category}_${item.tier || ''}_${item.name}`;
-    if (!grouped[key]) {
-      grouped[key] = {
-        tier: item.tier,
-        category: item.category,
-        categoryName: item.categoryName,
-        name: item.name,
-        desc: item.desc,
-        count: 0
-      };
+  if (gearItems.length === 0) {
+    lines.push('', '현재 보유 중인 T1~T6 전리품이 없습니다.', '사냥에서 세트 전리품을 획득할 수 있습니다.');
+    return lines.join('\n');
+  }
+
+  const grouped = new Map();
+  for (const item of gearItems) {
+    const key = `${item.tier}:${item.gearJob}:${item.slot}`;
+    if (!grouped.has(key)) grouped.set(key, { ...item, count:0 });
+    grouped.get(key).count++;
+  }
+  const sorted = [...grouped.values()].sort((a,b)=>
+    (tierOrder[a.tier]||99)-(tierOrder[b.tier]||99) ||
+    ['warrior','archer','wizard','thief'].indexOf(a.gearJob)-['warrior','archer','wizard','thief'].indexOf(b.gearJob) ||
+    EQUIPMENT_SLOTS.indexOf(a.slot)-EQUIPMENT_SLOTS.indexOf(b.slot)
+  );
+
+  let currentTier='';
+  for (const item of sorted) {
+    if (item.tier !== currentTier) {
+      currentTier=item.tier;
+      lines.push('', `━━ ${currentTier} 전리품 ━━`);
     }
-    grouped[key].count += 1;
-  });
+    const countStr=item.count>1 ? ` (${item.count}개)` : '';
+    const slotName=EQUIPMENT_SLOT_NAMES[item.slot] || item.categoryName || '장비';
+    lines.push(`[${slotName}] ${item.name}${countStr}`);
+    lines.push(`  ${item.setName}`);
+  }
 
-  const sortedItems = Object.values(grouped);
-  const categoryOrder = { 'box':0, 'costume':0, 'gear':1, 'hilt':90, 'guard':91, 'blade':92, 'scabbard':93, 'pommel':94 };
-
-  sortedItems.sort((a, b) => {
-    const catDiff = (categoryOrder[a.category] ?? 99) - (categoryOrder[b.category] ?? 99);
-    if (catDiff !== 0) return catDiff;
-    return (tierOrder[a.tier] || 99) - (tierOrder[b.tier] || 99);
-  });
-
-  let lines = [`🎒 [전리품 및 상자 목록]`];
-  sortedItems.forEach((item, index) => {
-    const countStr = item.count > 1 ? ` (${item.count}개)` : '';
-    if (item.category === 'box') {
-      lines.push(`${index + 1}. [상자] ${item.name}${countStr}`);
-    } else if (item.category === 'costume') {
-      lines.push(`${index + 1}. [특별] ${item.name}${countStr}`);
-    } else if (item.category === 'gear') {
-      const original = profile.inventory.find(x=>x&&x.category==='gear'&&x.tier===item.tier&&x.name===item.name);
-      const setName = original && original.setName ? original.setName : '세트 전리품';
-      const slotName = original && original.slot ? (EQUIPMENT_SLOT_NAMES[original.slot] || original.slot) : (item.categoryName || '장비');
-      lines.push(`${index + 1}. [${item.tier}] [${slotName}] ${item.name}${countStr}\n   ${setName}`);
-    } else {
-      let multiplierVal = (tierOrder[item.tier] * 0.10).toFixed(2);
-      lines.push(`${index + 1}. [${item.tier}] ${item.name}${countStr}\n배율 x${multiplierVal}`);
-    }
-  });
   const progress = getEquipmentSetProgressLines(profile);
   const set = getEquipmentSetBonuses(profile);
-  if (progress.length) {
-    lines.push('', '🧩 [세트 보유 현황]', ...progress);
-    lines.push('', '✨ [현재 적용 중인 세트 효과]', ...(set.active.length ? set.active : ['없음']));
-    lines.push('※ 같은 티어·같은 세트의 서로 다른 부위 2/4/6개 보유 시 자동 적용됩니다.');
-  }
+  lines.push('', '🧩 [세트 보유 현황]');
+  if (progress.length) lines.push(...progress);
+  else lines.push('아직 활성화 가능한 세트가 없습니다.');
+  lines.push('', '✨ [현재 적용 중인 세트 효과]', ...(set.active.length ? set.active : ['없음']));
+  lines.push('※ 같은 티어·같은 세트의 서로 다른 부위 2/4/6개 보유 시 자동 적용됩니다.');
   return lines.join('\n');
 }
 
@@ -5931,19 +5938,20 @@ function processHunt(playerState) {
       }
     }
 
-    let lootDropChance = 0.001; 
-    let isLootDropped = false;
-    let targetTier = "";
-    const g = monster.grade;
-
-    if (g === "C+등급" && Math.random() < lootDropChance) { targetTier = "T1"; isLootDropped = true; }
-    else if (g === "B등급" && Math.random() < lootDropChance) { targetTier = "T2"; isLootDropped = true; }
-    else if (g === "B+등급" && Math.random() < lootDropChance) { targetTier = "T3"; isLootDropped = true; }
-    else if (g === "A등급" && Math.random() < lootDropChance) { targetTier = "T4"; isLootDropped = true; }
-    else if (g === "A+등급" && Math.random() < lootDropChance) { targetTier = "T5"; isLootDropped = true; }
-    else if ((g.startsWith("S") || g.startsWith("EX")) && Math.random() < lootDropChance) { targetTier = "T6"; isLootDropped = true; }
-
-    if (isLootDropped) {
+    // T1~T6 세트 전리품 드롭
+    // 몬스터 등급에 따라 드롭 가능한 티어가 고정된다.
+    // 일반 등급(D/C/B/A/S/EX)은 처치 시 0.01%, +등급은 처치 시 0.1% 확률로 드롭한다.
+    const gearTierByGrade = {
+      'D등급':'T1',  'D+등급':'T1',
+      'C등급':'T2',  'C+등급':'T2',
+      'B등급':'T3',  'B+등급':'T3',
+      'A등급':'T4',  'A+등급':'T4',
+      'S등급':'T5',  'S+등급':'T5',
+      'EX등급':'T6', 'EX+등급':'T6'
+    };
+    const targetTier = gearTierByGrade[monster.grade] || null;
+    const gearDropChance = targetTier ? (monster.grade.includes('+') ? 0.001 : 0.0001) : 0;
+    if (targetTier && Math.random() < gearDropChance) {
       const gearJobs = ['warrior','archer','wizard','thief'];
       const chosenGearJob = gearJobs[rand(0, gearJobs.length - 1)];
       const chosenSlot = EQUIPMENT_SLOTS[rand(0, EQUIPMENT_SLOTS.length - 1)];
@@ -5957,9 +5965,18 @@ function processHunt(playerState) {
           playerState.cash += refundAmount;
           droppedLootTexts.push(`🎉 [전리품 중복 대체] [${itemData.tier}] ${itemData.name}을(를) 이미 보유 중이므로 현금 +${won(refundAmount)}이 지급되었습니다!`);
         } else {
+          const beforeCount = new Set(playerState.inventory.filter(inv=>inv.category==='gear' && inv.gearJob===chosenGearJob && inv.tier===targetTier).map(inv=>inv.slot)).size;
           playerState.inventory.push({...itemData});
-          const ownedCount = new Set(playerState.inventory.filter(inv=>inv.category==='gear' && inv.gearJob===chosenGearJob && inv.tier===targetTier).map(inv=>inv.slot)).size;
-          droppedLootTexts.push(`🎉 [세트 전리품 획득!] [${itemData.tier}] ${itemData.categoryName} - ${itemData.name}\n세트: ${itemData.setName} (${ownedCount}/6부위)\n※ 착용 없이 보유만으로 세트 효과가 적용됩니다.\n(/전리품에서 확인)`);
+          const ownedCount = beforeCount + 1;
+          const newMark = '🆕 NEW! ';
+          droppedLootTexts.push(`${newMark}🎉 [세트 전리품 획득!] [${itemData.tier}] ${itemData.categoryName} - ${itemData.name}\n세트: ${itemData.setName} (${beforeCount}/6 → ${ownedCount}/6부위)\n(/전리품에서 확인)`);
+          if (ownedCount === 2 || ownedCount === 4) {
+            droppedLootTexts.push(`✨ [${itemData.tier}] ${itemData.setName} ${ownedCount}세트 효과 활성화!`);
+          }
+          if (ownedCount === 6) {
+            const active = getEquipmentSetBonuses(playerState).active.filter(x=>x.includes(`[${itemData.tier}] ${itemData.setName}`));
+            droppedLootTexts.push(`🌟 [세트 완성!]\n「${itemData.setName}」\n6/6 부위 수집 완료!${active.length ? '\n\n'+active.join('\n') : ''}`);
+          }
         }
       }
     }
@@ -6418,6 +6435,23 @@ function processTurn(state, utterance, context = {}) {
   if (requiresGameAdmin(utterance) && !isGameAdmin(context && context.userId)) {
     return { text: "관리자만 사용할 수 있는 명령어입니다.", choices: [], state: state || {} };
   }
+  const adminAttack = String(utterance||'').trim().match(/^\/관리자\s+공격력\s+(\d+)$/);
+  if (adminAttack && isGameAdmin(context && context.userId)) {
+    const attackVal = Number(adminAttack[1]);
+    const profile = createProfile(state && state.profile);
+    const battle = state && state.battle;
+    if (!Number.isSafeInteger(attackVal) || attackVal < 0) {
+      return { text: '⚠️ 관리자 공격력은 0 이상의 안전한 정수만 설정할 수 있습니다.\n예: /관리자 공격력 1000000', state: { profile, battle } };
+    }
+    profile.adminAttackPower = attackVal;
+    return {
+      text: `🛠️ [관리자 공격력] ${attackVal.toLocaleString()} 설정 완료\n💪 현재 공격력 : ${getAttackPower(profile).toLocaleString()}`,
+      choices: [],
+      category: 'adminAttack',
+      state: { profile, battle },
+      adminAction: 'attack'
+    };
+  }
   const adminSpeed = String(utterance||'').trim().match(/^\/관리자\s+배속\s+(\d+)$/);
   if (adminSpeed && isGameAdmin(context && context.userId)) {
     const speedVal = Number(adminSpeed[1]);
@@ -6669,7 +6703,7 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /대결 - 1대1 대결`,
       `• /던전 - 고등급 던전 입장`,
       `• /각인 - 각인 정보 확인`,
-      `• /전리품 - 획득한 전리품 확인`,
+      `• /전리품 - T1~T6 세트 전리품 및 세트 효과 확인`,
       `• /프로필 - 내 정보 확인`,
       `• /사냥 - 몬스터 사냥 및 현금 보상 획득`,
       `• /누적 - 누적 강화 비용 확인`,
@@ -7196,7 +7230,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
   // 27. /전리품 명령어
   if (command === '/전리품' || command === '/인벤토리') {
-    const wText = processWarehouse(profile);
+    const wText = processWarehouse(profile, arg);
     return {
       text: wText,
       imageUrl: null,
