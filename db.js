@@ -72,7 +72,7 @@ async function saveSession(userId, state, expected = { revision: state && state.
 }
 
 // 공격·처치·참여자 보상은 한 트랜잭션으로 확정한다 (MongoDB Atlas).
-const { createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
+const { checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
 const RAID_ID = 'world-boss-rewards-v1';
 const RAID_HP = 100000000;
 const RAID_REWARDS = Object.freeze({ cash: 10000000, gold: 1000, gem: 1000, keys: 100 });
@@ -115,6 +115,25 @@ async function grantAdminResource(actorId, targetId, field, amount) {
     await users.updateOne({ _id: targetId }, { $set: { state, updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
     await db.collection('admin_grants').insertOne({ actorId, targetId, field, amount, createdAt: new Date() }, { session });
     return { found: true, balance: state.profile[field] };
+  });
+}
+async function activatePremiumPass(actorId, targetId) {
+  if (!isGameAdmin(actorId)) throw new Error('관리자만 사용할 수 있습니다.');
+  validateUserId(targetId);
+  return transaction(async (db, session) => {
+    const users = db.collection('sessions');
+    const doc = await users.findOne({ _id: targetId }, { session });
+    if (!doc || !doc.state || !doc.state.profile) return { found: false };
+    const state = withUserId(doc.state, targetId);
+    checkAndResetSeasonPass(state.profile);
+    const pass = state.profile.seasonPass;
+    const alreadyActive = pass.premiumMonth === pass.month;
+    if (!alreadyActive) {
+      pass.premiumMonth = pass.month;
+      await users.updateOne({ _id: targetId }, { $set: { state, updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
+      await db.collection('admin_grants').insertOne({ actorId, targetId, action: 'premium_pass', month: pass.month, createdAt: new Date() }, { session });
+    }
+    return { found: true, alreadyActive, month: pass.month };
   });
 }
 async function getPowerRanking() {
@@ -271,7 +290,32 @@ async function renameUser(actorId,targetId,requestedName) {
     return {found:true,duplicate:false,nickname};
   });
 }
-module.exports = { getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn };
+// 대결은 상대의 저장된 능력치를 읽기만 한다. 보상과 횟수는 요청자에게만 저장한다.
+async function findPvpOpponent(userId, requestedNickname = '') {
+  validateUserId(userId);
+  await ensureNicknames();
+  const db = await database(), users = db.collection('sessions');
+  const nickname = String(requestedNickname).normalize('NFKC').trim();
+  const valid = doc => doc && typeof doc._id === 'string' && doc.state && doc.state.profile;
+  if (nickname) {
+    if (Array.from(nickname).length > 60 || /[\x00-\x1f\x7f]/.test(nickname)) return {version:1,reason:'invalid_name'};
+    const key = nickname.toLocaleLowerCase('en-US');
+    const claim = await db.collection('nickname_claims').findOne({_id:key});
+    const doc = claim ? await users.findOne({_id:claim.userId}) : null;
+    // 변경 전 닉네임의 예약 기록을 실제 현재 닉네임으로 오인하지 않는다.
+    if (!valid(doc) || nicknameBase(doc.state.profile.nickname).toLocaleLowerCase('en-US') !== key) return {version:1,reason:'not_found'};
+    if (doc._id === userId) return {version:1,reason:'own_name'};
+    return {version:1,opponent:createProfile(doc.state.profile)};
+  }
+  let selected = null, count = 0;
+  for await (const doc of users.find({}, {projection:{_id:1,'state.profile':1}})) {
+    if (!valid(doc) || doc._id === userId) continue;
+    count++;
+    if (Math.random() < 1/count) selected = doc;
+  }
+  return selected ? {version:1,opponent:createProfile(selected.state.profile)} : {version:1,reason:'no_players'};
+}
+module.exports = { activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
 
 // Names are claimed in MongoDB by a unique _id. Claims are never released, so a
 // concurrent reset/save cannot let a second account take the same nickname.
