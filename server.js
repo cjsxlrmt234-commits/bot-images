@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const { startGame, processTurn, createProfile, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
 const { buildResponse, parseSkillRequest } = require('./kakao');
-const { getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn } = require('./db');
+const { activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
 
 const app = express();
 app.set('trust proxy', true);
@@ -84,6 +84,13 @@ app.post('/skill', async (req, res) => {
     const adminAttackCommand=/^\/관리자\s+공격력\s+\d+$/.test(utterance);
     // game.js 내부에서 처리하는 관리자 전용 명령은 재화 지급 파서가 가로채지 않도록 통과시킨다.
     if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !adminAttackCommand) {
+      const premium = utterance.match(/^\/관리자\s+(\S+)\s+패스\s+활성화$/);
+      if (premium) {
+        stage = '관리자 유료 패스 활성화';
+        const result = await activatePremiumPass(userId, premium[1]);
+        return res.json(await buildSafeResponse(!result.found ? '해당 UID의 게임 계정이 없습니다.' :
+          '✅ ' + result.month + ' 유료 패스 ' + (result.alreadyActive ? '이미 활성화되어 있습니다.' : '활성화 완료!') + '\n한국 시간 다음 달 1일 00:00에 종료됩니다.\n/패스 보상으로 보상을 수령하세요.', []));
+      }
       const rename=parseAdminRename(utterance);
       if(rename) {
         stage='관리자 닉네임 변경';
@@ -91,7 +98,7 @@ app.post('/skill', async (req, res) => {
         return res.json(await buildSafeResponse(!result.found ? '해당 UID의 계정이 없습니다.' : result.duplicate ? '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.' : '✅ 닉네임 변경 완료\n'+result.nickname,[]));
       }
       const grant = parseAdminGrant(utterance);
-      if (!grant) return res.json(await buildSafeResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명 · /관리자 배속 1~1000 · /관리자 공격력 수치', []));
+      if (!grant) return res.json(await buildSafeResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n유료 패스: /관리자 대상UID 패스 활성화\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명 · /관리자 배속 1~1000 · /관리자 공격력 수치', []));
       stage = '관리자 재화 지급';
       const paid = await grantAdminResource(userId, grant.targetId, grant.field, grant.amount);
       return res.json(await buildSafeResponse(paid.found ? '✅ 지급 완료\n대상: ' + grant.targetId + '\n' + grant.label + ' +' + grant.amount.toLocaleString() + (grant.field === 'cash' ? '원' : '개') : '해당 UID의 게임 계정이 없습니다. UID를 확인해 주세요.', []));
@@ -138,7 +145,12 @@ app.post('/skill', async (req, res) => {
     } else {
       // 신규 사용자도 /id, /출석 등 최초 입력한 명령을 바로 처리한다.
       console.log('[게임 명령 진입] #' + req.traceId);
-      result = processTurn(state, utterance, { userId, sharedRaidPassives:true });
+      let pvpMatch;
+      if (/^\/대결(?:\s|$)/.test(utterance)) {
+        stage = '대결 상대 조회';
+        pvpMatch = await findPvpOpponent(userId, utterance.replace(/^\/대결\s*/, ''));
+      }
+      result = processTurn(state, utterance, { userId, sharedRaidPassives:true, pvpMatch });
     }
 
     if (!result || !result.state || !result.state.profile) {
