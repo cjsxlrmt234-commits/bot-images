@@ -1,3 +1,287 @@
+const BEGINNER_GUIDE = "🎉 몬스터사냥이 체질입니다에 오신 걸 환영합니다!\n\n🌱 처음이라면 이렇게 시작하세요!\n\n① /사냥 — 재화 모으기\n몬스터를 만나 현금과 보석을 획득하세요.\n같은 몬스터의 기본·+등급을 모두 처치하면 컬렉션이 완성됩니다!\n\n② /파밍 — 몬스터에 도전하기\nHP가 다할 때까지 몬스터에 도전하세요.\n처치 기록에 따라 받은 상자는 /상자에서 확인할 수 있어요!\n\n③ /강화 — 무기 성장시키기\n현금을 사용해 무기를 강화하세요.\n⚠️ 단계에 따라 유지·하락·파괴가 발생할 수 있어요.\n\n매일 첫 사냥·파밍을 진행하면 자동으로 출석 처리됩니다!\n내 상태는 /프로필, 전체 명령어는 /도움말로 확인하세요.\n이 안내는 /가이드로 다시 볼 수 있어요.";
+const BEGINNER_CHOICES = ['/사냥','/파밍','/강화','/프로필','/도움말'].map(label => ({label,action:label}));
+
+const MAX_ITEM_USE_PER_REQUEST = 1000;
+function parseItemCount(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text) return 1;
+  if (!/^[1-9]\d*$/.test(text)) return null;
+  const count = Number(text);
+  return Number.isSafeInteger(count) && count <= MAX_ITEM_USE_PER_REQUEST ? count : null;
+}
+function enhanceShortageText(profile, row) {
+  const cash = Math.floor(row.cost * (1-getImprintTotalBonus(profile,'enhanceCostDown')/100));
+  const gems = row.gemCost || 0;
+  return '강화 재화가 부족하여 중단했습니다.\n💵 현금: 필요 '+won(cash)+' / 보유 '+won(profile.cash)+'\n💎 보석: 필요 '+gems+'개 / 보유 '+(profile.gem||0)+'개';
+}
+const SUBWEAPON_CATALOG = {
+  "warrior": {
+    "type": "검집",
+    "names": [
+      "훈련병의 나무 검집",
+      "가죽끈 검집",
+      "단단한 참나무 검집",
+      "철테 검집",
+      "청동 사자 검집",
+      "수호병의 강철 검집",
+      "기사의 은장 검집",
+      "붉은 늑대 검집",
+      "흑철 요새 검집",
+      "백은 맹세 검집",
+      "왕실 근위 검집",
+      "불꽃 문양 검집",
+      "서리 맹약 검집",
+      "천둥의 검집",
+      "용비늘 검집",
+      "불굴의 성채 검집",
+      "태양기사의 검집",
+      "심연 봉인 검집",
+      "별을 품은 검집",
+      "왕의 귀환 검집",
+      "영원한 승리의 검집"
+    ],
+    "desc": [
+      "기본 발도 자세를 익히도록 무게를 맞춘 나무 검집.",
+      "질긴 가죽끈이 허리를 단단히 잡아 빠른 발도를 돕는다.",
+      "오랜 세월 자란 참나무가 거친 충격을 받아낸다.",
+      "입구에 두른 철테가 칼날을 곧게 이끈다.",
+      "사자 문양의 청동 장식에 전사의 용기를 새겼다.",
+      "수많은 경계 근무에도 뒤틀리지 않는 강철 검집.",
+      "은빛 장식이 흔들림을 줄여 기사의 검로를 지킨다.",
+      "늑대 가죽으로 감싸 손에 착 붙는 붉은 검집.",
+      "검은 철판을 겹쳐 작은 요새처럼 단단하게 만들었다.",
+      "흰 은판에 동료를 지키겠다는 맹세가 새겨져 있다.",
+      "왕을 호위하는 근위대장에게 수여되는 정교한 검집.",
+      "칼을 뽑을 때마다 불꽃 문양이 붉게 빛난다.",
+      "차가운 서리 문양이 전사의 흐트러진 호흡을 가다듬는다.",
+      "발도 순간 낮은 천둥소리가 울려 퍼진다.",
+      "겹겹이 엮은 용비늘이 칼날의 힘을 고스란히 품는다.",
+      "무너진 성채에서도 끝까지 남은 수호자의 유품.",
+      "태양 문장을 품어 긴 전투 속에서도 광채를 잃지 않는다.",
+      "검집 안쪽의 봉인이 검에 깃든 심연을 잠재운다.",
+      "밤하늘의 별빛이 칼날을 따라 검집 속으로 흘러든다.",
+      "왕의 귀환을 기다리며 수백 년간 칼날을 지킨 검집.",
+      "수많은 승리의 서약을 품은 전사의 최종 검집."
+    ]
+  },
+  "archer": {
+    "type": "화살통",
+    "names": [
+      "견습 사냥꾼의 화살통",
+      "가죽 화살통",
+      "자작나무 화살통",
+      "깃털 장식 화살통",
+      "숲지기의 화살통",
+      "매의 눈 화살통",
+      "바람결 화살통",
+      "은잎 화살통",
+      "늑대 추적자 화살통",
+      "초승달 화살통",
+      "왕실 궁수의 화살통",
+      "폭풍깃 화살통",
+      "서리매 화살통",
+      "번개줄기 화살통",
+      "용날개 화살통",
+      "황혼 순찰자 화살통",
+      "태양깃 화살통",
+      "공허 추적자 화살통",
+      "별무리 화살통",
+      "천공의 지배자 화살통",
+      "백발백중의 성좌"
+    ],
+    "desc": [
+      "화살을 꺼내는 동작부터 익히는 견습용 화살통.",
+      "부드러운 가죽이 화살촉이 부딪치는 소리를 줄인다.",
+      "가벼운 자작나무로 만들어 숲길을 달리기 편하다.",
+      "깃털 장식이 바람의 방향을 알려준다.",
+      "나무껍질 무늬가 울창한 숲속에서 모습을 감춘다.",
+      "매의 문장이 새겨진 사냥꾼의 소중한 화살통.",
+      "허리 움직임에 맞춰 유연하게 흔들리는 화살통.",
+      "은빛 나뭇잎 장식이 화살깃을 가지런히 지킨다.",
+      "늑대를 쫓던 궁수가 긴 추적에 맞게 개량했다.",
+      "초승달처럼 휘어진 덮개가 화살을 비로부터 보호한다.",
+      "왕실의 명사수에게 지급되는 균형 잡힌 화살통.",
+      "폭풍새의 깃털로 안감을 대어 놀랍도록 가볍다.",
+      "서리매의 푸른 무늬가 설원에서도 선명하게 빛난다.",
+      "번개가 스친 나무로 만들어 미세한 울림이 남아 있다.",
+      "용의 날개막을 덧대어 먼 원정에도 닳지 않는다.",
+      "황혼의 경계를 지키던 순찰대장의 화살통.",
+      "황금빛 깃털이 날아갈 화살에 태양의 색을 입힌다.",
+      "소리 없는 공허를 지나온 추적자의 검은 화살통.",
+      "화살을 뽑을 때마다 작은 별빛이 손끝에 묻어난다.",
+      "구름 위의 사냥터를 누비던 명궁의 유산.",
+      "모든 별이 한 표적을 가리키는 전설의 화살통."
+    ]
+  },
+  "wizard": {
+    "type": "오브",
+    "names": [
+      "견습생의 유리 오브",
+      "희미한 마력 오브",
+      "푸른 수정 오브",
+      "룬 문양 오브",
+      "새벽 이슬 오브",
+      "현자의 숨결 오브",
+      "은빛 조율 오브",
+      "불꽃 심장 오브",
+      "서리꽃 오브",
+      "천둥 구름 오브",
+      "마도학자의 오브",
+      "원소 회랑 오브",
+      "달빛 공명 오브",
+      "시간의 모래 오브",
+      "용의 기억 오브",
+      "황혼의 진리 오브",
+      "태양의 핵 오브",
+      "심연의 눈 오브",
+      "별의 탄생 오브",
+      "창세의 빛 오브",
+      "무한한 지혜의 오브"
+    ],
+    "desc": [
+      "마력의 흐름을 관찰하기 위한 작은 유리 구슬.",
+      "손바닥에서 희미한 마력의 빛을 내뿜는다.",
+      "맑은 청색 수정이 흩어진 마력을 모은다.",
+      "표면에 새긴 기초 룬이 마력의 흐름을 정돈한다.",
+      "새벽 이슬을 품어 안쪽에 잔잔한 물결이 보인다.",
+      "오랜 현자가 남긴 따뜻한 마력의 흔적을 담았다.",
+      "은빛 고리가 흔들리는 마력을 일정하게 맞춘다.",
+      "구슬 속 작은 불씨가 심장처럼 규칙적으로 뛴다.",
+      "결코 녹지 않는 서리꽃이 투명한 중심에 피어 있다.",
+      "손끝에 올리면 작은 먹구름과 번개가 맴돈다.",
+      "수많은 연구 기록이 빛의 문자로 새겨져 있다.",
+      "여러 원소의 빛이 서로 부딪치지 않고 순환한다.",
+      "달빛을 받으면 낮은 공명음으로 주인에게 답한다.",
+      "멈추지 않는 모래가 마력의 박자를 재어 준다.",
+      "고대 용이 보았던 풍경이 수정 속에 스쳐 지나간다.",
+      "해가 지는 순간에만 읽히는 진리의 문장을 품었다.",
+      "작은 태양처럼 빛나지만 손안에서는 따뜻하기만 하다.",
+      "심연을 바라본 마법사가 봉인한 검은 눈동자.",
+      "새로운 별이 태어나는 찰나를 수정 속에 담았다.",
+      "세상이 처음 빛났던 순간을 닮은 순백의 오브.",
+      "끝없는 질문과 깨달음을 품은 대마법사의 보조 오브."
+    ]
+  },
+  "thief": {
+    "type": "수리검",
+    "names": [
+      "수련용 철표창",
+      "날선 삼각 표창",
+      "검은 깃 표창",
+      "쌍갈래 수리검",
+      "그믐달 표창",
+      "밤안개 수리검",
+      "은빛 독사 표창",
+      "그림자 발톱",
+      "붉은 전갈 수리검",
+      "무음의 표창",
+      "암영단의 수리검",
+      "유령걸음 표창",
+      "서리 송곳 수리검",
+      "뇌광 표창",
+      "용송곳니 수리검",
+      "황혼 암살자의 표창",
+      "검은 태양 수리검",
+      "심연의 꽃 표창",
+      "별을 가르는 수리검",
+      "죽음의 속삭임",
+      "영원한 암영의 수리검"
+    ],
+    "desc": [
+      "던지는 자세를 익히도록 날을 무디게 만든 철표창.",
+      "세 모서리를 고르게 갈아 회전이 안정적이다.",
+      "검은 깃 장식이 밤의 옷자락에 자연스럽게 섞인다.",
+      "두 갈래 날이 매끄러운 곡선을 그리며 날아간다.",
+      "그믐달처럼 얇은 날을 지닌 작고 날렵한 표창.",
+      "밤안개를 닮은 무광 표면이 빛의 반사를 줄인다.",
+      "독사의 몸짓을 본떠 구불구불한 날을 새겼다.",
+      "그림자 짐승의 발톱처럼 짧고 날카로운 투척 무기.",
+      "전갈의 꼬리를 닮은 붉은 날이 인상적인 수리검.",
+      "바람을 가르는 소리를 줄이도록 날을 다듬었다.",
+      "암영단의 정예에게만 주어지는 비밀 문장 수리검.",
+      "유령처럼 흔적 없이 임무를 마친 도적의 표창.",
+      "차가운 송곳 같은 날이 푸른 빛을 머금는다.",
+      "번쩍이는 궤적이 뇌광을 닮은 은백색 표창.",
+      "용의 송곳니 조각을 중심에 고정한 수리검.",
+      "황혼에만 모습을 드러내던 암살자의 마지막 유품.",
+      "검은 태양 문양을 중심으로 날이 방사형으로 펼쳐진다.",
+      "심연에서 피어난 꽃처럼 겹겹의 날을 가진 표창.",
+      "별빛을 가를 만큼 얇고 정밀하게 연마한 수리검.",
+      "손안에서조차 존재감이 희미한 전설의 투척 무기.",
+      "어떤 밤에도 주인의 손길을 기억하는 궁극의 수리검."
+    ]
+  }
+};
+
+// 보조무기는 1차 계열에 종속되며 2차 전직 후에도 강화 단계를 유지한다.
+// +0에는 능력치가 없고, 1차 전직 무기 +0 대비 강화 증가분만 더한다.
+function getSubweaponLevel(profile) {
+  return getBaseJobCode(profile) ? normalizeStoredInt(profile.subweaponEnhance, 0, 0, 20) : 0;
+}
+function getSubweaponBonus(profile) {
+  const n = getSubweaponLevel(profile);
+  return { attack: 1000*n + 50*n*(n-1), mult: n*0.05, critRate:n, critDmg:n, counter:n*0.10, fullCounter:Math.max(0,n-10)*0.10 };
+}
+function getSubweaponImage(profile) {
+  const base = getBaseJobCode(profile);
+  return SUBWEAPON_CATALOG[base] ? BASE_URL + '/' + base + '_as_' + getSubweaponLevel(profile) + '.png' : null;
+}
+function getSubweaponInfo(profile) {
+  const catalog = SUBWEAPON_CATALOG[getBaseJobCode(profile)];
+  if (!catalog) return null;
+  const level = getSubweaponLevel(profile);
+  return { level, type:catalog.type, name:catalog.names[level], description:catalog.desc[level] };
+}
+function subweaponText(profile) {
+  const info = getSubweaponInfo(profile);
+  if (!info) return '보조무기는 1차 전직 이후 사용할 수 있습니다.';
+  const b = getSubweaponBonus(profile);
+  const lines = ['🗡️ [보조무기 · '+info.type+']', '+'+info.level+' '+info.name, info.description, '',
+    '💪 공격력 +'+b.attack.toLocaleString(), '🔘 배율 +'+b.mult.toFixed(2),
+    '🎯 치명타 확률 +'+b.critRate.toFixed(2)+'%p', '💥 치명타 데미지 +'+b.critDmg.toFixed(2)+'%p',
+    '⚔️ 카운터 확률 +'+b.counter.toFixed(2)+'%p', '⚔️ 풀카운터 확률 +'+b.fullCounter.toFixed(2)+'%p'];
+  if (info.level < 20) {
+    const row = JOB_ENHANCE_TABLE[info.level];
+    const cost = Math.max(0, Math.floor(row.cost*(1-getImprintTotalBonus(profile,'enhanceCostDown')/100)));
+    const bonus = (getCombinedGrowthInfo(profile).successBonus+getImprintTotalBonus(profile,'enhanceSuccess'))/100;
+    lines.push('', '다음 강화: 현금 '+won(cost)+(row.gemCost ? ' · 보석 '+row.gemCost+'개' : ''),
+      '성공 '+(Math.min(1,row.success+bonus)*100).toFixed(2)+'% · 유지 '+(Math.max(0,row.keep-bonus)*100).toFixed(2)+'% · 하락 '+((row.drop||0)*100).toFixed(2)+'% · 파괴 '+((row.destroy||0)*100).toFixed(2)+'%');
+  } else lines.push('', '최고 강화 단계입니다.');
+  lines.push('', '/보조강화 : 1회 강화', '/보조강화 15 : +15까지 강화');
+  return lines.join('\n');
+}
+function processSubweaponEnhance(profile, arg = '') {
+  if (!getSubweaponInfo(profile)) return {text:'보조무기는 1차 전직 이후 강화할 수 있습니다.'};
+  const text = String(arg).trim(), repeated = text !== '';
+  const target = repeated && /^[1-9]\d*$/.test(text) ? Number(text) : repeated ? NaN : 20;
+  if (!Number.isInteger(target) || target < 1 || target > 20) return {text:'사용법: /보조강화 또는 /보조강화 [목표 단계 1~20]'};
+  const initial = getSubweaponLevel(profile);
+  if (initial >= target) return {text:'이미 목표 강화 단계에 도달했습니다.\n\n'+subweaponText(profile)};
+  let attempted=0, cash=0, gems=0, success=0, keep=0, drop=0, destroy=0;
+  const limit = repeated ? 100000 : 1;
+  const bonus = (getCombinedGrowthInfo(profile).successBonus + getImprintTotalBonus(profile,'enhanceSuccess'))/100;
+  const discount = getImprintTotalBonus(profile,'enhanceCostDown');
+  profile.subweaponEnhance = initial;
+  while (profile.subweaponEnhance < target && attempted < limit) {
+    const row = JOB_ENHANCE_TABLE[profile.subweaponEnhance];
+    const cost = Math.max(0, Math.floor(row.cost*(1-discount/100))), gemCost = row.gemCost || 0;
+    if (profile.cash < cost || (profile.gem||0) < gemCost) break;
+    profile.cash -= cost; profile.gem = (profile.gem||0)-gemCost;
+    cash+=cost; gems+=gemCost; attempted++;
+    const roll = Math.random(), sr = Math.min(1,row.success+bonus), kr = Math.max(0,row.keep-bonus);
+    if (roll < sr) { profile.subweaponEnhance++; success++; }
+    else if (roll < sr+kr) keep++;
+    else if (roll < sr+kr+(row.drop||0)) { profile.subweaponEnhance=Math.max(0,profile.subweaponEnhance-1); drop++; }
+    else { profile.subweaponEnhance=0; destroy++; }
+    profile.maxSubweaponEnhanceHistory = Math.max(profile.maxSubweaponEnhanceHistory||0,profile.subweaponEnhance);
+  }
+  profile.totalSubweaponEnhanceCost = (profile.totalSubweaponEnhanceCost||0)+cash;
+  let reason = profile.subweaponEnhance>=target ? '목표 강화 달성!' : attempted<limit ? enhanceShortageText(profile,JOB_ENHANCE_TABLE[profile.subweaponEnhance]) : repeated ? '100,000회에서 중단했습니다. 같은 명령으로 이어갈 수 있습니다.' : '1회 강화 완료.';
+  return {text:['🗡️ [보조무기 강화]',reason,'+'+initial+' → +'+profile.subweaponEnhance,
+    '시도 '+attempted.toLocaleString()+'회 · 성공 '+success+' / 유지 '+keep+' / 하락 '+drop+' / 파괴 '+destroy,
+    '소모: 현금 '+won(cash)+' · 보석 '+gems.toLocaleString()+'개','',subweaponText(profile),'',enhanceResourceText(profile)].join('\n')};
+}
+
 const JOB_CATALOG = {
   "warrior": [
     "전사",
@@ -354,11 +638,11 @@ const VAULT_CAPACITY_PER_LEVEL = 2000000;
 const EXP_PER_LEVEL_BASE = 200;
 const FARM_DAILY_LIMIT = 1000;
 const FARM_QUEST_MILESTONES = [100,250,500,1000,1500,2000];
-const JOB_UNLOCK_CASH = 50000000;
-const JOB_UNLOCK_GOLD = 500;
-const JOB_CHANGE_CASH = 100000000;
-const JOB_CHANGE_GOLD = 2000;
-const JOB_CHANGE_GEM = 2000;
+const JOB_UNLOCK_CASH = 10000000;
+const JOB_UNLOCK_GOLD = 300;
+const JOB_CHANGE_CASH = 20000000;
+const JOB_CHANGE_GOLD = 500;
+const JOB_CHANGE_GEM = 500;
 const REFINE_BASE_CASH = 10000000;
 
 const BASE_URL = 'https://raw.githubusercontent.com/cjsxlrmt234-commits/bot-images/main'; 
@@ -2434,36 +2718,29 @@ const JOB_ENHANCE_TABLE = [
   { cost: 450000, success: 0.45, keep: 0.51, drop: 0.04, destroy: 0.00 },
   { cost: 550000, success: 0.40, keep: 0.55, drop: 0.05, destroy: 0.00 },
   { cost: 650000, success: 0.35, keep: 0.60, drop: 0.05, destroy: 0.00 },
-  { cost: 1000000, success: 0.30, keep: 0.60, drop: 0.10, destroy: 0.00, gemCost: 10 },
-  { cost: 1250000, success: 0.27, keep: 0.67, drop: 0.05, destroy: 0.01, gemCost: 15 },
-  { cost: 1500000, success: 0.24, keep: 0.69, drop: 0.05, destroy: 0.02, gemCost: 20 },
-  { cost: 1750000, success: 0.21, keep: 0.71, drop: 0.05, destroy: 0.03, gemCost: 25 },
-  { cost: 2000000, success: 0.18, keep: 0.73, drop: 0.05, destroy: 0.04, gemCost: 30 },
-  { cost: 2250000, success: 0.15, keep: 0.75, drop: 0.05, destroy: 0.05, gemCost: 35 },
-  { cost: 2500000, success: 0.12, keep: 0.77, drop: 0.05, destroy: 0.06, gemCost: 40 },
-  { cost: 2750000, success: 0.10, keep: 0.77, drop: 0.05, destroy: 0.08, gemCost: 45 },
-  { cost: 3000000, success: 0.08, keep: 0.77, drop: 0.05, destroy: 0.10, gemCost: 50 },
-  { cost: 3500000, success: 0.06, keep: 0.77, drop: 0.05, destroy: 0.12, gemCost: 55 },
-  { cost: 4000000, success: 0.05, keep: 0.75, drop: 0.05, destroy: 0.15, gemCost: 60 },
+  { cost: 1000000, success: 0.30, keep: 0.60, drop: 0.10, destroy: 0.00, gemCost: 1 },
+  { cost: 1250000, success: 0.27, keep: 0.67, drop: 0.05, destroy: 0.01, gemCost: 2 },
+  { cost: 1500000, success: 0.24, keep: 0.69, drop: 0.05, destroy: 0.02, gemCost: 4 },
+  { cost: 1750000, success: 0.21, keep: 0.71, drop: 0.05, destroy: 0.03, gemCost: 6 },
+  { cost: 2000000, success: 0.18, keep: 0.73, drop: 0.05, destroy: 0.04, gemCost: 8 },
+  { cost: 2250000, success: 0.15, keep: 0.75, drop: 0.05, destroy: 0.05, gemCost: 10 },
+  { cost: 2500000, success: 0.12, keep: 0.77, drop: 0.05, destroy: 0.06, gemCost: 15 },
+  { cost: 2750000, success: 0.10, keep: 0.77, drop: 0.05, destroy: 0.08, gemCost: 20 },
+  { cost: 3000000, success: 0.08, keep: 0.77, drop: 0.05, destroy: 0.10, gemCost: 25 },
+  { cost: 3500000, success: 0.06, keep: 0.77, drop: 0.05, destroy: 0.12, gemCost: 30 },
+  { cost: 4000000, success: 0.05, keep: 0.75, drop: 0.05, destroy: 0.15, gemCost: 40 },
 ];
 
 
 // 2차 전직 전용 강화표
-// - 1차 전직 대비 현금 비용 5배
-// - 성공률은 단계별 3%p 하향(최저 2%)
-// - 낮아진 성공률만큼 유지 확률에 가산하여 하락/파괴 확률은 기존과 동일하게 유지
+// - 성공/유지/하락/파괴 확률은 1차 전직 JOB_ENHANCE_TABLE과 동일
+// - 현금 비용은 1차 전직 대비 5배 유지
 // - +0 → +1부터 보석 5개, 이후 단계마다 5개씩 증가
-const SECOND_JOB_ENHANCE_TABLE = JOB_ENHANCE_TABLE.map((row, index) => {
-  const success = Math.max(0.02, Number((row.success - 0.03).toFixed(2)));
-  const shifted = row.success - success;
-  return {
-    ...row,
-    cost: row.cost * 5,
-    success,
-    keep: Number((row.keep + shifted).toFixed(2)),
-    gemCost: (index + 1) * 5
-  };
-});
+const SECOND_JOB_ENHANCE_TABLE = JOB_ENHANCE_TABLE.map((row, index) => ({
+  ...row,
+  cost: row.cost * 5,
+  gemCost: (index + 1) * 5
+}));
 
 function getActiveEnhanceTable(profile) {
   if (!profile || !profile.job) return ENHANCE_TABLE;
@@ -2486,15 +2763,15 @@ const REFINE_STARS = [
 
 const REFINE_TABLE = [
   { cashCost: REFINE_BASE_CASH, goldCost: 10, success: 1.00, keep: 0.00, destroy: 0.000, drop: 0.00 },
-  { cashCost: 15000000, goldCost: 15, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 },
-  { cashCost: 20000000, goldCost: 20, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 },
-  { cashCost: 25000000, goldCost: 25, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 },
-  { cashCost: 25000000, goldCost: 25, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 },
-  { cashCost: 35000000, goldCost: 30, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },
-  { cashCost: 40000000, goldCost: 35, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 },
-  { cashCost: 45000000, goldCost: 40, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },
-  { cashCost: 50000000, goldCost: 45, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 },
-  { cashCost: 60000000, goldCost: 50, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 },
+  { cashCost: 10000000, goldCost: 0, success: 0.90, keep: 0.10, destroy: 0.000, drop: 0.00 },
+  { cashCost: 15000000, goldCost: 5, success: 0.80, keep: 0.20, destroy: 0.000, drop: 0.00 },
+  { cashCost: 20000000, goldCost: 10, success: 0.70, keep: 0.25, destroy: 0.000, drop: 0.05 },
+  { cashCost: 25000000, goldCost: 15, success: 0.50, keep: 0.40, destroy: 0.000, drop: 0.10 },
+  { cashCost: 30000000, goldCost: 20, success: 0.40, keep: 0.575, destroy: 0.025, drop: 0.00 },
+  { cashCost: 35000000, goldCost: 25, success: 0.30, keep: 0.65, destroy: 0.050, drop: 0.00 },
+  { cashCost: 40000000, goldCost: 30, success: 0.20, keep: 0.725, destroy: 0.075, drop: 0.00 },
+  { cashCost: 45000000, goldCost: 35, success: 0.10, keep: 0.80, destroy: 0.100, drop: 0.00 },
+  { cashCost: 50000000, goldCost: 40, success: 0.05, keep: 0.80, destroy: 0.150, drop: 0.00 },
 ];
 
 const AMPLIFY_TABLE = [
@@ -2510,6 +2787,20 @@ const AMPLIFY_TABLE = [
   { level: 9, costNext: 9000, minGold: 2, maxGold: 10, multBonus: 1.80, critWeight: 0.80, successBonus: 4.5 },
   { level: 10, costNext: 0, minGold: 3, maxGold: 11, multBonus: 2.00, critWeight: 1.00, successBonus: 5.0 }
 ];
+
+// 공명은 증폭과 같은 비용/효과 곡선을 사용하지만 보석으로 강화한다.
+const RESONANCE_TABLE = AMPLIFY_TABLE.map(({ minGold, maxGold, ...row }) => ({ ...row, minGem:minGold, maxGem:maxGold }));
+function getResonanceInfo(profile) {
+  return RESONANCE_TABLE[normalizeStoredInt(profile && profile.resonanceLevel,0,0,10)];
+}
+function getCombinedGrowthLevel(profile) {
+  return normalizeStoredInt(profile && profile.combatLevel,0,0,10) + getResonanceInfo(profile).level;
+}
+function getCombinedGrowthInfo(profile, combatLevel = profile && profile.combatLevel) {
+  const amp = getAmplifyInfo(combatLevel), resonance = getResonanceInfo(profile);
+  return {...amp, multBonus:amp.multBonus+resonance.multBonus, critWeight:amp.critWeight+resonance.critWeight, successBonus:amp.successBonus+resonance.successBonus};
+}
+const RESONANCE_CHOICES = [{label:'/공명 강화',action:'/공명 강화'}];
 
 
 
@@ -2736,12 +3027,12 @@ function getJobTier(profile) {
 function getWeaponBaseMultiplier(profile) {
   const tier = getJobTier(profile);
   const perLevel = tier === 2 ? 0.08 : 0.05;
-  return Number(((1 + tier) + normalizeWeaponLevel(getCurrentEnhanceLevel(profile)) * perLevel).toFixed(2));
+  return Number(((1 + tier) + normalizeWeaponLevel(getCurrentEnhanceLevel(profile)) * perLevel + getSubweaponBonus(profile).mult).toFixed(2));
 }
 function getGoldMultiplier(profile) {
   const currentEnhance = getCurrentEnhanceLevel(profile);
   const baseMult = getWeaponBaseMultiplier(profile);
-  const ampInfo = getAmplifyInfo(profile ? profile.combatLevel : 0);
+  const ampInfo = getCombinedGrowthInfo(profile);
   const refineBonus = ((profile && profile.refine) || 0) * 0.10; 
   const imprintCashBoost = getImprintTotalBonus(profile, 'cashBoost') / 100;
   const creatureCashPct = getCreatureBonus(profile).cashPct;
@@ -2845,15 +3136,21 @@ function getEnhanceStats(enhanceLevel, combatLevel = 0, profile = null) {
     baseFullCounter = 0.50 + Math.max(0, lvl - 10) * 0.10;
   } else {
     baseMult = (1.00 + (lvl * 0.05)).toFixed(2);
-    baseCrit = lvl * 0.50;
-    baseCritDmg = lvl * 1.00;
+    baseCrit = lvl * 0.20;
+    baseCritDmg = lvl * 0.50;
     
     baseCounter = Math.max(0, lvl - 10) * 0.10;
     baseFullCounter = Math.max(0, lvl - 15) * 0.10;
 
   }
 
-  const ampInfo = getAmplifyInfo(combatLevel);
+  const sub = getSubweaponBonus(profile);
+  baseMult = (Number(baseMult) + sub.mult).toFixed(2);
+  baseCrit += sub.critRate;
+  baseCritDmg += sub.critDmg;
+  baseCounter += sub.counter;
+  baseFullCounter += sub.fullCounter;
+  const ampInfo = getCombinedGrowthInfo(profile, combatLevel);
   const imprintCritRate = getImprintTotalBonus(profile, 'critRate');
   const imprintCritWeight = getImprintTotalBonus(profile, 'critWeight');
 
@@ -2920,14 +3217,12 @@ function getWeaponAttackPower(profile) {
 
 function getAttackPower(profile) {
   if (!profile) return 0;
-  // 관리자 공격력 오버라이드가 설정되어 있으면 모든 공격력 표시/전투 계산에 그대로 사용한다.
-  if (Number.isSafeInteger(profile.adminAttackPower) && profile.adminAttackPower >= 0) return profile.adminAttackPower;
-  const combatLv = profile.combatLevel || 0;
+  const combatLv = getCombinedGrowthLevel(profile);
   const enhance = getCurrentEnhanceLevel(profile);
   const lvl = profile.level || 1;
   const refineLvl = profile.refine || 0;
 
-  const basePower = (lvl * 100) + (combatLv * 500) + getWeaponAttackPower(profile) + getCollectionCombatPower(profile);
+  const basePower = (lvl * 100) + (combatLv * 500) + getWeaponAttackPower(profile) + getSubweaponBonus(profile).attack + getCollectionCombatPower(profile);
   const refineBonusMult = 1 + (refineLvl * 0.02);
   const imprintCombatBoost = getImprintTotalBonus(profile, 'combatBoost') / 100;
   
@@ -2993,6 +3288,17 @@ function checkAndResetSeasonPass(profile) {
   pass.exp %= 100;
   pass.claimedRewards = Array.isArray(pass.claimedRewards)
     ? [...new Set(pass.claimedRewards.map(Number).filter(n => Number.isInteger(n) && n >= 1))] : [];
+  // 이전 버전에서 받은 보상은 유료 수준이었으므로 재지급하지 않는다.
+  if (pass.rewardVersion !== 2) {
+    pass.freeClaimedRewards = [...pass.claimedRewards];
+    pass.paidClaimedRewards = [...pass.claimedRewards];
+    pass.rewardVersion = 2;
+    pass.premiumMonth = '';
+  }
+  for (const field of ['freeClaimedRewards', 'paidClaimedRewards']) {
+    pass[field] = Array.isArray(pass[field]) ? [...new Set(pass[field].map(Number).filter(n => Number.isSafeInteger(n) && n >= 1))] : [];
+  }
+  if (pass.premiumMonth !== currentMonthStr) pass.premiumMonth = '';
   pass.lastAttendanceDate = typeof pass.lastAttendanceDate === 'string' ? pass.lastAttendanceDate : '';
   pass.dailyFarmExpClaimed = pass.dailyFarmExpClaimed === true;
   pass.dailyHuntExpClaimed = pass.dailyHuntExpClaimed === true;
@@ -3001,6 +3307,15 @@ function checkAndResetSeasonPass(profile) {
     profile.seasonPass.dailyFarmExpClaimed = false;
     profile.seasonPass.dailyHuntExpClaimed = false;
   }
+}
+
+function claimAttendance(profile, automatic = false) {
+  checkAndResetSeasonPass(profile);
+  const today = getKSTDateString();
+  if (profile.seasonPass.lastAttendanceDate === today) return null;
+  profile.seasonPass.lastAttendanceDate = today;
+  const reward = grantPassExp(profile,20);
+  return (automatic ? '📅 [자동 출석 완료!]' : '📅 [출석 체크 완료!]') + '\n' + reward;
 }
 
 function grantPassExp(profile, amount) {
@@ -3035,7 +3350,7 @@ function claimDailyPassMissions(profile) {
   checkAndResetHuntLimit(profile);
   const lines = [];
   for (const mission of [
-    { count: profile.farmData.count, threshold: 200, flag: 'dailyFarmExpClaimed', name: '파밍' },
+    { count: profile.farmData.count, threshold: 1000, flag: 'dailyFarmExpClaimed', name: '파밍' },
     { count: profile.huntData.count, threshold: 2000, flag: 'dailyHuntExpClaimed', name: '사냥' }
   ]) {
     if (mission.count >= mission.threshold && !profile.seasonPass[mission.flag]) {
@@ -3047,116 +3362,89 @@ function claimDailyPassMissions(profile) {
   return lines;
 }
 
-function processPassCommand(profile) {
-  const missionMessages = claimDailyPassMissions(profile);
-  const pass = profile.seasonPass;
-  const todayStr = getKSTDateString();
+function passRewardAt(level, premium) {
+  const reward = premium ? {cash:100000,gold:10,gem:5,keys:0} : {cash:10000,gold:1,gem:0,keys:0};
+  if ([1,5,10,15,20].includes(level)) {
+    reward.cash += premium ? 1000000 : 100000;
+    reward.gold += premium ? 100 : 10;
+    reward.gem += premium ? 10 : 1;
+    reward.keys += premium ? ([1,5,15].includes(level) ? 5 : 0) : 1;
+  }
+  return reward;
+}
 
-  let lines = [
-    ...missionMessages,
-    `🎫 [${pass.month} 시즌 패스 대시보드]`,
+function processPassCommand(profile) {
+  const messages = claimDailyPassMissions(profile);
+  const pass = profile.seasonPass;
+  const premium = pass.premiumMonth === pass.month;
+  const claimed = premium ? pass.paidClaimedRewards : pass.freeClaimedRewards;
+  const lines = [...messages,
+    `🎫 [${pass.month} ${premium ? '유료' : '무료'} 시즌 패스]`,
     `• 현재 패스 레벨 : Lv.${pass.level}`,
     `• 패스 경험치 : ${pass.exp} / 100`,
-    ``,
-    `📋 [일일 경험치 획득 미션]`,
-    `• 출석 체크 : 20 EXP ${pass.lastAttendanceDate === todayStr ? '(완료)' : '(미완료)'}`,
-    `• 일일 /파밍 200회 달성 : 50 EXP ${pass.dailyFarmExpClaimed ? '(완료)' : `(${profile.farmData?.count || 0}/200)`}`,
-    `• 일일 /사냥 2000회 달성 : 50 EXP ${pass.dailyHuntExpClaimed ? '(완료)' : `(${profile.huntData?.count || 0}/2000)`}`,
-    ``,
-    `🎁 [시즌 패스 주요 보상 (레벨당 기본 보상: 10만 원, 금괴 10, 보석 5)]`,
-    `• 1레벨 보상 : 100만 원, 금괴 100, 보석 10, 비밀열쇠 5 ${pass.claimedRewards.includes(1) ? '(수령완료)' : ''}`,
-    `• 5레벨 보상 : 100만 원, 금괴 100, 보석 10, 비밀열쇠 5 ${pass.claimedRewards.includes(5) ? '(수령완료)' : ''}`,
-    `• 10레벨 보상 : 100만 원, 금괴 100, 보석 10, 2026 시즌1 코스튬 ${pass.claimedRewards.includes(10) ? '(수령완료)' : ''}`,
-    `• 15레벨 보상 : 100만 원, 금괴 100, 보석 10, 비밀열쇠 5 ${pass.claimedRewards.includes(15) ? '(수령완료)' : ''}`,
-    `• 20레벨 보상 : 100만 원, 금괴 100, 보석 10, 2026 시즌1 패스 칭호 ${pass.claimedRewards.includes(20) ? '(수령완료)' : ''}`,
-    `• 21레벨 이상 : 기본 보상 반복 획득`,
-    ``,
-    `💡 [/패스 보상] 명령어로 수령 가능한 시즌 패스 보상을 일괄 수령할 수 있습니다.`
+    premium ? '• 이용 기간 : 한국 시간 다음 달 1일 00:00까지' : '• 무료 패스 이용 중', '',
+    '📋 [일일 경험치 획득 미션]',
+    `• 출석 체크 (사냥·파밍 자동) : 20 EXP ${pass.lastAttendanceDate === getKSTDateString() ? '(완료)' : '(미완료)'}`,
+    `• 일일 /파밍 1,000회 달성 : 50 EXP ${pass.dailyFarmExpClaimed ? '(완료)' : `(${profile.farmData.count}/1000)`}`,
+    `• 일일 /사냥 2000회 달성 : 50 EXP ${pass.dailyHuntExpClaimed ? '(완료)' : `(${profile.huntData.count}/2000)`}`, '',
+    `🎁 [${premium ? '유료' : '무료'} 패스 보상]`,
+    premium ? '• 매 레벨 기본 보상 : 100,000원, 금괴 10개, 보석 5개' : '• 매 레벨 기본 보상 : 10,000원, 금괴 1개',
+    '아래 특별 보상은 기본 보상에 추가됩니다.'
   ];
-
-  return { text: lines.join('\n') };
+  for (const level of [1,5,10,15,20]) {
+    const special = !premium ? '100,000원, 금괴 10개, 보석 1개, 비밀열쇠 1개' :
+      '1,000,000원, 금괴 100개, 보석 10개, ' + (level === 10 ? '2026 시즌1 코스튬' : level === 20 ? '2026 시즌1 패스 칭호' : '비밀열쇠 5개');
+    lines.push(`• ${level}레벨 보상 : ${special} ${claimed.includes(level) ? '(수령완료)' : ''}`);
+  }
+  lines.push('• 21레벨 이상 : 레벨마다 기본 보상 반복 획득', '', '💡 /패스 보상으로 수령 가능한 보상을 일괄 수령하세요.');
+  if (premium) lines.push('무료로 이미 수령한 레벨은 부족한 보상만 추가 지급됩니다.');
+  return {text:lines.join('\n')};
 }
 
 function processPassClaimRewards(profile) {
   checkAndResetSeasonPass(profile);
   const pass = profile.seasonPass;
-
-  let totalCash = 0;
-  let totalGold = 0;
-  let totalGem = 0;
-  let totalKeys = 0;
-  let itemsGained = [];
-  let claimedLevels = [];
-
-  if (!profile.ownedTitles) profile.ownedTitles = [];
-  if (!profile.inventory) profile.inventory = [];
-
-  for (let lvl = 1; lvl <= pass.level; lvl++) {
-    if (!pass.claimedRewards.includes(lvl)) {
-      pass.claimedRewards.push(lvl);
-      claimedLevels.push(lvl);
-
-      // 모든 레벨 공통 기본 보상 (21레벨 이상 무한 구간 포함)
-      totalCash += 100000;
-      totalGold += 10;
-      totalGem += 5;
-
-      // 특정 단계별 특별 추가 보상
-      if (lvl === 1 || lvl === 5 || lvl === 15) {
-        totalCash += 1000000;
-        totalGold += 100;
-        totalGem += 10;
-        totalKeys += 5;
-      } else if (lvl === 10) {
-        totalCash += 1000000;
-        totalGold += 100;
-        totalGem += 10;
-        
-        const costumeItem = "2026 시즌1 코스튬";
-        itemsGained.push(costumeItem);
-        profile.inventory.push({
-          category: 'costume',
-          name: costumeItem,
-          desc: "2026 시즌1 특별 패스 코스튬 아이템입니다."
-        });
-      } else if (lvl === 20) {
-        totalCash += 1000000;
-        totalGold += 100;
-        totalGem += 10;
-        const passTitle = "2026 시즌1 패스";
-        if (!profile.ownedTitles.includes(passTitle)) {
-          profile.ownedTitles.push(passTitle);
-        }
-        itemsGained.push(`칭호: ${passTitle}`);
-      }
+  const premium = pass.premiumMonth === pass.month;
+  const free = new Set(pass.freeClaimedRewards), paid = new Set(pass.paidClaimedRewards);
+  const totals = {cash:0,gold:0,gem:0,keys:0}, levels = [], items = [];
+  profile.inventory ||= [];
+  profile.ownedTitles ||= [];
+  for (let level=1; level<=pass.level; level++) {
+    if (premium ? paid.has(level) : free.has(level)) continue;
+    const reward = passRewardAt(level,premium);
+    const previous = premium && free.has(level) ? passRewardAt(level,false) : {cash:0,gold:0,gem:0,keys:0};
+    for (const key of Object.keys(totals)) totals[key] += Math.max(0,reward[key]-previous[key]);
+    if (premium && level === 10) {
+      const name = '2026 시즌1 코스튬';
+      profile.inventory.push({category:'costume',name,desc:'2026 시즌1 특별 패스 코스튬 아이템입니다.'});
+      items.push(name);
     }
+    if (premium && level === 20) {
+      const name = '2026 시즌1 패스';
+      if (!profile.ownedTitles.includes(name)) profile.ownedTitles.push(name);
+      items.push('칭호: '+name);
+    }
+    free.add(level);
+    if (premium) paid.add(level);
+    levels.push(level);
   }
+  if (!levels.length) return {text:'⚠️ 현재 수령할 수 있는 시즌 패스 보상이 없습니다.'};
+  pass.freeClaimedRewards = [...free];
+  pass.paidClaimedRewards = [...paid];
+  pass.claimedRewards = [...free];
+  totals.cash = applyAchievementCashBonus(totals.cash,profile);
+  for (const key of Object.keys(totals)) profile[key] = (profile[key] || 0) + totals[key];
+  const lines = [`🎁 [${premium ? '유료' : '무료'} 시즌 패스 보상 수령 완료!]`,
+    `• 수령한 레벨 구간 : Lv.${levels[0]} ~ Lv.${levels[levels.length-1]} (${levels.length}개 단계)`,
+    `• 획득 현금 : +${won(totals.cash)}`, `• 획득 금괴 : +${totals.gold.toLocaleString()}개`];
+  if (totals.gem) lines.push(`• 획득 보석 : +${totals.gem.toLocaleString()}개`);
+  if (totals.keys) lines.push(`• 획득 비밀열쇠 : +${totals.keys.toLocaleString()}개`);
+  if (items.length) lines.push('• 특별 보상 : '+items.join(', '));
+  lines.push('',resourceText(profile));
+  return {text:lines.join('\n')};
 
-  if (claimedLevels.length === 0) {
-    return { text: `⚠️ 현재 수령할 수 있는 시즌 패스 보상이 없습니다.` };
-  }
-
-  totalCash = applyAchievementCashBonus(totalCash, profile);
-  profile.cash += totalCash;
-  profile.gold = (profile.gold || 0) + totalGold;
-  profile.gem = (profile.gem || 0) + totalGem;
-  profile.keys = (profile.keys || 0) + totalKeys;
-
-  let rewardSummary = [
-    `🎁 [시즌 패스 보상 수령 완료!]`,
-    `• 수령한 레벨 구간 : Lv.${claimedLevels[0]} ~ Lv.${claimedLevels[claimedLevels.length - 1]} (${claimedLevels.length}개 단계)`,
-    `• 획득 현금 : +${won(totalCash)}`,
-    `• 획득 금괴 : +${totalGold.toLocaleString()}개`,
-    `• 획득 보석 : +${totalGem.toLocaleString()}개`
-  ];
-
-  if (totalKeys > 0) rewardSummary.push(`• 획득 비밀열쇠 : +${totalKeys}개`);
-  if (itemsGained.length > 0) rewardSummary.push(`• 특별 보상 : ${itemsGained.join(', ')}`);
-
-  rewardSummary.push(``, resourceText(profile));
-
-  return { text: rewardSummary.join('\n') };
 }
+
 
 const CURRENT_DATA_VERSION = 5;
 
@@ -3201,6 +3489,16 @@ function migrateProfileData(profile) {
   return profile;
 }
 
+const ECONOMY_RULES = Object.freeze({adDailyMax:3,adCashMin:5000,adCashMax:15000,shadowDailyMax:5,vaultHourlyRate:0.001,keyCashMin:2000,keyCashMax:10000,supplyCashMin:30000,supplyCashMax:150000,raidCashRate:0.1});
+function getEconomyDay(profile) {
+  const date=getKSTDateString();
+  if(!profile.economyDaily || profile.economyDaily.date!==date)profile.economyDaily={date,ads:0,shadow:0};
+  return profile.economyDaily;
+}
+function getEconomyStage(profile) { return 1+getJobTier(profile); }
+function getKeyCashReward(profile) {return applyCreatureCashBonus(rand(ECONOMY_RULES.keyCashMin,ECONOMY_RULES.keyCashMax)*getEconomyStage(profile),profile);}
+function getSupplyCashReward(profile) {return applyCreatureCashBonus(rand(ECONOMY_RULES.supplyCashMin,ECONOMY_RULES.supplyCashMax)*getEconomyStage(profile),profile);}
+
 function createProfile(existing = {}) {
   const safeObj = existing && typeof existing === 'object' ? existing : {};
   
@@ -3211,6 +3509,7 @@ function createProfile(existing = {}) {
   let profile = {
     version: normalizeStoredInt(safeObj.version, CURRENT_DATA_VERSION, 0),
     gradeSchemaVersion: 2,
+    economyDaily: safeObj.economyDaily && typeof safeObj.economyDaily==='object' ? {date:String(safeObj.economyDaily.date || ''),ads:normalizeStoredInt(safeObj.economyDaily.ads,0,0),shadow:normalizeStoredInt(safeObj.economyDaily.shadow,0,0)} : {date:'',ads:0,shadow:0},
     // 서버가 MongoDB 조회에 사용하는 사용자 ID. 기존 저장 키와 별도로 보존한다.
     userId: typeof safeObj.userId === 'string' ? safeObj.userId.trim() : '',
     monsterCollection: normalizeMonsterCollection(safeObj.monsterCollection),
@@ -3220,12 +3519,16 @@ function createProfile(existing = {}) {
     keys: normalizeStoredInt(safeObj.keys, 0, 0),
     enhance: normalizeStoredInt(safeObj.enhance, 0, 0),
     jobEnhance: normalizeStoredInt(safeObj.jobEnhance, 0, 0),
+    subweaponEnhance: normalizeStoredInt(safeObj.subweaponEnhance, 0, 0, 20),
+    maxSubweaponEnhanceHistory: normalizeStoredInt(safeObj.maxSubweaponEnhanceHistory ?? safeObj.subweaponEnhance, 0, 0, 20),
+    totalSubweaponEnhanceCost: normalizeStoredInt(safeObj.totalSubweaponEnhanceCost, 0, 0),
     totalEnhanceCost: normalizeStoredInt(safeObj.totalEnhanceCost, 0, 0),       // 모험가 시절 일반무기 누적 강화 비용
     totalJobEnhanceCost: normalizeStoredInt(safeObj.totalJobEnhanceCost, 0, 0), // 전직 이후 전직무기 누적 강화 비용
     refine: normalizeStoredInt(safeObj.refine, 0, 0),
     level: normalizeStoredInt(safeObj.level, 1, 1),
     exp: normalizeStoredInt(safeObj.exp, 0, 0),
     combatLevel: normalizeStoredInt(safeObj.combatLevel, 0, 0),
+    resonanceLevel: normalizeStoredInt(safeObj.resonanceLevel, 0, 0, 10),
     job: safeObj.job ?? null,
     firstJob: typeof safeObj.firstJob === 'string' ? safeObj.firstJob : null,
     secondJob: typeof safeObj.secondJob === 'string' ? safeObj.secondJob : null,
@@ -3249,14 +3552,13 @@ function createProfile(existing = {}) {
     maxEnhanceHistory: normalizeStoredInt(safeObj.maxEnhanceHistory ?? safeObj.enhance, 0, 0),
     maxJobEnhanceHistory: normalizeStoredInt(safeObj.maxJobEnhanceHistory ?? safeObj.jobEnhance, 0, 0),
     hasSeenJobGuide: safeObj.hasSeenJobGuide ?? false,
+    hasSeenBeginnerGuide: safeObj.hasSeenBeginnerGuide === true,
     farmData: safeObj.farmData && typeof safeObj.farmData === 'object' ? { ...safeObj.farmData } : { date: "", count: 0, lastClaimedFarmQuest: 0 },
     huntData: safeObj.huntData && typeof safeObj.huntData === 'object' ? { ...safeObj.huntData } : { date: "", count: 0, lastClaimedHuntQuest: 0 },
     pvpData: safeObj.pvpData && typeof safeObj.pvpData === 'object' ? { ...safeObj.pvpData } : { date: "", count: 0 },
     dungeonData: safeObj.dungeonData && typeof safeObj.dungeonData === 'object' ? { ...safeObj.dungeonData } : { date: "", count: 0 },
     speedMultiplier: normalizeStoredInt(safeObj.speedMultiplier, 1, 1, 1000),
     adminSpeedMode: safeObj.adminSpeedMode === true,
-    // 관리자 전용 공격력 고정값. null이면 기존 성장식 공격력을 사용한다.
-    adminAttackPower: Number.isSafeInteger(safeObj.adminAttackPower) && safeObj.adminAttackPower >= 0 ? safeObj.adminAttackPower : null,
     vault: safeObj.vault && typeof safeObj.vault === 'object'
       ? {
           ...safeObj.vault,
@@ -3305,7 +3607,7 @@ function calculateVaultInterest(vault) {
     return { currentAmount: vault.amount, interest: 0, elapsedHours: 0 };
   }
 
-  const interest = Math.floor(vault.amount * 0.01 * elapsedHours);
+  const interest = Math.floor(vault.amount * ECONOMY_RULES.vaultHourlyRate * elapsedHours);
   return {
     currentAmount: vault.amount + interest,
     interest: interest,
@@ -3356,7 +3658,7 @@ function processVaultCommand(profile, subCommand, arg) {
         ``,
         `• 해금 비용 : 금괴 1,000개 (1레벨 해금)`,
         `• 1레벨 보관 한도 : 2,000,000원`,
-        `• 이자 혜택 : 1시간당 1% (최대 12시간, 단리 적용)`,
+        `• 이자 혜택 : 1시간당 0.1% (최대 12시간, 단리 적용)`,
         ``,
         `💡 [/금고 구매] 명령어로 금고를 해금할 수 있습니다.`
       ].join('\n')
@@ -3418,7 +3720,7 @@ function processVaultCommand(profile, subCommand, arg) {
         `🏦 [금고 입금 완료]`,
         `• 입금액 : ${won(inputAmount)}`,
         `• 금고 현재 금액 : ${won(profile.vault.amount)} / ${won(maxLimit)}`,
-        `• 이자 타이머가 새로 시작되었습니다 (1시간당 1%, 최대 12시간).`,
+        `• 이자 타이머가 새로 시작되었습니다 (1시간당 0.1%, 최대 12시간).`,
         ``,
         resourceText(profile)
       ].join('\n')
@@ -3473,7 +3775,7 @@ function checkAndResetFarmLimit(playerState) {
 function activeAbilityText(profile) {
   const p = profile;
   const stats = getEnhanceStats(getCurrentEnhanceLevel(p), p.combatLevel || 0, p);
-  const amp = getAmplifyInfo(p.combatLevel || 0);
+  const amp = getCombinedGrowthInfo(p);
   const imprint = key => getImprintTotalBonus(p, key);
   const fmt = n => Number(n.toFixed(2)).toLocaleString();
   const lines = ['✨ 적용 중인 능력치'];
@@ -3534,10 +3836,12 @@ function profileText(profile, detailed = false) {
     `🎖️ 직업 : ${jobDisplay}`,
     `🐾 크리처 : ${creatureDisplay}`,
     `🎯 무기 : +${currentEnhance} ${wName}`,
+    ...(getSubweaponInfo(p) ? ['🗡️ 보조무기 : +'+getSubweaponLevel(p)+' '+getSubweaponInfo(p).name] : []),
     `🔥 제련 : ${refineStar}`,
     `⭐ Lv.${p.level} (${(p.exp || 0).toLocaleString()}/${reqExp.toLocaleString()})`,
     `💪 공격력 : ${combatPower.toLocaleString()}`,
     `🌌 증폭 Lv.${p.combatLevel || 0}`,
+    `🔮 공명 Lv.${p.resonanceLevel || 0}`,
     `🔘 배율 : x${totalMult}`,
     `⏩ 배속 : x${p.speedMultiplier || 1}`
   ];
@@ -3749,8 +4053,8 @@ function processCreatureGacha(profile) {
 }
 
 function processSupply(profile, countArg = "1") {
-  let count = parseInt(countArg, 10);
-  if (isNaN(count) || count < 1) count = 1;
+  const count = parseItemCount(countArg);
+  if (count === null) return {text:'사용법: /보급 [수량 1~1,000]. 잘못된 수량은 사용하지 않습니다.'};
 
   if (!profile.supplyItem || profile.supplyItem < 1) {
     return { text: `⚠️ 보급 재화가 부족합니다! (현재 보유 보급: ${(profile.supplyItem || 0).toLocaleString()}개)` };
@@ -3795,8 +4099,8 @@ function processSupply(profile, countArg = "1") {
       }
     } else if (roll < 10) {
       if (profile.ownedAvatars.includes(currentMonthAvatar)) {
-        totalCash += applyAchievementCashBonus(1000000, profile);
-        gainedAvatars.push(`중복 아바타: '${currentMonthAvatar}' → 현금 1,000,000원 대체`);
+        totalCash += applyAchievementCashBonus(100000, profile);
+        gainedAvatars.push(`중복 아바타: '${currentMonthAvatar}' → 현금 100,000원 기본 대체`);
       } else {
         profile.ownedAvatars.push(currentMonthAvatar);
         gainedAvatars.push(`월별 아바타: '${currentMonthAvatar}'`);
@@ -3807,8 +4111,7 @@ function processSupply(profile, countArg = "1") {
       if (roll < 60) {
         const combatPower = getAttackPower(profile);
         const dice = rand(1, 6);
-        let gainedCash = combatPower * 100 * dice * 2;
-        gainedCash = applyCreatureCashBonus(gainedCash, profile);
+        let gainedCash = getSupplyCashReward(profile);
         totalCash += gainedCash;
       } else if (roll < 85) {
         const ampLevel = profile.combatLevel || 0;
@@ -4239,7 +4542,7 @@ function resolveProgressionFarmTurn(profile, battle) {
     battle.currentGradeIndex = Math.min(gradeIndex + 1, FARM_GRADE_STEPS.length - 1);
     battle.farmMonster = null;
     battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
-    lines.push(attackLabel + ' ' + damage);
+    lines.push(attackLabel + ' ' + (attackLabel === '[치명타]' ? Math.floor(damage * getCriticalMultiplier(profile, stats)) : damage));
     if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
     if (thiefAmbushMasterTriggered) { battle.accumulatedKeys=(battle.accumulatedKeys||0)+1; lines.push('👑 [마스터 효과 발동] 그림자 습격으로 비밀열쇠 +1개'); }
     const stolen = rollShadowLoot(profile, cash, 0);
@@ -4252,7 +4555,7 @@ function resolveProgressionFarmTurn(profile, battle) {
     return { text: lines.join('\n'), imageUrl: monster.image || null, encounter };
   }
 
-  battle.accumulatedCash = (battle.accumulatedCash || 0) + cash;
+  // 처치 실패 시 현금 보상은 지급하지 않는다.
   let rawIncoming = rand(20,30);
   if (secondJob === 'elementalist' && battle.element === 'frost') rawIncoming = Math.max(1, Math.floor(rawIncoming * Math.max(0, 1 - 0.10 * elementEffectMult)));
   const hit = counter ? { finalDamage: 0, armorNotes: [] } : calculateCombatDamage(profile, battle, rawIncoming);
@@ -4260,7 +4563,6 @@ function resolveProgressionFarmTurn(profile, battle) {
   battle.hp = Math.max(0, battle.hp - hpLoss);
   checkDeath(battle);
   lines.push(attackLabel + ' MISS | HP -' + hpLoss, ...hit.armorNotes);
-  if (cash > 0) lines.push('', '💵 현금 +' + won(cash));
   return { text: lines.join('\n'), imageUrl: monster.image || null, missed: true, encounter };
 }
 
@@ -4343,7 +4645,7 @@ function processEnhance(profile) {
   const initialEnhance = currentLevel;
   const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0, profile);
 
-  const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
+  const ampInfo = getCombinedGrowthInfo(profile);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   
   const successRate = Math.min(1.0, tableData.success + ((ampInfo.successBonus + imprintSuccessBonus) / 100));
@@ -4413,116 +4715,13 @@ function processEnhance(profile) {
   };
 }
 
-function calculateExpectedCost(targetLevel, isJob, profile) {
-  const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
-  const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
-  const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
-  const activeTable = getActiveEnhanceTable(profile);
-
-  let totalExpectedCost = 0;
-
-  for (let lvl = 0; lvl < targetLevel; lvl++) {
-    if (lvl >= activeTable.length) break;
-    const tableData = activeTable[lvl];
-    let cost = tableData.cost;
-    cost = Math.floor(cost * (1 - costDownPct / 100));
-
-    const rawSuccessRate = tableData.success + ((ampInfo.successBonus + imprintSuccessBonus) / 100);
-    const successRate = Math.max(0.01, Math.min(1.0, isNaN(rawSuccessRate) ? 0.01 : rawSuccessRate));
-    
-    const keepRate = Math.max(0, tableData.keep - ((ampInfo.successBonus + imprintSuccessBonus) / 100));
-    const destroyRate = tableData.destroy || 0;
-    const dropRate = tableData.drop || 0;
-    const failRateVal = Math.max(0, 1.0 - successRate - keepRate);
-
-    let avgAttempts = 1.0;
-    if (successRate > 0) {
-      avgAttempts = Math.min(1000, 1 / successRate);
-    } else {
-      avgAttempts = 1000;
-    }
-    
-    if (!isNaN(avgAttempts) && isFinite(avgAttempts)) {
-      totalExpectedCost += cost * Math.max(1, avgAttempts);
-    } else {
-      totalExpectedCost += cost * 100;
-    }
-  }
-
-  return Math.floor(totalExpectedCost * 2.5);
+function processEnhanceToTarget(profile, target) {
+  if (!Number.isInteger(target) || target < 1 || target > 20) return { text: '사용법: /강화 [목표 단계 1~20]' };
+  if (getCurrentEnhanceLevel(profile) >= target) return { text: '이미 목표 강화 단계에 도달했습니다.' };
+  return processMultiEnhance(profile, 100000, target);
 }
 
-function processGuaranteedEnhance(profile, targetLevel) {
-  const isJob = Boolean(profile.job);
-  if (isJob) {
-    return { text: `⚠️ 전직 이후의 무기는 확정 강화를 사용할 수 없습니다. (일반 무기 +0~+20까지만 가능)` };
-  }
-
-  const currentEnhanceKey = 'enhance';
-  const historyKey = 'maxEnhanceHistory';
-
-  if (profile[historyKey] === undefined) {
-    profile[historyKey] = profile[currentEnhanceKey] || 0;
-  }
-
-  if (isNaN(targetLevel) || targetLevel < 1 || targetLevel > 20) {
-    return { text: `⚠️ 올바른 확정 강화 목표 수치를 입력해 주세요. (예: /강화 10, 범위: 1~20)` };
-  }
-
-  let requiredHistory = targetLevel + 1;
-  if (targetLevel === 19) {
-    requiredHistory = 19;
-  }
-
-  if (profile[historyKey] < requiredHistory) {
-    return { 
-      text: `⚠️ 확정 강화 해금 조건 미달성!\n• +${targetLevel} 확정 강화를 해금하려면 최고 기록이 **+${requiredHistory} 이상**이어야 합니다.\n• (현재 나의 최고 기록: +${profile[historyKey]})` 
-    };
-  }
-
-  const currentLevel = profile[currentEnhanceKey] || 0;
-  if (currentLevel >= targetLevel) {
-    return { text: `⚠️ 이미 무기 강화 수치가 +${currentLevel}이므로 해당 수치 이상으로 확정 강화할 수 없습니다.` };
-  }
-
-  const cost = calculateExpectedCost(targetLevel, false, profile);
-
-  if (profile.cash < cost) {
-    return { text: `⚠️ 현금이 부족합니다!\n(+${targetLevel} 확정 강화 필요 비용(기댓값 x2.5): ${won(cost)})\n(보유 현금: ${won(profile.cash)})` };
-  }
-
-  profile.cash -= cost;
-  profile.totalEnhanceCost = (profile.totalEnhanceCost || 0) + cost;
-
-  const initialEnhance = currentLevel;
-  const oldStats = getEnhanceStats(initialEnhance, profile.combatLevel || 0, profile);
-
-  profile[currentEnhanceKey] = targetLevel;
-  if (profile[currentEnhanceKey] > profile[historyKey]) {
-    profile[historyKey] = profile[currentEnhanceKey];
-  }
-
-  const newStats = getEnhanceStats(targetLevel, profile.combatLevel || 0, profile);
-  const detailMsg = formatEnhanceStatDiff(oldStats, newStats);
-  const [newWName] = getWeaponInfo(targetLevel, profile.job);
-
-  const resultMsg = [
-    `✨ [확정 강화 성공!] +${initialEnhance} ➔ +${targetLevel}`,
-    `(소모 비용 (기댓값 x2.5): ${won(cost)})`,
-    `🎯 무기 : +${targetLevel} ${newWName}`,
-    detailMsg,
-    ``,
-    enhanceResourceText(profile)
-  ].join('\n');
-
-  return {
-    text: resultMsg,
-    imageUrl: getEnhanceImage('success', targetLevel, profile.job),
-    status: 'success'
-  };
-}
-
-function processMultiEnhance(profile, count) {
+function processMultiEnhance(profile, count, target = 20) {
   const isJob = Boolean(profile.job);
   const currentEnhanceKey = isJob ? 'jobEnhance' : 'enhance';
   const historyKey = isJob ? 'maxJobEnhanceHistory' : 'maxEnhanceHistory';
@@ -4547,13 +4746,13 @@ function processMultiEnhance(profile, count) {
   let attempted = 0;
   let lastStatus = 'success';
 
-  const ampInfo = getAmplifyInfo(profile.combatLevel || 0);
+  const ampInfo = getCombinedGrowthInfo(profile);
   const imprintSuccessBonus = getImprintTotalBonus(profile, 'enhanceSuccess');
   const costDownPct = getImprintTotalBonus(profile, 'enhanceCostDown');
   const activeTable = getActiveEnhanceTable(profile);
 
   for (let i = 0; i < targetCount; i++) {
-    if (profile[currentEnhanceKey] >= activeTable.length) break; 
+    if (profile[currentEnhanceKey] >= target || profile[currentEnhanceKey] >= activeTable.length) break; 
 
     const tableData = activeTable[profile[currentEnhanceKey]];
     let cost = tableData.cost;
@@ -4631,7 +4830,7 @@ function processMultiEnhance(profile, count) {
     let costNeeded = Math.floor(baseCostNeeded * (1 - costDownPct / 100));
 
     return { 
-      text: `현금 또는 보석이 부족합니다! (필요 현금: ${won(costNeeded)})`, 
+      text: enhanceShortageText(profile,activeTable[profile[currentEnhanceKey]]), 
       imageUrl: null, 
       status: 'nomoney' 
     };
@@ -4650,7 +4849,8 @@ function processMultiEnhance(profile, count) {
   }
 
   let resultMsg = [
-    `⏩ [연속 강화 ${attempted.toLocaleString()}회 완료]`,
+    `⏩ [목표 +${target} 강화 · ${attempted.toLocaleString()}회 시도]`,
+    profile[currentEnhanceKey] >= target ? '목표 강화 달성!' : attempted >= targetCount ? '서버 응답 보호를 위해 100,000회에서 중단했습니다. 같은 명령으로 이어갈 수 있습니다.' : enhanceShortageText(profile,activeTable[profile[currentEnhanceKey]]),
     `결과 : +${initialLevel} ➔ +${profile[currentEnhanceKey]}`,
     `📊 ${statSummary}`,
     `(총 소모 비용: ${won(totalCost)}${totalGemCost > 0 ? `, 보석 ${totalGemCost}개` : ''})`,
@@ -4811,7 +5011,7 @@ function showAmplifyInfo(profile) {
     lines.push(
       ``,
       `⏩ 증폭(Lv.${currentLevel + 1})`,
-      `• 필요 금괴 ${nextAmp.costNext.toLocaleString()}개`,
+      `• 필요 금괴 ${currentAmp.costNext.toLocaleString()}개`,
       `• 배율 가산 x${nextAmp.multBonus.toFixed(2)}`,
       `• 치명타 가중치 ${Math.round(nextAmp.critWeight * 100)}%`,
       `• 강화 성공 보정 +${nextAmp.successBonus.toFixed(1)}%`,
@@ -4827,6 +5027,7 @@ function showAmplifyInfo(profile) {
 }
 
 function processAmplify(profile, targetLevels = 1) {
+  if (targetLevels !== 1) return {text:'증폭은 한 번에 1단계만 강화할 수 있습니다. /증폭 강화 를 입력하세요.',imageUrl:null};
   if (profile.combatLevel === undefined) profile.combatLevel = 0;
   
   if (profile.combatLevel >= 10) {
@@ -4876,15 +5077,104 @@ function processAmplify(profile, targetLevels = 1) {
   };
 }
 
+function showResonanceInfo(profile) {
+  profile.resonanceLevel = normalizeStoredInt(profile.resonanceLevel, 0, 0, 10);
+  const currentLevel = Math.max(0, Math.min(10, profile.resonanceLevel));
+  const currentAmp = RESONANCE_TABLE[currentLevel];
+  const currentGoldRange = currentAmp.minGem === currentAmp.maxGem ? `${currentAmp.minGem.toLocaleString()}개` : `${currentAmp.minGem.toLocaleString()}~${currentAmp.maxGem.toLocaleString()}개`;
+  
+  let lines = [
+    `🔮 [현재 공명 정보]`,
+    `🔮 공명 단계 Lv.${currentLevel}`,
+    `• 배율 가산 x${currentAmp.multBonus.toFixed(2)}`,
+    `• 치명타 가중치 ${Math.round(currentAmp.critWeight * 100)}%`,
+    `• 강화 성공 보정 +${currentAmp.successBonus.toFixed(1)}%`,
+    `• 사냥 보석 이벤트 수량 ${currentGoldRange}`,
+    `• 기본 공격력 +${(currentLevel*500).toLocaleString()}`,
+    `• 던전 일일 횟수 +${currentLevel*2}`,
+    `• 배속 해금: 증폭·공명 합산 레벨 (최대 x10)`,
+    `※ 증폭과 공명 능력치는 합산됩니다. 금괴 수량은 증폭을 따릅니다.`
+  ];
+
+  if (currentLevel < 10) {
+    const nextAmp = RESONANCE_TABLE[currentLevel + 1];
+    const goldRange = nextAmp.minGem === nextAmp.maxGem ? `${nextAmp.minGem.toLocaleString()}개` : `${nextAmp.minGem.toLocaleString()}~${nextAmp.maxGem.toLocaleString()}개`;
+    lines.push(
+      ``,
+      `🔮 공명(Lv.${currentLevel + 1})`,
+      `• 필요 보석 ${currentAmp.costNext.toLocaleString()}개`,
+      `• 배율 가산 x${nextAmp.multBonus.toFixed(2)}`,
+      `• 치명타 가중치 ${Math.round(nextAmp.critWeight * 100)}%`,
+      `• 강화 성공 보정 +${nextAmp.successBonus.toFixed(1)}%`,
+      `• 사냥 보석 이벤트 수량 ${goldRange}`,
+      ``,
+      `공명 강화를 진행하시려면 [/공명 강화] 명령어를 입력해 주세요.`
+    );
+  } else {
+    lines.push(``, `✨ 공명 레벨이 최고 단계에 도달했습니다!`);
+  }
+
+  return { text: lines.join('\n'), imageUrl: null };
+}
+
+function processResonance(profile, targetLevels = 1) {
+  profile.resonanceLevel = normalizeStoredInt(profile.resonanceLevel, 0, 0, 10);
+  
+  if (profile.resonanceLevel >= 10) {
+    return { text: `✨ 공명 레벨이 최고 단계(Lv.10)에 도달했습니다!`, imageUrl: null };
+  }
+
+  if (!Number.isSafeInteger(targetLevels) || targetLevels < 1) return {text:'사용법: /공명 강화 [강화 횟수]',imageUrl:null};
+  let levelsUpgraded = 0;
+  let totalGoldSpent = 0;
+  const startLevel = profile.resonanceLevel;
+
+  for (let i = 0; i < targetLevels; i++) {
+    if (profile.resonanceLevel >= 10) break;
+    
+    const costNext = RESONANCE_TABLE[profile.resonanceLevel].costNext;
+    if (profile.gem < costNext) break;
+
+    profile.gem -= costNext;
+    totalGoldSpent += costNext;
+    profile.resonanceLevel += 1;
+    levelsUpgraded += 1;
+  }
+
+  if (levelsUpgraded === 0) {
+    const costNext = RESONANCE_TABLE[profile.resonanceLevel].costNext;
+    return { text: `보석이 부족합니다! (다음 공명 필요량: 보석 ${costNext.toLocaleString()}개)`, imageUrl: null };
+  }
+
+  const prevAmp = RESONANCE_TABLE[startLevel];
+  const nextAmp = RESONANCE_TABLE[profile.resonanceLevel];
+
+  const goldRangePrev = prevAmp.minGem === prevAmp.maxGem ? `${prevAmp.minGem.toLocaleString()}개` : `${prevAmp.minGem.toLocaleString()}~${prevAmp.maxGem.toLocaleString()}개`;
+  const goldRangeNext = nextAmp.minGem === nextAmp.maxGem ? `${nextAmp.minGem.toLocaleString()}개` : `${nextAmp.minGem.toLocaleString()}~${nextAmp.maxGem.toLocaleString()}개`;
+
+  const resultMsg = [
+    `🔮 공명 강화 성공!`,
+    `[공명 Lv.${startLevel} ➔ Lv.${profile.resonanceLevel}]`,
+    `• 소모 보석 ${totalGoldSpent.toLocaleString()}개`,
+    `• 배율 가산 x${prevAmp.multBonus.toFixed(2)} ➔ x${nextAmp.multBonus.toFixed(2)}`,
+    `• 치명타 가중치 ${Math.round(prevAmp.critWeight * 100)}% ➔ ${Math.round(nextAmp.critWeight * 100)}%`,
+    `• 강화 성공 보정 +${prevAmp.successBonus.toFixed(1)}% ➔ +${nextAmp.successBonus.toFixed(1)}%`,
+    `• 사냥 보석 이벤트 수량 ${goldRangePrev} ➔ ${goldRangeNext}`
+  ].join('\n');
+
+  return { 
+    text: resultMsg, 
+    imageUrl: null 
+  };
+}
+
 function processUseKey(profile, countArg) {
   if (!profile.keys || profile.keys <= 0) {
     return { text: `비밀열쇠가 없습니다!\n\n${profileText(profile)}`, imageUrl: null };
   }
 
-  let count = parseInt(countArg, 10);
-  if (isNaN(count) || count < 1) {
-    count = 1;
-  }
+  let count = parseItemCount(countArg);
+  if (count === null) return {text:'사용법: /열쇠 [수량 1~1,000]. 잘못된 수량은 사용하지 않습니다.'};
 
   count = Math.min(count, profile.keys);
 
@@ -4900,8 +5190,7 @@ function processUseKey(profile, countArg) {
   for (let i = 0; i < count; i++) {
     const randRoll = Math.random() * 100;
     if (randRoll < 60) { 
-      let cashAmt = combatPower * 10;
-      cashAmt = applyCreatureCashBonus(cashAmt, profile);
+      let cashAmt = getKeyCashReward(profile);
       totalCash += cashAmt;
       profile.cash += cashAmt;
     } else if (randRoll < 99) { 
@@ -4959,11 +5248,45 @@ function getBoxCatalog() {
   return [...farmEntries, ...huntEntries, {id:'RAID',source:'raid',name:RAID_BOX_NAME}];
 }
 
+function processAllBoxes(profile) {
+  const catalog = getBoxCatalog();
+  const lines = ['📦 [상자 일괄개봉]'];
+  let total = 0;
+  // 현재 추가 상자는 상위 상자로만 이어진다. 새로 획득한 상자도 순서대로 개봉한다.
+  for (let pass = 0; pass < catalog.length && total < MAX_ITEM_USE_PER_REQUEST; pass++) {
+    let opened = 0;
+    catalog.forEach((box, index) => {
+      const count = Math.min(MAX_ITEM_USE_PER_REQUEST-total, profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt'))).length);
+      if (!count) return;
+      const before = [profile.cash || 0, profile.gold || 0, profile.gem || 0];
+      const titles = new Set(profile.ownedTitles || []), avatars = new Set(profile.ownedAvatars || []);
+      processUpdatedBoxesCommand(profile, String(index + 1) + ' ' + count);
+      const gained = [profile.cash || 0, profile.gold || 0, profile.gem || 0].map((n, i) => n - before[i]);
+      lines.push('', '[' + ({farm:'파밍',hunt:'사냥',raid:'레이드'}[box.source]) + ' · ' + box.name + '] ' + count.toLocaleString() + '개');
+      if (gained[0]) lines.push('💵 현금 +' + won(gained[0]));
+      if (gained[1]) lines.push('🧈 금괴 +' + gained[1].toLocaleString() + '개');
+      if (gained[2]) lines.push('💎 보석 +' + gained[2].toLocaleString() + '개');
+      const addedTitles = (profile.ownedTitles || []).filter(name => !titles.has(name));
+      const addedAvatars = (profile.ownedAvatars || []).filter(name => !avatars.has(name));
+      if (addedTitles.length) lines.push('🏅 칭호: ' + addedTitles.join(', '));
+      if (addedAvatars.length) lines.push('👤 아바타: ' + addedAvatars.join(', '));
+      if (!gained.some(Boolean) && !addedTitles.length && !addedAvatars.length) lines.push('새로 획득한 재화·칭호·아바타 없음 (미당첨 또는 이미 보유)');
+      total += count; opened += count;
+    });
+    if (!opened) break;
+  }
+  if (!total) return { text: '개봉할 수 있는 상자가 없습니다.' };
+  const remaining = profile.inventory.filter(item => item.category === 'box').length;
+  lines.push('', '총 ' + total.toLocaleString() + '개 개봉 완료.', ...(remaining ? ['남은 상자 ' + remaining + '개는 보관했습니다. /상자 일괄개봉으로 이어서 개봉하세요. 미등록 상자는 개봉하지 않습니다.'] : []), '', resourceText(profile));
+  return { text: lines.join('\n') };
+}
+
 function processUpdatedBoxesCommand(profile, arg) {
   if (!Array.isArray(profile.inventory)) profile.inventory = [];
   if (!Array.isArray(profile.ownedTitles)) profile.ownedTitles = [];
 
   let cleanArg = (arg || '').trim();
+  if (cleanArg === '일괄개봉') return processAllBoxes(profile);
   if (cleanArg && !/^[1-9]\d*\s+[1-9]\d*$/.test(cleanArg)) return { text: '사용법: /상자 [상자번호] [수량] (예: /상자 1 2)' };
   if (cleanArg && !cleanArg.split(/\s+/).every(x => Number.isSafeInteger(Number(x)))) return { text: '상자번호와 수량은 올바른 정수로 입력해 주세요.' };
   const parts = cleanArg.split(/\s+/).filter(Boolean);
@@ -4975,7 +5298,7 @@ function processUpdatedBoxesCommand(profile, arg) {
       const count = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt'))).length;
       lines.push(`${index + 1}. [${box.source === 'farm' ? '파밍' : box.source === 'raid' ? '레이드' : '사냥'}] ${box.source === 'hunt' ? box.key+'등급 ' : ''}${box.name}: ${count}개`);
     });
-    lines.push(``, `💡 사용법: /상자 [번호] [개수] (예: /상자 1 2)`);
+    lines.push(``, `💡 사용법: /상자 [번호] [개수] 또는 /상자 일괄개봉`);
     return { text: lines.join('\n') };
   }
 
@@ -4991,7 +5314,7 @@ function processUpdatedBoxesCommand(profile, arg) {
   if (!box) return { text: `⚠️ 올바른 상자 번호를 입력해 주세요. /상자로 보유 목록을 확인하세요.` };
 
   let openCount = parseInt(requestedCount, 10);
-  if (!Number.isInteger(openCount) || openCount < 1) openCount = 1;
+  if (!Number.isSafeInteger(openCount) || openCount < 1 || openCount > MAX_ITEM_USE_PER_REQUEST) return {text:'상자는 한 번에 1~1,000개까지 개봉할 수 있습니다.'};
   const matchingBoxes = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt')));
   if (matchingBoxes.length === 0) return { text: `⚠️ 보유 중인 [${box.name}]가 없습니다.` };
   openCount = Math.min(openCount, matchingBoxes.length);
@@ -5162,7 +5485,7 @@ function processUpgradeJobSkill(profile, context = {}, target = '') {
   if (!jobCode) return {text:'강화할 전직 스킬이 없습니다.'};
   const currentLevel = getJobSkillLevelFor(profile,jobCode);
   if (currentLevel >= 10) return { text: `✨ ${JOB_NAMES[jobCode]} 스킬이 이미 최고 레벨(Lv.10 MAX)에 도달했습니다!` };
-  const goldCost = currentLevel * 500;
+  const goldCost = currentLevel * 100;
   if ((profile.gold || 0) < goldCost) return { text: `금괴가 부족합니다!\n(${JOB_NAMES[jobCode]} Lv.${currentLevel}➔Lv.${currentLevel + 1} 필요: 금괴 ${goldCost.toLocaleString()}개 | 보유: ${(profile.gold || 0).toLocaleString()}개)` };
   profile.gold -= goldCost;
   setJobSkillLevelFor(profile,jobCode,currentLevel+1);
@@ -5218,7 +5541,7 @@ function processShadowBattle(profile, betArg) {
   }
 
   const sLvl = getJobSkillLevelFor(profile,'shadow');
-  const maxBet = sLvl * 1000000;
+  const maxBet = sLvl * 100000;
   const input = String(betArg == null ? '' : betArg).trim();
   if (!/^[1-9]\d*$/.test(input) || !Number.isSafeInteger(Number(input))) {
     return { text: '사용법: /스킬 금액\n금액은 1 이상의 정수로 입력하세요. (최대 '+won(maxBet)+')' };
@@ -5230,23 +5553,26 @@ function processShadowBattle(profile, betArg) {
   }
 
   const combatPower = getAttackPower(profile);
-  const reqPctAmount = Math.floor(betAmount * (combatPower / 10000));
+  const reqPctAmount = betAmount;
+  const day=getEconomyDay(profile);
+  if(day.shadow>=ECONOMY_RULES.shadowDailyMax)return {text:"오늘 대결 약탈은 모두 사용했습니다. (5/5회)"};
 
   if (!Number.isSafeInteger(reqPctAmount) || reqPctAmount < 1 || !Number.isSafeInteger(profile.cash) || !Number.isSafeInteger(profile.cash + reqPctAmount)) {
     return {text:'계산된 대결 금액이 유효 범위를 벗어났습니다. 금액을 조정해 주세요.'};
   }
   if (profile.cash < reqPctAmount) {
-    return { text: `⚠️ 공격력에 해당하는 % 금액(${won(reqPctAmount)})이 부족하여 대결 스킬을 사용할 수 없습니다.` };
+    return { text: `⚠️ 대결 금액(${won(reqPctAmount)})이 부족하여 대결 스킬을 사용할 수 없습니다.` };
   }
 
+  day.shadow++;
   const isSuccess = Math.random() < 0.5;
   if (isSuccess) {
-    const achievementWin = applyAchievementCashBonus(reqPctAmount, profile);
+    const achievementWin = reqPctAmount;
     profile.cash += achievementWin;
     return {
       text: [
         `🗡️ [섀도우 대결 약탈 성공! (50%)]`,
-        `상대와의 대결에서 승리하여 공격력 비율 재화 +${won(achievementWin)}을(를) 획득했습니다!`,
+        `상대와의 대결에서 승리하여 대결 재화 +${won(achievementWin)}을(를) 획득했습니다!`,
         `(대결받는 상대의 재화는 변동되지 않습니다.)`,
         ``,
         resourceText(profile)
@@ -5257,7 +5583,7 @@ function processShadowBattle(profile, betArg) {
     return {
       text: [
         `💥 [섀도우 대결 약탈 실패! (50%)]`,
-        `상대와의 대결에서 패배하여 공격력 비율 재화 -${won(reqPctAmount)}을(를) 잃었습니다.`,
+        `상대와의 대결에서 패배하여 대결 재화 -${won(reqPctAmount)}을(를) 잃었습니다.`,
         ``,
         resourceText(profile)
       ].join('\n')
@@ -5272,7 +5598,12 @@ function checkAndResetPvpLimit(profile) {
   }
 }
 
-function processPvpBattle(profile) {
+function processPvpBattle(profile, match) {
+  if (!match || match.version !== 1) return {text:'실제 유저 대결은 최신 server.js와 db.js 연결이 필요합니다.'};
+  if (match.reason === 'own_name') return {text:'본인 닉네임을 지정할 수 없습니다. 다른 닉네임 또는 /대결을 입력하세요.'};
+  if (!match.opponent && !['not_found','no_players'].includes(match.reason)) return {text:'대결 상대 정보를 확인하지 못했습니다. 다시 시도해 주세요.'};
+  const opponent = match.opponent ? createProfile(match.opponent) : profile;
+  const selfBattle = !match.opponent;
   checkAndResetPvpLimit(profile);
   const MAX_PVP_COUNT = 10;
 
@@ -5283,7 +5614,7 @@ function processPvpBattle(profile) {
   profile.pvpData.count += 1;
 
   const myPower = getAttackPower(profile);
-  const enemyPower = Math.floor(myPower * (rand(80, 120) / 100));
+  const enemyPower = getAttackPower(opponent);
 
   const myDmg = Math.floor(myPower * (rand(90, 110) / 100));
   const enemyDmg = Math.floor(enemyPower * (rand(90, 110) / 100));
@@ -5292,9 +5623,9 @@ function processPvpBattle(profile) {
   let isWin = myDmg >= enemyDmg;
 
   if (isWin) {
-    const rewardCash = applyAchievementCashBonus(myPower * 10, profile);
+    const rewardCash = applyCreatureCashBonus(rand(5000,15000)*getEconomyStage(profile),profile);
     profile.cash += rewardCash;
-    outcomeMsg = `🎉 [대결 승리!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n보상 획득: 현금 +${won(rewardCash)} (본인 공격력 * 10)`;
+    outcomeMsg = `🎉 [대결 승리!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n보상 획득: 현금 +${won(rewardCash)} (전직 단계별 보상)`;
   } else {
     outcomeMsg = `💥 [대결 패배!]\n나의 피해량: ${myDmg.toLocaleString()} vs 상대 피해량: ${enemyDmg.toLocaleString()}\n상대방에게 더 큰 피해를 입어 승리하지 못했습니다.`;
   }
@@ -5302,6 +5633,8 @@ function processPvpBattle(profile) {
   return {
     text: [
       `⚔️ [1대1 대결 성사] (${profile.pvpData.count}/${MAX_PVP_COUNT}회)`,
+      selfBattle ? (match.reason === 'not_found' ? '해당 닉네임을 찾지 못해 본인 능력치로 대결합니다.' : '다른 유저가 없어 본인 능력치로 대결합니다.') : '상대: '+opponent.nickname,
+      '💪 내 공격력: '+myPower.toLocaleString()+' / 상대 공격력: '+enemyPower.toLocaleString(),
       outcomeMsg,
       ``,
       resourceText(profile)
@@ -5369,9 +5702,7 @@ function processMgsDungeon(playerState) {
     totalEarnedGem += earnedGem;
 
     spawnedMonsters.push(monster);
-    if (isAdminIndependentHunt) {
-      independentHuntLines.push(`[${i+1}회] [${monster.grade}] ${monster.fullName} | 현금 +${won(earnedCash)}${earnedGem > 0 ? ` | 보석 +${earnedGem}개` : ''}`);
-    }
+
   }
 
   const battlemageMaster = isJobSkillMaster(playerState,'battlemage');
@@ -5386,14 +5717,14 @@ function processMgsDungeon(playerState) {
 
   const gradeRank = Object.fromEntries(FARM_GRADE_STEPS.map((g,i)=>[g,i+1]));
 
-  if (!isAdminIndependentHunt) {
+  {
     spawnedMonsters.sort((a, b) => {
       return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
     });
   }
 
   let monsterInfoBlocks = [];
-  if (!isAdminIndependentHunt) spawnedMonsters.forEach((m, idx) => {
+  spawnedMonsters.forEach((m, idx) => {
     const displayGradeHeader = `[${m.grade}] `;
     if (idx === 0) {
       monsterInfoBlocks.push(
@@ -5414,7 +5745,7 @@ function processMgsDungeon(playerState) {
   }
 
   let headerText = `🔮 [마검 전용 던전 토벌 완료! (${targetCount}마리)] (오늘 사용: ${playerState.mgsDungeonData.count}/${sLvl}회)` + (battlemageMaster ? `\n👑 [마스터 효과] 최종 현금·보석 보상 +10%` : '');
-  let middleContent = `${isAdminIndependentHunt ? `🎯 [관리자 독립 사냥 ${actualHunts}회]\n` : ''}${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
+  let middleContent = `${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
 
   let footerLines = [
     `🔘 배율 x${lootMult.toFixed(2)} (마검 던전 전용)`,
@@ -5441,7 +5772,7 @@ function checkAndResetDungeonLimit(profile) {
 
 function processGeneralDungeon(profile) {
   checkAndResetDungeonLimit(profile);
-  const MAX_DUNGEON_COUNT = 10 + (Math.max(0, Number(profile.combatLevel) || 0) * 2);
+  const MAX_DUNGEON_COUNT = 10 + getCombinedGrowthLevel(profile) * 2;
 
   if (profile.dungeonData.count >= MAX_DUNGEON_COUNT) {
     return { text: `⚠️ 오늘의 던전 입장 횟수를 모두 소모했습니다. (일일 가능 횟수: ${profile.dungeonData.count}/${MAX_DUNGEON_COUNT})` };
@@ -5709,7 +6040,7 @@ function processImprintReroll(profile) {
     if (profile.imprintLocks[k]) lockedCount++;
   });
 
-  const baseCash = 10000000;
+  const baseCash = 1000000;
   const baseGold = 20;
   const multiplier = Math.pow(2, lockedCount);
   const costCash = baseCash * multiplier;
@@ -5889,8 +6220,8 @@ function processHunt(playerState) {
       huntSkillState.buffs.hawkeyeTrack--;
     }
     if(drawn==='GEM') {
-      const amp=getAmplifyInfo(playerState.combatLevel || 0);
-      const gems=applyCreatureGemBonus(Math.max(1,rand(amp.minGold,amp.maxGold)),playerState);
+      const resonance=getResonanceInfo(playerState);
+      const gems=applyCreatureGemBonus(Math.max(1,rand(resonance.minGem,resonance.maxGem)),playerState);
       totalEarnedGem+=gems;gemEventCount++;
       if (isAdminIndependentHunt) independentHuntLines.push(`[${i+1}회] 💎 보석 이벤트 | 보석 +${gems}개`);
       else droppedLootTexts.push('💎 [재화] 보석 +'+gems+'개');
@@ -5989,9 +6320,7 @@ function processHunt(playerState) {
 
   const gradeRank = Object.fromEntries(FARM_GRADE_STEPS.map((g,i)=>[g,i+1]));
 
-  spawnedMonsters.sort((a, b) => {
-    return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
-  });
+  // 표시 순서는 추첨 순서를 유지한다. 대표 이미지만 최고 등급을 사용한다.
 
   let monsterInfoBlocks = [];
   spawnedMonsters.forEach((m, idx) => {
@@ -6001,7 +6330,7 @@ function processHunt(playerState) {
     }
     if (idx === 0) {
       monsterInfoBlocks.push(
-        `${displayGradeHeader}${m.fullName}\n설명: ${m.description}`
+        `${displayGradeHeader}${m.fullName}`
       );
     } else {
       monsterInfoBlocks.push(
@@ -6019,13 +6348,13 @@ function processHunt(playerState) {
     let qCash = applyCreatureCashBonus(5000 * dice, playerState);
     playerState.cash += qCash;
     playerState.huntData.lastClaimedHuntQuest = 100;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (100회) : 현금 +${won(qCash)}`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (100회) :\n💵 현금 +${won(qCash)}`);
   }
   if (count >= 250 && playerState.huntData.lastClaimedHuntQuest < 250) {
     let qCash = applyCreatureCashBonus(10000 * dice, playerState);
     playerState.cash += qCash;
     playerState.huntData.lastClaimedHuntQuest = 250;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (250회) : 현금 +${won(qCash)}`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (250회) :\n💵 현금 +${won(qCash)}`);
   }
   if (count >= 500 && playerState.huntData.lastClaimedHuntQuest < 500) {
     let qCash = applyCreatureCashBonus(15000 * dice, playerState);
@@ -6033,7 +6362,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 500;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (500회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (500회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
   if (count >= 1000 && playerState.huntData.lastClaimedHuntQuest < 1000) {
     let qCash = applyCreatureCashBonus(20000 * dice, playerState);
@@ -6041,7 +6370,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 1000;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (1000회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (1000회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
   if (count >= 1500 && playerState.huntData.lastClaimedHuntQuest < 1500) {
     let qCash = applyCreatureCashBonus(25000 * dice, playerState);
@@ -6049,7 +6378,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 1500;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (1500회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (1500회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
   if (count >= 2000 && playerState.huntData.lastClaimedHuntQuest < 2000) {
     let qCash = applyCreatureCashBonus(25000 * dice, playerState);
@@ -6057,7 +6386,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 2000;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (2000회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (2000회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
   if (count >= 3000 && playerState.huntData.lastClaimedHuntQuest < 3000) {
     let qCash = applyCreatureCashBonus(30000 * dice, playerState);
@@ -6065,7 +6394,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 3000;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (3000회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (3000회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
   if (count >= 4000 && playerState.huntData.lastClaimedHuntQuest < 4000) {
     let qCash = applyCreatureCashBonus(50000 * dice, playerState);
@@ -6073,7 +6402,7 @@ function processHunt(playerState) {
     playerState.cash += qCash;
     playerState.gem = (playerState.gem || 0) + qGem;
     playerState.huntData.lastClaimedHuntQuest = 4000;
-    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (4000회) : 현금 +${won(qCash)} 및 보석 +${qGem}개`);
+    huntQuestRewardMsgs.push(`퀘스트 달성 보상 (4000회) :\n💵 현금 +${won(qCash)}\n💎 보석 +${qGem}개`);
   }
 
   huntQuestRewardMsgs.push(...claimDailyPassMissions(playerState));
@@ -6083,22 +6412,22 @@ function processHunt(playerState) {
     finalRewardLines.push(huntQuestRewardMsgs.join('\n'));
   }
   if (droppedLootTexts.length > 0) {
-    finalRewardLines.push(droppedLootTexts.join('\n'));
+    finalRewardLines.push(droppedLootTexts.filter(line => !line.startsWith('💎 [재화] 보석 +')).join('\n'));
   }
 
   let monstersJoined = isAdminIndependentHunt
     ? independentHuntLines.join('\n')
     : monsterInfoBlocks.join('\n');
   
-  let summaryLines = [`💵 총 현금 +${won(totalEarnedCash)}`];
+  let summaryLines = [`💵 현금 +${won(totalEarnedCash)}`];
   if (totalEarnedGem > 0) {
-    summaryLines.push(`💎 총 보석 : ${totalEarnedGem}개`);
+    summaryLines.push(`💎 보석 : ${totalEarnedGem}개`);
   }
 
   let middleContent = `${isAdminIndependentHunt ? `🎯 [관리자 독립 사냥 ${actualHunts}회]\n` : ''}${monstersJoined}\n\n💰 획득 재화 :\n${summaryLines.join('\n')}`;
-  if(!spawnedMonsters.length)middleContent='';
+  if (!spawnedMonsters.length) middleContent = '💎 [재화] 보석 이벤트\n\n💰 획득 재화 :\n' + summaryLines.join('\n');
   if (finalRewardLines.length > 0) {
-    middleContent = middleContent + '\n' + finalRewardLines.join('\n');
+    middleContent = middleContent + '\n\n' + finalRewardLines.filter(Boolean).join('\n\n');
   }
 
   const questThresholds = [100, 250, 500, 1000, 1500, 2000, 3000, 4000];
@@ -6120,13 +6449,13 @@ function processHunt(playerState) {
   // 수정사항 3: /사냥 후 선택지 /파밍 제거하고 /사냥으로 통일
   const choices = HUNT_CHOICES;
 
-  const firstMonster = spawnedMonsters.length > 0 ? spawnedMonsters[0] : null;
+  const firstMonster = spawnedMonsters.reduce((best, monster) => !best || gradeRank[monster.grade] > gradeRank[best.grade] ? monster : best, null);
 
   return {
     combatPerformed: true,
     text,
     choices,
-    imageUrl: gemEventCount>0 ? BASE_URL+'/GEM_HUNT.png' : firstMonster?.image ?? null,
+    imageUrl: firstMonster?.image ?? (gemEventCount > 0 ? BASE_URL+'/GEM_HUNT.png' : null),
     image: firstMonster?.image ?? null,
     thumbnail: firstMonster?.image ?? null,
     url: firstMonster?.image ?? null,
@@ -6136,7 +6465,7 @@ function processHunt(playerState) {
 
 function processSpeedCommand(profile, arg, battle = null) {
   if (profile.combatLevel === undefined) profile.combatLevel = 0;
-  const maxAllowed = Math.max(1, profile.combatLevel); 
+  const maxAllowed = Math.max(1, Math.min(10, getCombinedGrowthLevel(profile))); 
 
   let speedVal = parseInt(arg, 10);
   if (isNaN(speedVal) || speedVal < 1 || speedVal > 10) {
@@ -6144,7 +6473,7 @@ function processSpeedCommand(profile, arg, battle = null) {
   }
 
   if (speedVal > maxAllowed) {
-    return { text: `⚠️ 증폭 레벨이 부족하여 해당 배속을 설정할 수 없습니다!\n• 현재 증폭 레벨: Lv.${profile.combatLevel}\n• 최대 설정 가능 배속: x${maxAllowed}` };
+    return { text: `⚠️ 증폭·공명 합산 레벨이 부족하여 해당 배속을 설정할 수 없습니다!\n• 증폭 Lv.${profile.combatLevel} + 공명 Lv.${getResonanceInfo(profile).level}\n• 최대 설정 가능 배속: x${maxAllowed}` };
   }
 
   profile.speedMultiplier = speedVal;
@@ -6159,6 +6488,7 @@ function processSpeedCommand(profile, arg, battle = null) {
 function processAccumulated(profile) {
   const adventurerCost = profile.totalEnhanceCost || 0;
   const jobCost = profile.totalJobEnhanceCost || 0;
+  const subweaponCost = profile.totalSubweaponEnhanceCost || 0;
   return {
     text: [
       `📊 [누적 강화 비용]`,
@@ -6167,7 +6497,10 @@ function processAccumulated(profile) {
       `강화에 들어간 누적 비용은 총 **${won(adventurerCost)}**입니다.`,
       ``,
       `🎖️전직`,
-      `강화에 들어간 누적 비용은 총 **${won(jobCost)}**입니다.`
+      `강화에 들어간 누적 비용은 총 **${won(jobCost)}**입니다.`,
+      ``,
+      `🗡️보조무기`,
+      `강화에 들어간 누적 비용은 총 **${won(subweaponCost)}**입니다.`
     ].join('\n')
   };
 }
@@ -6178,8 +6511,8 @@ function processExchange(profile, arg) {
     return {
       text: [
         `💱 [교환 목록 안내]`,
-        `1. 현금 → 금괴 (현금 1,000,000원당 금괴 1개)`,
-        `2. 현금 → 보석 (현금 1,000,000원당 보석 1개)`,
+        `1. 현금 → 금괴 (현금 200,000원당 금괴 1개)`,
+        `2. 현금 → 보석 (현금 200,000원당 보석 1개)`,
         `3. 금괴 → 현금 (금괴 1개당 50,000원)`,
         `4. 보석 → 현금 (보석 1개당 50,000원)`,
         ``,
@@ -6197,7 +6530,7 @@ function processExchange(profile, arg) {
 
   switch (type) {
     case 1: {
-      const costCash = 1000000 * amount;
+      const costCash = 200000 * amount;
       if (profile.cash < costCash) {
         return { text: `⚠️ 현금이 부족합니다! (필요 현금: ${won(costCash)})` };
       }
@@ -6206,7 +6539,7 @@ function processExchange(profile, arg) {
       return { text: `💱 [교환 완료]\n현금 ${won(costCash)}으로 금괴 ${amount}개를 교환했습니다!\n\n${resourceText(profile)}` };
     }
     case 2: {
-      const costCash = 1000000 * amount;
+      const costCash = 200000 * amount;
       if (profile.cash < costCash) {
         return { text: `⚠️ 현금이 부족합니다! (필요 현금: ${won(costCash)})` };
       }
@@ -6221,7 +6554,6 @@ function processExchange(profile, arg) {
       }
       profile.gold -= costGold;
       let rewardCash = 50000 * amount;
-      rewardCash = applyCreatureCashBonus(rewardCash, profile);
       profile.cash += rewardCash;
       return { text: `💱 [교환 완료]\n금괴 ${amount}개로 현금 ${won(rewardCash)}을(를) 교환했습니다!\n\n${resourceText(profile)}` };
     }
@@ -6232,7 +6564,6 @@ function processExchange(profile, arg) {
       }
       profile.gem -= costGem;
       let rewardCash = 50000 * amount;
-      rewardCash = applyCreatureCashBonus(rewardCash, profile);
       profile.cash += rewardCash;
       return { text: `💱 [교환 완료]\n보석 ${amount}개로 현금 ${won(rewardCash)}을(를) 교환했습니다!\n\n${resourceText(profile)}` };
     }
@@ -6320,14 +6651,16 @@ function getDungeonRewardGem(grade) {
 
 function startGame(existingProfile) {
   let profile = createProfile(existingProfile);
+  const showGuide = !profile.hasSeenBeginnerGuide;
+  profile.hasSeenBeginnerGuide = true;
   let battle = profile.activeFarmBattle && !profile.activeFarmBattle.finished && profile.activeFarmBattle.hp > 0
     ? JSON.parse(JSON.stringify(profile.activeFarmBattle))
     : createBattle(profile);
 
   return {
-    text: `배틀로얄 및 사냥 게임에 오신 것을 환영합니다! 아래 버튼을 누르거나 '/파밍' 등을 입력해 주세요.\n\n${battleStatusBoard(profile, battle)}`,
+    text: showGuide ? BEGINNER_GUIDE : `다시 오셨군요! /사냥 또는 /파밍으로 모험을 이어가세요.\n\n${battleStatusBoard(profile, battle)}`,
     imageUrl: null, 
-    choices: BATTLE_CHOICES,
+    choices: showGuide ? BEGINNER_CHOICES : BATTLE_CHOICES,
     category: 'start',
     state: { profile, battle }
   };
@@ -6422,7 +6755,7 @@ function resolveRaidAttack(profile, raid, options = {}) {
   const percentStrike = !execute && berserker && draw() < chance;
   const bonusDamage = percentStrike ? Math.max(1, Math.floor(raid.maxHp * 0.01)) : 0;
   const damage = execute ? raid.hp : Math.min(raid.hp, attackPower + Math.min(raid.hp, bonusDamage));
-  return {version:RAID_RULES_VERSION,source,attacked:true,attackPower,damage,cashEarned:damage,goldEarned:1+Math.floor(draw()*6),gemEarned:1+Math.floor(draw()*6),execute,percentStrike,defeated:damage===raid.hp};
+  return {version:RAID_RULES_VERSION,source,attacked:true,attackPower,damage,cashEarned:Math.floor(damage*ECONOMY_RULES.raidCashRate),goldEarned:1+Math.floor(draw()*6),gemEarned:1+Math.floor(draw()*6),execute,percentStrike,defeated:damage===raid.hp};
 }
 function formatRaidAttackEffects(result) {
   if (!result || !result.attacked) return '';
@@ -6434,23 +6767,6 @@ function formatRaidAttackEffects(result) {
 function processTurn(state, utterance, context = {}) {
   if (requiresGameAdmin(utterance) && !isGameAdmin(context && context.userId)) {
     return { text: "관리자만 사용할 수 있는 명령어입니다.", choices: [], state: state || {} };
-  }
-  const adminAttack = String(utterance||'').trim().match(/^\/관리자\s+공격력\s+(\d+)$/);
-  if (adminAttack && isGameAdmin(context && context.userId)) {
-    const attackVal = Number(adminAttack[1]);
-    const profile = createProfile(state && state.profile);
-    const battle = state && state.battle;
-    if (!Number.isSafeInteger(attackVal) || attackVal < 0) {
-      return { text: '⚠️ 관리자 공격력은 0 이상의 안전한 정수만 설정할 수 있습니다.\n예: /관리자 공격력 1000000', state: { profile, battle } };
-    }
-    profile.adminAttackPower = attackVal;
-    return {
-      text: `🛠️ [관리자 공격력] ${attackVal.toLocaleString()} 설정 완료\n💪 현재 공격력 : ${getAttackPower(profile).toLocaleString()}`,
-      choices: [],
-      category: 'adminAttack',
-      state: { profile, battle },
-      adminAction: 'attack'
-    };
   }
   const adminSpeed = String(utterance||'').trim().match(/^\/관리자\s+배속\s+(\d+)$/);
   if (adminSpeed && isGameAdmin(context && context.userId)) {
@@ -6493,6 +6809,18 @@ function processTurn(state, utterance, context = {}) {
   const turnState = state && typeof state === 'object' ? state : {};
   if (userId) turnState.profile = { ...(turnState.profile || {}), userId };
   const result = processTurnInternal(turnState, utterance, context);
+  if (result && result.state && result.state.profile) {
+    const updated = result.state.profile;
+    if (result.combatPerformed === true && ['farm','hunt'].includes(result.category)) {
+      const attendance = claimAttendance(updated, true);
+      if (attendance) result.text = attendance + '\n\n' + result.text;
+    }
+    // 최초 입력 명령도 그대로 수행하며, 신규 사용자에게만 안내를 한 번 덧붙인다.
+    if (!updated.hasSeenBeginnerGuide) {
+      updated.hasSeenBeginnerGuide = true;
+      result.text += '\n\n' + BEGINNER_GUIDE;
+    }
+  }
   // No offline queue: older servers ignore this field, and unprocessed attacks never accrue.
   if (context.sharedRaidPassives === true && result && result.combatPerformed) {
     result.raidIntent = {version:RAID_RULES_VERSION,source:result.category};
@@ -6532,13 +6860,16 @@ function processTurnInternal(state, utterance, context = {}) {
   const cleanInput = input.toLowerCase();
 
   if (cleanInput === '/광고') {
-    const rewards={cash:rand(1,100000),gold:rand(0,5),gem:rand(0,5),keys:rand(0,5)};
+    const day=getEconomyDay(profile);
+    if(day.ads>=ECONOMY_RULES.adDailyMax)return {text:'오늘 광고 보상은 모두 받았습니다. (3/3회)',state:{profile,battle},choices:[]};
+    const rewards={cash:rand(ECONOMY_RULES.adCashMin,ECONOMY_RULES.adCashMax),gold:rand(0,1),gem:rand(0,1),keys:rand(0,1)};
     for(const [field,amount] of Object.entries(rewards)) {
       const next=Number(profile[field]||0)+amount;
       if(!Number.isSafeInteger(next))return {text:'재화 저장 한도를 초과했습니다.',state:{profile,battle}};
     }
     for(const [field,amount] of Object.entries(rewards))profile[field]=(profile[field]||0)+amount;
-    return {text:['🎁 광고 보상','현재는 광고 없이 보상을 지급합니다.','💵 현금 +'+won(rewards.cash),'🧈 금괴 +'+rewards.gold+'개','💎 보석 +'+rewards.gem+'개','🔑 비밀열쇠 +'+rewards.keys+'개'].join('\n'),choices:[],state:{profile,battle},category:'ad'};
+    day.ads++;
+    return {text:['🎁 광고 보상 ('+day.ads+'/'+ECONOMY_RULES.adDailyMax+'회)' ,'현재는 광고 없이 보상을 지급합니다.','💵 현금 +'+won(rewards.cash),'🧈 금괴 +'+rewards.gold+'개','💎 보석 +'+rewards.gem+'개','🔑 비밀열쇠 +'+rewards.keys+'개'].join('\n'),choices:[],state:{profile,battle},category:'ad'};
   }
   if (/^\/레이드(?:\s|$)/.test(cleanInput)) {
     return { text: '협동 레이드는 서버와 DB의 레이드 기능 연결이 필요합니다.', choices: [], state: { profile, battle } };
@@ -6548,6 +6879,10 @@ function processTurnInternal(state, utterance, context = {}) {
     return { text: '해당 기능은 서버 연결이 필요합니다.', choices: [], state: { profile, battle } };
   }
 
+  if (cleanInput === '/가이드') {
+    profile.hasSeenBeginnerGuide = true;
+    return {text:BEGINNER_GUIDE,choices:BEGINNER_CHOICES,imageUrl:null,category:'guide',state:{profile,battle}};
+  }
   if (cleanInput === '/id') {
     return {
       text: profile.userId
@@ -6566,7 +6901,7 @@ function processTurnInternal(state, utterance, context = {}) {
     state.battle = startResult.state.battle;
     return {
       text: startResult.text,
-      choices: END_BATTLE_CHOICES,
+      choices: startResult.choices,
       category: "main",
       imageUrl: startResult.imageUrl,
       image: startResult.image,
@@ -6624,22 +6959,8 @@ function processTurnInternal(state, utterance, context = {}) {
 
   if (input === '/출석') {
     const missionMessages = claimDailyPassMissions(profile);
-    const todayStr = getKSTDateString();
-    if (profile.seasonPass.lastAttendanceDate === todayStr) {
-      return {
-        text: [...missionMessages, '⚠️ 이미 오늘 출석 체크를 완료하셨습니다.'].join('\n\n'),
-        choices: END_BATTLE_CHOICES,
-        state: { profile, battle }
-      };
-    }
-
-    profile.seasonPass.lastAttendanceDate = todayStr;
-    const passMsg = grantPassExp(profile, 20);
-    return {
-      text: [`📅 [출석 체크 완료!]\n오늘의 출석 보상이 지급되었습니다.\n\n${passMsg}`, ...missionMessages].join('\n\n'),
-      choices: END_BATTLE_CHOICES,
-      state: { profile, battle }
-    };
+    const attendance = claimAttendance(profile);
+    return {text:[attendance || '⚠️ 이미 오늘 출석 체크를 완료하셨습니다.', ...missionMessages].join('\n\n'), choices:END_BATTLE_CHOICES, state:{profile,battle}};
   }
 
   if (input === '/초기화') {
@@ -6678,6 +6999,7 @@ function processTurnInternal(state, utterance, context = {}) {
   if (input === '/' || input === '/도움말') {
     const helpText = [
       `📜 [사용 가능한 명령어 안내]`,
+      `• /가이드 - 처음 시작하는 분을 위한 안내`,
       `• /랭킹 - 공격력 랭킹`,
       `• /id - 사용자 ID 확인`,
       `• /레이드 - 공동 레이드 체력 조회`,
@@ -6686,8 +7008,12 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /컬렉션 [페이지] - 사냥 몬스터 수집 현황 및 영구 효과`,
       `• /강화 - 무기 강화`,
       `• /제련 - 제련 정보 확인`,
-      `• /연속 강화 [횟수] - 지정 횟수만큼 연속 강화`,
+      `• /강화 [목표 단계] - 목표까지 강화, 재화 부족 시 중단`,
+      `• /보조무기 - 보조무기 능력치 확인`,
+      `• /보조강화 [목표 단계] - 보조무기 1회 또는 목표 강화`,
       `• /증폭 - 증폭 정보 확인`,
+      `• /공명 - 공명 정보 확인 (보석 강화)`,
+      `• /공명 강화 [횟수] - 공명 단계 강화`,
       `• /배속 [1~10] - 증폭 레벨 제한 내에서 보상 배속 설정`,
       `• /금고 - 금고 정보 확인 및 입/출금/구매/레벨업`,
       `• /열쇠 [수량] - 비밀열쇠를 지정한 수량만큼 연속 사용`,
@@ -6700,7 +7026,7 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /스킬 - 보유 스킬 확인 (/스킬 1: 1차, /스킬 2: 2차 액티브)`,
       `• /스킬트리 - 1차·2차 패시브/액티브 상세 확인`,
       `• /업적 - 업적 진행도와 누적 현금 보너스 확인`,
-      `• /대결 - 1대1 대결`,
+      `• /대결 [닉네임] - 실제 유저 대결 (생략 시 무작위)`,
       `• /던전 - 고등급 던전 입장`,
       `• /각인 - 각인 정보 확인`,
       `• /전리품 - T1~T6 세트 전리품 및 세트 효과 확인`,
@@ -6708,7 +7034,7 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /사냥 - 몬스터 사냥 및 현금 보상 획득`,
       `• /누적 - 누적 강화 비용 확인`,
       `• /교환 [번호] [수량] - 재화 교환`,
-      `• /출석 - 일일 출석 체크 (시즌 패스 20 EXP)`,
+      `• /출석 - 출석 확인 (첫 사냥·파밍 시 자동, 시즌 패스 20 EXP)`,
       `• /패스 - 월간 시즌 패스 정보 확인 및 미션 현황`
     ].join('\n');
     return { text: helpText, imageUrl: null, state: { profile, battle } };
@@ -6801,7 +7127,7 @@ function processTurnInternal(state, utterance, context = {}) {
       battle.accumulatedExp = Math.round((battle.accumulatedCash || 0) / 10);
       if (battle.accumulatedExp > 0) {
         // 이미 배율이 적용된 현금으로 계산한 EXP에 추가 배율을 곱하지 않는다.
-        const expResult = addExp(profile, battle.accumulatedExp, 1);
+        const expResult = addExp(profile, battle.accumulatedExp, 1+Math.max(0,getImprintTotalBonus(profile,'expBoost'))/100);
         // 실제 지급한 정수 EXP를 종료 내역에 보관한다.
         battle.accumulatedExp = expResult.gained;
         if (expResult.msg) displayMsgs.push(expResult.msg);
@@ -6853,11 +7179,20 @@ function processTurnInternal(state, utterance, context = {}) {
     };
   }
 
-  // 3. /강화 명령어 (단일 /확정 강화)
+  if (command === '/보조무기' || command === '/보조강화') {
+    let result;
+    if (command === '/보조강화') result = processSubweaponEnhance(profile, arg);
+    else if (/^강화(?:\s|$)/.test(arg)) result = processSubweaponEnhance(profile, arg.replace(/^강화\s*/, ''));
+    else if (arg.trim()) result = {text:'사용법: /보조무기 또는 /보조강화 [목표 단계]'};
+    else result = {text:subweaponText(profile)};
+    return {...result, imageUrl:getSubweaponImage(profile), choices:[{label:'/보조무기'},{label:'/보조강화'}], category:'subweapon', state:{profile,battle}};
+  }
+
+  // 3. /강화 명령어 (단일 /목표 강화)
   if (command === '/강화') {
-    let targetLvl = parseInt(arg, 10);
-    if (!isNaN(targetLvl) && targetLvl > 0) {
-      const gResult = processGuaranteedEnhance(profile, targetLvl);
+    if (arg.trim()) {
+      const targetLvl = /^[1-9]\d*$/.test(arg.trim()) ? Number(arg.trim()) : NaN;
+      const gResult = processEnhanceToTarget(profile, targetLvl);
       return {
         text: gResult.text,
         imageUrl: gResult.imageUrl,
@@ -6879,17 +7214,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
   // 4. /연속 강화 명령어
   if (command === '/연속 강화') {
-    let count = parseInt(arg, 10);
-    if (!/^[1-9]\d*$/.test(arg) || !Number.isSafeInteger(Number(arg))) return { text: '사용법: /연속 강화 [횟수]', choices: [], state: { profile, battle } };
-
-    const mResult = processMultiEnhance(profile, count);
-    return {
-      text: mResult.text,
-      imageUrl: mResult.imageUrl,
-      choices: ENHANCE_CHOICES,
-      category: 'multiEnhance',
-      state: { profile, battle }
-    };
+    return { text: '기존 /연속 강화는 종료되었습니다. /강화 [목표 단계]를 사용해 주세요. 예: /강화 15', choices: ENHANCE_CHOICES, state: { profile, battle } };
   }
 
   // 5. /제련 명령어
@@ -6916,6 +7241,18 @@ function processTurnInternal(state, utterance, context = {}) {
     };
   }
 
+  if (command === '/공명' || command === '/공명강화') {
+    const value = arg.trim();
+    const upgrading = command === '/공명강화' || /^강화(?:\s|$)/.test(value);
+    const countText = command === '/공명강화' ? value : value.replace(/^강화\s*/, '');
+    let result;
+    if (upgrading) {
+      const count = countText === '' ? 1 : /^[1-9]\d*$/.test(countText) ? Number(countText) : NaN;
+      result = processResonance(profile, count);
+    } else result = value ? {text:'사용법: /공명 또는 /공명 강화 [횟수]'} : showResonanceInfo(profile);
+    return {...result, imageUrl:null, choices:RESONANCE_CHOICES, category:'resonance', state:{profile,battle}};
+  }
+
   // 7. /증폭 명령어
   if (command === '/증폭') {
     const aInfo = showAmplifyInfo(profile);
@@ -6930,8 +7267,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
   // 8. /증폭 강화 명령어
   if (command === '/증폭 강화' || command === '/증폭강화') {
-    let targetCount = parseInt(arg, 10);
-    if (isNaN(targetCount) || targetCount < 1) targetCount = 1;
+    const targetCount = !arg.trim() || arg.trim() === '1' ? 1 : NaN;
 
     const aResult = processAmplify(profile, targetCount);
     return {
@@ -7146,7 +7482,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
   // 21. /대결 명령어
   if (command === '/대결') {
-    const pResult = processPvpBattle(profile);
+    const pResult = processPvpBattle(profile, context.pvpMatch);
     return {
       text: pResult.text,
       imageUrl: null,
@@ -7162,7 +7498,7 @@ function processTurnInternal(state, utterance, context = {}) {
     return {
       text: dResult.text,
       imageUrl: dResult.imageUrl,
-      choices: END_BATTLE_CHOICES,
+      choices: [{ label: '/던전' }],
       category: 'dungeon',
       state: { profile, battle }
     };
@@ -7343,6 +7679,7 @@ function processTurnInternal(state, utterance, context = {}) {
 // Module Exports (Node.js/카카오 챗봇 백엔드 연동용)
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    checkAndResetSeasonPass,
     isGameAdmin, requiresGameAdmin, parseAdminGrant, ADMIN_RESOURCES, formatRanking, formatRaidReward,
     RAID_RULES_VERSION, resolveRaidAttack, formatRaidAttackEffects,
     addRaidBox, RAID_BOX_NAME, RAID_TITLE, RAID_AVATAR,
