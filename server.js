@@ -1,7 +1,7 @@
 // server.js — 카카오톡 챗봇 스킬 서버
 const path = require('path');
 const express = require('express');
-const { startGame, processTurn, createProfile, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
+const { normalizeImageFilename, parsePvpCommand, startGame, processTurn, createProfile, getSecondJobCode, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
 const { buildResponse, parseSkillRequest } = require('./kakao');
 const { activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
 
@@ -38,6 +38,7 @@ function safeErrorDetails(err) {
 // Missing/slow image servers must not suppress a completed command's text.
 const imageChecks=new Map();
 async function buildSafeResponse(text,choices=[],imageUrl=null) {
+  imageUrl=normalizeImageFilename(imageUrl);
   let image=null;
   if(typeof imageUrl==='string' && /^https?:\/\//i.test(imageUrl) && typeof fetch==='function') {
     const cached=imageChecks.get(imageUrl);
@@ -83,7 +84,7 @@ app.post('/skill', async (req, res) => {
     const adminSpeedCommand=/^\/관리자\s+배속\s+\d+$/.test(utterance);
     const adminAttackCommand=/^\/관리자\s+공격력\s+\d+$/.test(utterance);
     // game.js 내부에서 처리하는 관리자 전용 명령은 재화 지급 파서가 가로채지 않도록 통과시킨다.
-    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !adminAttackCommand) {
+    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !/^\/관리자\s+횟수$/.test(utterance)) {
       const premium = utterance.match(/^\/관리자\s+(\S+)\s+패스\s+활성화$/);
       if (premium) {
         stage = '관리자 유료 패스 활성화';
@@ -148,7 +149,10 @@ app.post('/skill', async (req, res) => {
       let pvpMatch;
       if (/^\/대결(?:\s|$)/.test(utterance)) {
         stage = '대결 상대 조회';
-        pvpMatch = await findPvpOpponent(userId, utterance.replace(/^\/대결\s*/, ''));
+        const command=parsePvpCommand(utterance);
+        if(command.invalid||!Number.isSafeInteger(command.count)||command.count<1||command.count>10)return res.json(await buildSafeResponse('대결 횟수는 1~10 정수입니다. 숫자로 끝나는 닉네임은 /대결 "닉네임"으로 지정하세요.',[]));
+        if(command.explicit && getSecondJobCode(state.profile)!=='archmage')return res.json(await buildSafeResponse('횟수 지정은 아크메이지 전용입니다. /대결 또는 /대결 "닉네임"으로 1회씩 진행하세요.',[]));
+        pvpMatch = {...await findPvpOpponent(userId, command.nickname),requestedCount:command.count,explicitCount:command.explicit};
       }
       result = processTurn(state, utterance, { userId, sharedRaidPassives:true, pvpMatch });
     }
@@ -165,6 +169,12 @@ app.post('/skill', async (req, res) => {
     if(adminJobCommand && result.adminAction === 'job') {
       const committed=await commitGameTurn(userId,nextState,expected,{adminJob:true});
       nextState=committed.state;
+    } else if(result.skillRaid === true) {
+      const committed=await commitGameTurn(userId,nextState,expected,{skillRaid:true,source:'farm'});
+      nextState=committed.state;
+      result.text=committed.raidResult ? buildRaidText(nextState.profile,committed.raidResult) : '발견된 살아 있는 레이드가 없습니다. 사용권은 차감되지 않았습니다.';
+      if(committed.raidResult)result.text+='\n\n'+formatRaidReward(committed.raidResult.raid,userId);
+      result.imageUrl=committed.raidResult?RAID_IMAGE:null;
     } else if(combatCommand && result.combatPerformed === true) {
       const beforeResources=resourceText(nextState.profile);
       const committed=await commitGameTurn(userId,nextState,expected,{combatPerformed:true,source:result.category});
