@@ -61,18 +61,18 @@ async function saveSession(userId, state, expected = { revision: state && state.
   delete stored._dbRevision; delete stored._dbExists; delete stored._combatReadyAt;
   const conflict = () => { const err = new Error('다른 요청이 먼저 저장되었습니다. 다시 시도해 주세요.'); err.code = 'STATE_CONFLICT'; return err; };
   if (!expected.exists) {
-    try { await col.insertOne({ _id: userId, state: stored, revision: 1, updatedAt: new Date() }); }
+    try { await col.insertOne({ _id: userId, state: stored, ...playerIndex(userId,stored), revision: 1, updatedAt: new Date() }); }
     catch (err) { if (err.code === 11000) throw conflict(); throw err; }
   } else {
     const filter = expected.revision === 0 ? { _id: userId, $or: [{ revision: 0 }, { revision: { $exists: false } }] } : { _id: userId, revision: expected.revision };
-    const result = await col.updateOne(filter, { $set: { state: stored, revision: expected.revision + 1, updatedAt: new Date() } });
+    const result = await col.updateOne(filter, { $set: { state: stored, ...playerIndex(userId,stored), revision: expected.revision + 1, updatedAt: new Date() } });
     if (result.matchedCount !== 1) throw conflict();
   }
   state.profile.nickname = stored.profile.nickname;
 }
 
 // 공격·처치·참여자 보상은 한 트랜잭션으로 확정한다 (MongoDB Atlas).
-const { checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
+const { raidEncounterChance, consumeSkillUse, getSecondJobCode, checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
 const RAID_ID = 'world-boss-rewards-v1';
 const RAID_HP = 100000000;
 const RAID_REWARDS = Object.freeze({ cash: 10000000, gold: 1000, gem: 1000, keys: 100 });
@@ -112,7 +112,7 @@ async function grantAdminResource(actorId, targetId, field, amount) {
     if (!doc) return { found: false };
     const state = withUserId(doc.state, targetId);
     addResources(state.profile, { [field]: amount });
-    await users.updateOne({ _id: targetId }, { $set: { state, updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
+    await users.updateOne({ _id: targetId }, { $set: { state, ...playerIndex(targetId,state), updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
     await db.collection('admin_grants').insertOne({ actorId, targetId, field, amount, createdAt: new Date() }, { session });
     return { found: true, balance: state.profile[field] };
   });
@@ -130,26 +130,16 @@ async function activatePremiumPass(actorId, targetId) {
     const alreadyActive = pass.premiumMonth === pass.month;
     if (!alreadyActive) {
       pass.premiumMonth = pass.month;
-      await users.updateOne({ _id: targetId }, { $set: { state, updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
+      await users.updateOne({ _id: targetId }, { $set: { state, ...playerIndex(targetId,state), updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
       await db.collection('admin_grants').insertOne({ actorId, targetId, action: 'premium_pass', month: pass.month, createdAt: new Date() }, { session });
     }
     return { found: true, alreadyActive, month: pass.month };
   });
 }
-async function getPowerRanking() {
-  await ensureNicknames();
-  const users = await getCollection();
-  const top = [];
-  for await (const doc of users.find({}, { projection: { _id: 1, 'state.profile': 1 } })) {
-    if (!doc.state || !doc.state.profile || typeof doc._id !== 'string') continue;
-    const profile = createProfile({ ...doc.state.profile, nickname: doc.state.profile.nickname || '이름 없는 유저' });
-    const power = getRaidAttackPower(profile);
-    const enhance = getCurrentEnhanceLevel(profile);
-    top.push({ id: doc._id, nickname: profile.nickname, power, level: profile.level, enhance, weaponName:getWeaponInfo(enhance,profile.job)[0] });
-    top.sort((a, b) => b.power - a.power || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    if (top.length > 5) top.pop();
-  }
-  return top;
+async function getPowerRanking(){
+ await ensurePlayerIndexes();const users=await getCollection();
+ const docs=await users.find({indexedPlayer:true},{projection:{_id:1,rankSnapshot:1}}).sort({rankPower:-1,_id:1}).limit(5).toArray();
+ return docs.map(doc=>({id:doc._id,...doc.rankSnapshot}));
 }
 async function ensureRaid(db) {
   try {
@@ -194,7 +184,9 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
   const combat=options.combatPerformed === true && ['farm','hunt'].includes(options.source);
   const adminRaid=options.adminRaid === true, adminJob=options.adminJob === true;
   if((adminRaid || adminJob) && !isGameAdmin(userId))throw new Error('관리자만 사용할 수 있습니다.');
-  const raidAction=combat || adminRaid;
+  const skillRaid=options.skillRaid===true;
+  if(skillRaid && getSecondJobCode(prepared.profile)!=='dualblade')throw Error('듀얼블레이드 전용 스킬입니다.');
+  const raidAction=combat || adminRaid || skillRaid;
   const rolls=Array.from({length:8},()=>Math.random());
   if(raidAction) await ensureRaid(await database());
   return transaction(async(db,session)=>{
@@ -208,7 +200,7 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
       const err=new Error('다른 명령이 먼저 저장되었습니다.');err.code='STATE_CONFLICT';throw err;
     }
     const stored=JSON.parse(JSON.stringify(prepared));
-    const update={state:stored,revision:expected.revision+1,updatedAt:new Date()};
+    const update={state:stored,...playerIndex(userId,stored),revision:expected.revision+1,updatedAt:new Date()};
     if(combat)update.combatReadyAt=now+2000;
     if(current)await users.updateOne({_id:userId},{$set:update},{session});
     else await users.insertOne({_id:userId,...update},{session});
@@ -218,7 +210,7 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
       let raid=await raids.findOne({_id:RAID_ID},{session});
       let discovered=false;
       const pristine=!raid.discoveredBy && !(raid.attackCount>0) && !(raid.participants||[]).length;
-      if((raid.hp===0 || pristine) && (adminRaid || rolls[0]<0.001)) {
+      if(!skillRaid && (raid.hp===0 || pristine) && (adminRaid || rolls[0]<raidEncounterChance(stored.profile))) {
         const oldGeneration=raid.generation || 1;
         if(raid.hp===0) {
           const historyId=RAID_ID+':'+oldGeneration;
@@ -226,16 +218,18 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
         }
         raid={_id:RAID_ID,generation:raid.hp===0 ? oldGeneration+1 : oldGeneration,hp:RAID_HP,maxHp:RAID_HP,attackCount:0,participants:[],rewards:[],createdAt:new Date(),discoveredBy:userId,discoveredNickname:stored.profile.nickname,discoveredAt:new Date()};
         addRaidBox(stored.profile);
-        await users.updateOne({_id:userId},{$set:{state:stored}},{session});
+        await users.updateOne({_id:userId},{$set:{state:stored,...playerIndex(userId,stored)}},{session});
         await raids.replaceOne({_id:RAID_ID},raid,{session});
         discovered=true;
         raidResult={raid,discovered:true,attacked:false,raidBoxAwarded:'discover'};
       }
+      const canSkillRaid=skillRaid && raid.hp>0 && !!raid.discoveredBy;
+      if(canSkillRaid && !consumeSkillUse(stored.profile,'dualblade'))throw Error('오늘 레이드 스킬 횟수를 모두 사용했습니다.');
       let index=0;
-      const hit=resolveRaidAttack(stored.profile,raid,{source:options.source || 'farm',random:()=>{if(discovered && !adminRaid && index===0){index=1;return 0;}return rolls[index++];},forceEncounter:adminRaid,actorId:userId});
+      const hit=skillRaid && !canSkillRaid ? {attacked:false} : resolveRaidAttack(stored.profile,raid,{skillEncounter:canSkillRaid,source:options.source || 'farm',random:()=>{if(discovered && !adminRaid && index===0){index=1;return 0;}return rolls[index++];},forceEncounter:adminRaid,actorId:userId});
       if(hit.attacked) {
         addResources(stored.profile,{cash:hit.cashEarned,gold:hit.goldEarned,gem:hit.gemEarned});
-        await users.updateOne({_id:userId},{$set:{state:stored}},{session});
+        await users.updateOne({_id:userId},{$set:{state:stored,...playerIndex(userId,stored)}},{session});
         const participant=raid.participants.find(p=>p.userId===userId);
         if(participant)participant.damage+=hit.damage;else raid.participants.push({userId,nickname:stored.profile.nickname,damage:hit.damage});
         raid.hp-=hit.damage;raid.attackCount++;raid.updatedAt=new Date();
@@ -247,7 +241,7 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
             const state=withUserId(player.state,reward.userId);
             addResources(state.profile,{cash:reward.cash,gold:reward.gold,gem:reward.gem,keys:reward.keys});
             if(reward.userId===userId)addRaidBox(state.profile);
-            await users.updateOne({_id:reward.userId},{$set:{state,updatedAt:new Date()},$inc:{revision:1}},{session});
+            await users.updateOne({_id:reward.userId},{$set:{state,...playerIndex(reward.userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
           }
           raid.rewardPaid=true;raid.defeatedAt=new Date();raid.killedBy=userId;raid.killerNickname=stored.profile.nickname;
         }
@@ -283,7 +277,7 @@ async function renameUser(actorId,targetId,requestedName) {
     else await claims.insertOne(replacement,{session});
     const previous=doc.state?.profile?.nickname || '';
     const state=withUserId(doc.state,targetId);state.profile.nickname=nickname;
-    await users.updateOne({_id:targetId},{$set:{state,updatedAt:new Date()},$inc:{revision:1}},{session});
+    await users.updateOne({_id:targetId},{$set:{state,...playerIndex(targetId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
     const oldKey=nicknameBase(previous).toLocaleLowerCase('en-US');
     if(previous && oldKey!==key)await claims.deleteOne({_id:oldKey,userId:targetId},{session});
     await db.collection('admin_grants').insertOne({actorId,targetId,action:'rename',previous,nickname,createdAt:new Date()},{session});
@@ -307,13 +301,11 @@ async function findPvpOpponent(userId, requestedNickname = '') {
     if (doc._id === userId) return {version:1,reason:'own_name'};
     return {version:1,opponent:createProfile(doc.state.profile)};
   }
-  let selected = null, count = 0;
-  for await (const doc of users.find({}, {projection:{_id:1,'state.profile':1}})) {
-    if (!valid(doc) || doc._id === userId) continue;
-    count++;
-    if (Math.random() < 1/count) selected = doc;
-  }
-  return selected ? {version:1,opponent:createProfile(selected.state.profile)} : {version:1,reason:'no_players'};
+  await ensurePlayerIndexes();
+  const pivot=Math.random();
+  let selected=await users.find({indexedPlayer:true,_id:{$ne:userId},matchKey:{$gte:pivot}}).sort({matchKey:1,_id:1}).limit(1).next();
+  if(!selected)selected=await users.find({indexedPlayer:true,_id:{$ne:userId},matchKey:{$lt:pivot}}).sort({matchKey:1,_id:1}).limit(1).next();
+  return selected?{version:1,opponent:createProfile(selected.state.profile)}:{version:1,reason:'no_players'};
 }
 module.exports = { activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
 
@@ -345,18 +337,43 @@ async function reserveNickname(userId, preferred) {
 async function ensureNicknames() {
   if(!nicknameMigrationPromise) nicknameMigrationPromise=(async()=>{
     const users=await getCollection();
-    for await(const item of users.find({}, {projection:{_id:1}})) {
+    for await(const item of users.find({nicknameSchema:{$ne:1}}, {projection:{_id:1}})) {
       if(typeof item._id!=='string')continue;
       await nicknameTransaction(async(db,session)=>{
         const col=db.collection('sessions');const doc=await col.findOne({_id:item._id},{session});
         if(!doc || !doc.state || !doc.state.profile)return;
         const name=await claimNickname(db,session,doc._id,doc.state.profile.nickname || createProfile({}).nickname);
-        if(doc.state.profile.nickname!==name) {
+        if(doc.state.profile.nickname!==name || doc.nicknameSchema!==1) {
           const state=withUserId(doc.state,doc._id);state.profile.nickname=name;
-          await col.updateOne({_id:doc._id},{$set:{state,updatedAt:new Date()},$inc:{revision:1}},{session});
+          await col.updateOne({_id:doc._id},{$set:{state,...playerIndex(doc._id,state),updatedAt:new Date()},$inc:{revision:1}},{session});
         }
       });
     }
   })().catch(err=>{nicknameMigrationPromise=null;throw err;});
   return nicknameMigrationPromise;
+}
+
+
+function playerIndex(userId,state){
+ const profile=createProfile(state.profile);const power=getRaidAttackPower(profile),enhance=getCurrentEnhanceLevel(profile);
+ let h=2166136261;for(const c of userId){h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;}
+ return {indexVersion:3,nicknameSchema:1,indexedPlayer:true,rankPower:power,matchKey:h/4294967296,
+ rankSnapshot:{nickname:profile.nickname,power,level:profile.level,enhance,weaponName:getWeaponInfo(enhance,profile.job)[0]}};
+}
+let playerIndexPromise=null;
+async function ensurePlayerIndexes(){
+ if(!playerIndexPromise)playerIndexPromise=(async()=>{
+   await ensureNicknames();const users=await getCollection();
+   await Promise.all([
+     users.createIndex({indexedPlayer:1,rankPower:-1,_id:1},{name:'power_top5_v1'}),
+     users.createIndex({indexedPlayer:1,matchKey:1,_id:1},{name:'pvp_seek_v1'})
+   ]);
+   // One-time legacy backfill; revision condition prevents overwriting newer profile metadata.
+   for await(const doc of users.find({indexVersion:{$ne:3},'state.profile':{$exists:true}})){
+     if(typeof doc._id!=='string'||!doc.state?.profile)continue;
+     const rev=doc.revision||0,filter=rev?{_id:doc._id,revision:rev}:{_id:doc._id,$or:[{revision:0},{revision:{$exists:false}}]};
+     await users.updateOne(filter,{$set:playerIndex(doc._id,doc.state)});
+   }
+ })().catch(err=>{playerIndexPromise=null;throw err;});
+ return playerIndexPromise;
 }
