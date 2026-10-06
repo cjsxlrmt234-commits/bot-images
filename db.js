@@ -38,12 +38,14 @@ function withUserId(state, userId) {
   const saved = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
   const profile = saved.profile && typeof saved.profile === 'object' && !Array.isArray(saved.profile)
     ? saved.profile : {};
-  return { ...saved, userId, profile: { ...profile, userId } };
+  const normalized={ ...profile, userId };
+  normalizeEquippedCosmetics(normalized);
+  return { ...saved, userId, profile: normalized };
 }
 
 async function getSession(userId) {
-  await ensureNicknames();
   validateUserId(userId);
+  await ensureUserNickname(userId);
   const col = await getCollection();
   const doc = await col.findOne({ _id: userId });
   // 신규 사용자도 ID를 전달합니다. 레벨·재화 등 기본값은 game.js가 생성합니다.
@@ -54,25 +56,27 @@ async function getSession(userId) {
 async function saveSession(userId, state, expected = { revision: state && state._dbRevision, exists: state && state._dbExists }) {
   validateUserId(userId);
   if (!state || !state.profile || !Number.isSafeInteger(expected.revision) || typeof expected.exists !== 'boolean') throw new Error('게임 저장 버전이 없습니다. 서버 파일을 함께 교체해 주세요.');
-  const col = await getCollection();
-  await ensureNicknames();
   const stored = withUserId(state, userId);
   stored.profile.nickname = await reserveNickname(userId, stored.profile.nickname || createProfile({}).nickname);
   delete stored._dbRevision; delete stored._dbExists; delete stored._combatReadyAt;
   const conflict = () => { const err = new Error('다른 요청이 먼저 저장되었습니다. 다시 시도해 주세요.'); err.code = 'STATE_CONFLICT'; return err; };
+  return businessTransaction(async(db,session)=>{
+  const col=db.collection('sessions');
+  await assertNoBulkJob(db,session,userId);
   if (!expected.exists) {
-    try { await col.insertOne({ _id: userId, state: stored, ...playerIndex(userId,stored), revision: 1, updatedAt: new Date() }); }
+    try { await col.insertOne({ _id: userId, state: stored, ...playerIndex(userId,stored), revision: 1, updatedAt: new Date() }, {session}); }
     catch (err) { if (err.code === 11000) throw conflict(); throw err; }
   } else {
     const filter = expected.revision === 0 ? { _id: userId, $or: [{ revision: 0 }, { revision: { $exists: false } }] } : { _id: userId, revision: expected.revision };
-    const result = await col.updateOne(filter, { $set: { state: stored, ...playerIndex(userId,stored), revision: expected.revision + 1, updatedAt: new Date() } });
+    const result = await col.updateOne(filter, { $set: { state: stored, ...playerIndex(userId,stored), revision: expected.revision + 1, updatedAt: new Date() } }, {session});
     if (result.matchedCount !== 1) throw conflict();
   }
   state.profile.nickname = stored.profile.nickname;
+  });
 }
 
-// 공격·처치·참여자 보상은 한 트랜잭션으로 확정한다 (MongoDB Atlas).
-const { raidEncounterChance, consumeSkillUse, getSecondJobCode, checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
+// 공격·처치·지급 계획을 원자적으로 확정하고 참여자 보상은 별도 작업으로 지급한다.
+const { processBoxBatch, normalizeEquippedCosmetics, raidEncounterChance, consumeSkillUse, getSecondJobCode, checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
 const RAID_ID = 'world-boss-rewards-v1';
 const RAID_HP = 100000000;
 const RAID_REWARDS = Object.freeze({ cash: 10000000, gold: 1000, gem: 1000, keys: 100 });
@@ -106,7 +110,7 @@ async function grantAdminResource(actorId, targetId, field, amount) {
   if (!isGameAdmin(actorId)) throw new Error('관리자만 사용할 수 있습니다.');
   validateUserId(targetId);
   if (!Object.values(ADMIN_RESOURCES).includes(field) || !Number.isSafeInteger(amount) || amount <= 0) throw new Error('지급 형식이 올바르지 않습니다.');
-  return transaction(async (db, session) => {
+  return businessTransaction(async (db, session) => {
     const users = db.collection('sessions');
     const doc = await users.findOne({ _id: targetId }, { session });
     if (!doc) return { found: false };
@@ -120,7 +124,7 @@ async function grantAdminResource(actorId, targetId, field, amount) {
 async function activatePremiumPass(actorId, targetId) {
   if (!isGameAdmin(actorId)) throw new Error('관리자만 사용할 수 있습니다.');
   validateUserId(targetId);
-  return transaction(async (db, session) => {
+  return businessTransaction(async (db, session) => {
     const users = db.collection('sessions');
     const doc = await users.findOne({ _id: targetId }, { session });
     if (!doc || !doc.state || !doc.state.profile) return { found: false };
@@ -137,9 +141,12 @@ async function activatePremiumPass(actorId, targetId) {
   });
 }
 async function getPowerRanking(){
+ startPlayerIndexMaintenance();
  await ensurePlayerIndexes();const users=await getCollection();
  const docs=await users.find({indexedPlayer:true},{projection:{_id:1,rankSnapshot:1}}).sort({rankPower:-1,_id:1}).limit(5).toArray();
- return docs.map(doc=>({id:doc._id,...doc.rankSnapshot}));
+ const rows=docs.map(doc=>({id:doc._id,...doc.rankSnapshot}));
+ rows.indexUpdating=!playerBackfillComplete;
+ return rows;
 }
 async function ensureRaid(db) {
   try {
@@ -176,7 +183,7 @@ function distributeRaidRewards(participants) {
 // Compare-and-save game state, cooldown and shared raid rewards together.
 // Random samples are captured outside the retrying transaction and replayed inside it.
 async function commitGameTurn(userId, nextState, expected, options = {}) {
-  validateUserId(userId); await ensureNicknames();
+  validateUserId(userId);
   if (!nextState || !nextState.profile || !expected || !Number.isSafeInteger(expected.revision) || typeof expected.exists !== 'boolean') throw new Error('게임 저장 정보가 없습니다.');
   const prepared=withUserId(nextState,userId);
   delete prepared._dbRevision;delete prepared._dbExists;delete prepared._combatReadyAt;
@@ -189,8 +196,9 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
   const raidAction=combat || adminRaid || skillRaid;
   const rolls=Array.from({length:8},()=>Math.random());
   if(raidAction) await ensureRaid(await database());
-  return transaction(async(db,session)=>{
+  return businessTransaction(async(db,session)=>{
     const users=db.collection('sessions');
+    await assertNoBulkJob(db,session,userId);
     const current=await users.findOne({_id:userId},{session});
     const now=Date.now();
     if(combat && current && current.combatReadyAt > now) {
@@ -234,16 +242,13 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
         if(participant)participant.damage+=hit.damage;else raid.participants.push({userId,nickname:stored.profile.nickname,damage:hit.damage});
         raid.hp-=hit.damage;raid.attackCount++;raid.updatedAt=new Date();
         if(raid.hp===0) {
+          raid.generation=raid.generation||1;
           raid.rewards=distributeRaidRewards(raid.participants);
-          for(const reward of raid.rewards) {
-            const player=await users.findOne({_id:reward.userId},{session});
-            if(!player)throw new Error('레이드 참여자의 계정이 없습니다.');
-            const state=withUserId(player.state,reward.userId);
-            addResources(state.profile,{cash:reward.cash,gold:reward.gold,gem:reward.gem,keys:reward.keys});
-            if(reward.userId===userId)addRaidBox(state.profile);
-            await users.updateOne({_id:reward.userId},{$set:{state,...playerIndex(reward.userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
-          }
-          raid.rewardPaid=true;raid.defeatedAt=new Date();raid.killedBy=userId;raid.killerNickname=stored.profile.nickname;
+          addRaidBox(stored.profile);
+          await users.updateOne({_id:userId},{$set:{state:stored,...playerIndex(userId,stored)}},{session});
+          const planId=RAID_ID+':'+(raid.generation||1);
+          await db.collection('raid_payouts').insertOne({_id:planId,generation:raid.generation||1,rewards:raid.rewards,offset:0,status:'pending',createdAt:new Date()},{session});
+          raid.rewardPaid=false;raid.defeatedAt=new Date();raid.killedBy=userId;raid.killerNickname=stored.profile.nickname;
         }
         await raids.replaceOne({_id:RAID_ID},raid,{session});
         if(raid.hp===0) {
@@ -260,13 +265,14 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
 }
 async function renameUser(actorId,targetId,requestedName) {
   if(!isGameAdmin(actorId))throw new Error('관리자만 사용할 수 있습니다.');
-  validateUserId(targetId);await ensureNicknames();
+  validateUserId(targetId);await ensureUserNickname(targetId);
   const nickname=String(requestedName || '').normalize('NFKC').trim();
   if(!nickname || Array.from(nickname).length>60 || /[\x00-\x1f\x7f]/.test(nickname))throw new Error('닉네임은 제어문자 없이 1~60자로 입력하세요.');
-  return nicknameTransaction(async(db,session)=>{
+  return businessTransaction(async(db,session)=>{
     const users=db.collection('sessions'),claims=db.collection('nickname_claims');
     const doc=await users.findOne({_id:targetId},{session});if(!doc)return {found:false};
     const key=nickname.toLocaleLowerCase('en-US');
+    if(await legacyNicknameOwner(db,session,nickname,targetId))return {found:true,duplicate:true};
     const claim=await claims.findOne({_id:key},{session});
     if(claim && claim.userId!==targetId) {
       const owner=await users.findOne({_id:claim.userId},{session});
@@ -287,7 +293,6 @@ async function renameUser(actorId,targetId,requestedName) {
 // 대결은 상대의 저장된 능력치를 읽기만 한다. 보상과 횟수는 요청자에게만 저장한다.
 async function findPvpOpponent(userId, requestedNickname = '') {
   validateUserId(userId);
-  await ensureNicknames();
   const db = await database(), users = db.collection('sessions');
   const nickname = String(requestedNickname).normalize('NFKC').trim();
   const valid = doc => doc && typeof doc._id === 'string' && doc.state && doc.state.profile;
@@ -295,7 +300,7 @@ async function findPvpOpponent(userId, requestedNickname = '') {
     if (Array.from(nickname).length > 60 || /[\x00-\x1f\x7f]/.test(nickname)) return {version:1,reason:'invalid_name'};
     const key = nickname.toLocaleLowerCase('en-US');
     const claim = await db.collection('nickname_claims').findOne({_id:key});
-    const doc = claim ? await users.findOne({_id:claim.userId}) : null;
+    const doc = claim ? await users.findOne({_id:claim.userId}) : await legacyNicknameOwner(db,null,nickname,null);
     // 변경 전 닉네임의 예약 기록을 실제 현재 닉네임으로 오인하지 않는다.
     if (!valid(doc) || nicknameBase(doc.state.profile.nickname).toLocaleLowerCase('en-US') !== key) return {version:1,reason:'not_found'};
     if (doc._id === userId) return {version:1,reason:'own_name'};
@@ -307,7 +312,7 @@ async function findPvpOpponent(userId, requestedNickname = '') {
   if(!selected)selected=await users.find({indexedPlayer:true,_id:{$ne:userId},matchKey:{$lt:pivot}}).sort({matchKey:1,_id:1}).limit(1).next();
   return selected?{version:1,opponent:createProfile(selected.state.profile)}:{version:1,reason:'no_players'};
 }
-module.exports = { activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
+module.exports = { runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
 
 // Names are claimed in MongoDB by a unique _id. Claims are never released, so a
 // concurrent reset/save cannot let a second account take the same nickname.
@@ -322,6 +327,7 @@ async function claimNickname(db, session, userId, preferred) {
     const claim=await claims.findOne({_id:key},{session});
     if(claim && claim.userId===userId) return claim.nickname;
     if(claim) continue;
+    if(await legacyNicknameOwner(db,session,name,userId))continue;
     await claims.insertOne({_id:key,userId,nickname:name},{session}); return name;
   }
   throw new Error('사용 가능한 닉네임을 생성하지 못했습니다.');
@@ -357,23 +363,185 @@ async function ensureNicknames() {
 function playerIndex(userId,state){
  const profile=createProfile(state.profile);const power=getRaidAttackPower(profile),enhance=getCurrentEnhanceLevel(profile);
  let h=2166136261;for(const c of userId){h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;}
- return {indexVersion:3,nicknameSchema:1,indexedPlayer:true,rankPower:power,matchKey:h/4294967296,
+ return {indexVersion:4,nicknameSchema:1,indexedPlayer:true,rankPower:power,matchKey:h/4294967296,
  rankSnapshot:{nickname:profile.nickname,power,level:profile.level,enhance,weaponName:getWeaponInfo(enhance,profile.job)[0]}};
 }
 let playerIndexPromise=null;
 async function ensurePlayerIndexes(){
  if(!playerIndexPromise)playerIndexPromise=(async()=>{
-   await ensureNicknames();const users=await getCollection();
+   const users=await getCollection();
    await Promise.all([
      users.createIndex({indexedPlayer:1,rankPower:-1,_id:1},{name:'power_top5_v1'}),
-     users.createIndex({indexedPlayer:1,matchKey:1,_id:1},{name:'pvp_seek_v1'})
+     users.createIndex({indexedPlayer:1,matchKey:1,_id:1},{name:'pvp_seek_v1'}),
+     users.createIndex({'state.profile.nickname':1},{name:'nickname_lookup_v1',collation:{locale:'en',strength:2}})
    ]);
+
+ })().catch(err=>{playerIndexPromise=null;throw err;});
+ return playerIndexPromise;
+}
+
+// Full refresh runs independently of ranking requests. Concurrent saves win via revision checks.
+let playerBackfillPromise=null,playerBackfillComplete=false;
+function startPlayerIndexMaintenance(){
+ if(playerBackfillPromise)return playerBackfillPromise;
+ playerBackfillPromise=(async()=>{
+   await ensurePlayerIndexes();
+   await ensureNicknames();
+   const users=await getCollection();
    // One-time legacy backfill; revision condition prevents overwriting newer profile metadata.
-   for await(const doc of users.find({indexVersion:{$ne:3},'state.profile':{$exists:true}})){
+   for await(const doc of users.find({indexVersion:{$ne:4},'state.profile':{$exists:true}})){
      if(typeof doc._id!=='string'||!doc.state?.profile)continue;
      const rev=doc.revision||0,filter=rev?{_id:doc._id,revision:rev}:{_id:doc._id,$or:[{revision:0},{revision:{$exists:false}}]};
      await users.updateOne(filter,{$set:playerIndex(doc._id,doc.state)});
    }
- })().catch(err=>{playerIndexPromise=null;throw err;});
- return playerIndexPromise;
+   // Retry revision conflicts on the next request rather than silently reporting completion.
+   playerBackfillComplete=!(await users.findOne({indexVersion:{$ne:4},'state.profile':{$exists:true}},{projection:{_id:1}}));
+   if(!playerBackfillComplete)playerBackfillPromise=null;
+ })().catch(()=>{playerBackfillPromise=null;playerBackfillComplete=false;console.error('[랭킹 갱신] 백그라운드 갱신을 완료하지 못했습니다. 다음 조회에서 다시 시도합니다.');});
+ return playerBackfillPromise;
+}
+
+// Durable request receipts: same request ID never commits a mutation twice.
+const {AsyncLocalStorage}=require('async_hooks');
+const {createHash,randomUUID}=require('crypto');
+const requestContext=new AsyncLocalStorage();
+function smallReply(text){return {version:'2.0',template:{outputs:[{simpleText:{text}}]}};}
+async function runRequestOnce(userId,token,utterance,callback){
+  if(!token)return callback();
+  const receipts=(await database()).collection('request_receipts');
+  const id=createHash('sha256').update(userId+'\0'+token).digest('hex');
+  const fingerprint=createHash('sha256').update(utterance).digest('hex'),owner=randomUUID();
+  try{await receipts.insertOne({_id:id,fingerprint,owner,status:'running',leaseUntil:new Date(Date.now()+120000),createdAt:new Date()});}
+  catch(err){
+    if(err.code!==11000)throw err;
+    const old=await receipts.findOne({_id:id});
+    if(old.fingerprint!==fingerprint)return smallReply('동일 요청 식별자로 다른 명령이 전달되었습니다. 다시 입력해 주세요.');
+    if(old.status==='done')return old.response;
+    if(old.status==='applied')return smallReply('이미 처리된 요청입니다. 재화와 횟수는 다시 소모하지 않았습니다. /프로필에서 확인해 주세요.');
+    const acquired=await receipts.updateOne({_id:id,status:'running',leaseUntil:{$lt:new Date()}},{$set:{owner,leaseUntil:new Date(Date.now()+120000)}});
+    if(acquired.matchedCount!==1)return smallReply('⏳ 같은 요청을 처리 중입니다. 중복 실행하지 않았습니다.');
+  }
+  return requestContext.run({id,owner},async()=>{
+    try{
+      const response=await callback();
+      await receipts.updateOne({_id:id,owner},{$set:{status:'done',response,completedAt:new Date()}});
+      return response;
+    }catch(err){
+      // A committed receipt must survive errors while constructing the response.
+      await receipts.updateOne({_id:id,owner,status:'running'},{$set:{leaseUntil:new Date(0)}});
+      throw err;
+    }
+  });
+}
+async function businessTransaction(callback){
+ return transaction(async(db,session)=>{
+   const ctx=requestContext.getStore(),receipts=db.collection('request_receipts');
+   if(ctx){const receipt=await receipts.findOne({_id:ctx.id},{session});if(!receipt||receipt.owner!==ctx.owner||receipt.status!=='running')throw Object.assign(new Error('이미 처리되었거나 만료된 요청입니다.'),{code:'DUPLICATE_REQUEST'});}
+   const value=await callback(db,session);
+   if(ctx)await receipts.updateOne({_id:ctx.id,owner:ctx.owner,status:'running'},{$set:{status:'applied',appliedAt:new Date()}},{session});
+   return value;
+ });
+}
+
+// Migrate only the requested account. Bulk migration stays in background maintenance.
+async function ensureUserNickname(userId){
+ validateUserId(userId);
+ const current=await (await getCollection()).findOne({_id:userId},{projection:{nicknameSchema:1}});
+ if(!current || current.nicknameSchema===1)return;
+ return nicknameTransaction(async(db,session)=>{
+   const users=db.collection('sessions'),doc=await users.findOne({_id:userId},{session});
+   if(!doc||!doc.state?.profile||doc.nicknameSchema===1)return;
+   const state=withUserId(doc.state,userId);
+   state.profile.nickname=await claimNickname(db,session,userId,state.profile.nickname||createProfile({}).nickname);
+   await users.updateOne({_id:userId},{$set:{state,...playerIndex(userId,state)},$inc:{revision:1}},{session});
+ });
+}
+
+// Bulk jobs commit one bounded batch at a time, together with their result summary.
+async function getBulkOpening(userId){return (await database()).collection('bulk_open_jobs').findOne({_id:userId});}
+function bulkOpeningText(job){
+ if(!job)return '';
+ if(job.status==='running')return '📦 상자 일괄개봉 진행 중\n'+Number(job.total||0).toLocaleString()+'개 개봉 완료\n/상자 일괄개봉으로 진행 상황을 확인하세요.';
+ if(job.status==='done' && !job.total)return '개봉할 수 있는 상자가 없습니다.';
+ if(job.status==='error')return '⚠️ 상자 개봉 중 오류로 일시 중단했습니다. 이미 완료된 보상은 보존됩니다. /상자 일괄개봉으로 다시 시도하세요.';
+ return ['📦 [상자 일괄개봉]',...(job.results||[]).flatMap(x=>['',x.name+' : '+x.count.toLocaleString()+'개',...(x.cash?['💵 현금 +'+x.cash.toLocaleString()+'원']:[]),...(x.gold?['🧈 금괴 +'+x.gold.toLocaleString()+'개']:[]),...(x.gem?['💎 보석 +'+x.gem.toLocaleString()+'개']:[]),...(x.titles?.length?['🏆 칭호 : '+x.titles.join(', ')]:[]),...(x.avatars?.length?['🎭 아바타 : '+x.avatars.join(', ')]:[])]),'','총 '+job.total.toLocaleString()+'개 개봉 완료.',...(job.unregistered?['미등록 상자는 보관했습니다.']:[])].join('\n');
+}
+async function startBulkOpening(userId){
+ await ensureUserNickname(userId);
+ return businessTransaction(async(db,session)=>{
+  const jobs=db.collection('bulk_open_jobs'),existing=await jobs.findOne({_id:userId},{session});
+  if(existing?.status==='running')return existing;
+  if(existing?.status==='done' && !existing.delivered){await jobs.updateOne({_id:userId},{$set:{delivered:true}},{session});return existing;}
+  const doc=await db.collection('sessions').findOne({_id:userId},{session});
+  if(!doc?.state?.profile)return {status:'done',total:0,results:[]};
+  if(existing?.status==='error'){existing.status='running';await jobs.replaceOne({_id:userId},existing,{session});return existing;}
+  // Writing the user revision also serializes job creation with in-flight turns.
+  await db.collection('sessions').updateOne({_id:userId},{$inc:{revision:1}},{session});
+  const job={_id:userId,status:'running',total:0,results:[],createdAt:new Date()};
+  await jobs.replaceOne({_id:userId},job,{upsert:true,session});return job;
+ });
+}
+async function processBulkOpeningBatch(userId){
+ return transaction(async(db,session)=>{
+  const jobs=db.collection('bulk_open_jobs'),job=await jobs.findOne({_id:userId,status:'running'},{session});if(!job)return;
+  const users=db.collection('sessions'),doc=await users.findOne({_id:userId},{session});if(!doc?.state?.profile)throw Error('계정을 찾을 수 없습니다.');
+  const state=withUserId(doc.state,userId);state.profile=createProfile(state.profile);
+  const batch=processBoxBatch(state.profile,100);
+  if(!batch){job.status='done';job.unregistered=state.profile.inventory.some(x=>x.category==='box');}
+  else{
+    job.total+=batch.count;
+    const row=job.results.find(x=>x.name===batch.name);
+    if(row){for(const k of ['count','cash','gold','gem'])row[k]+=batch[k];row.titles.push(...batch.titles);row.avatars.push(...batch.avatars);}else job.results.push(batch);
+    await users.updateOne({_id:userId},{$set:{state,...playerIndex(userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
+  }
+  await jobs.replaceOne({_id:userId},job,{session});return job;
+ });
+}
+
+// Raid payout plans are immutable, one receipt per generation/user prevents double credit.
+async function payOneRaidReward(planId,reward){
+ return transaction(async(db,session)=>{
+  const receipts=db.collection('raid_reward_receipts'),id=planId+':'+reward.userId;
+  if(await receipts.findOne({_id:id},{session}))return;
+  const users=db.collection('sessions'),doc=await users.findOne({_id:reward.userId},{session});if(!doc?.state?.profile)throw Error('레이드 보상 계정이 없습니다.');
+  const state=withUserId(doc.state,reward.userId);
+  addResources(state.profile,{cash:reward.cash,gold:reward.gold,gem:reward.gem,keys:reward.keys});
+  await users.updateOne({_id:reward.userId},{$set:{state,...playerIndex(reward.userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
+  await receipts.insertOne({_id:id,createdAt:new Date()},{session});
+ });
+}
+let maintenanceTimer=null,maintenanceBusy=false,backgroundIndexes=null;
+async function ensureBackgroundIndexes(db){
+ if(!backgroundIndexes)backgroundIndexes=Promise.all([
+  db.collection('bulk_open_jobs').createIndex({status:1},{name:'bulk_status_v1'}),
+  db.collection('raid_payouts').createIndex({status:1},{name:'payout_status_v1'})
+ ]).catch(err=>{backgroundIndexes=null;throw err;});
+ return backgroundIndexes;
+}
+async function runBackgroundBatch(){
+ if(maintenanceBusy)return;maintenanceBusy=true;
+ try{
+  const db=await database();
+  for(const job of await db.collection('bulk_open_jobs').find({status:'running'}).limit(5).toArray()){
+   try{await processBulkOpeningBatch(job._id);}catch(_){console.error('[상자 작업] 배치 실패, 자동 재시도 예정');}
+  }
+  for(const plan of await db.collection('raid_payouts').find({status:'pending'}).limit(1).toArray()){
+   for(const reward of plan.rewards.slice(plan.offset||0,(plan.offset||0)+10)){
+    await payOneRaidReward(plan._id,reward);
+    // Concurrent workers may repeat a batch but receipts make credits exactly once.
+   }
+   const next=Math.min(plan.rewards.length,(plan.offset||0)+10);
+   await db.collection('raid_payouts').updateOne({_id:plan._id,offset:plan.offset||0},{$set:{offset:next,status:next===plan.rewards.length?'done':'pending'}});
+   if(next===plan.rewards.length){await db.collection('raids').updateOne({_id:RAID_ID,generation:plan.generation},{$set:{rewardPaid:true}});await db.collection('raid_history').updateOne({_id:plan._id},{$set:{rewardPaid:true}});}
+  }
+ }catch(_){console.error('[백그라운드 처리] 일시 실패, 자동 재시도 예정');}
+ finally{maintenanceBusy=false;}
+}
+function startBackgroundWorkers(){if(maintenanceTimer)return;runBackgroundBatch();maintenanceTimer=setInterval(runBackgroundBatch,500);maintenanceTimer.unref?.();}
+
+async function assertNoBulkJob(db,session,userId){
+ if(await db.collection('bulk_open_jobs').findOne({_id:userId,status:'running'},{session})){const err=Error('상자 일괄개봉 진행 중입니다.');err.code='BULK_RUNNING';throw err;}
+}
+async function legacyNicknameOwner(db,session,name,excludeId){
+ return db.collection('sessions').findOne({_id:{$ne:excludeId},'state.profile.nickname':name},{...(session?{session}:{}),collation:{locale:'en',strength:2}});
 }
