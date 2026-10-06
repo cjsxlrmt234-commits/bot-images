@@ -1,9 +1,9 @@
 // server.js — 카카오톡 챗봇 스킬 서버
 const path = require('path');
 const express = require('express');
-const { normalizeImageFilename, parsePvpCommand, startGame, processTurn, createProfile, getSecondJobCode, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
+const { validateCommandInput, normalizeImageFilename, parsePvpCommand, startGame, processTurn, createProfile, getSecondJobCode, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
 const { buildResponse, parseSkillRequest } = require('./kakao');
-const { activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
+const { runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
 
 const app = express();
 app.set('trust proxy', true);
@@ -36,34 +36,41 @@ function safeErrorDetails(err) {
 }
 
 // Missing/slow image servers must not suppress a completed command's text.
-const imageChecks=new Map();
+const imageChecks=new Map(),imagePending=new Map();
+function probeImage(url) {
+ if(imagePending.has(url))return imagePending.get(url);
+ const previous=imageChecks.get(url);
+ const task=(async()=>{
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),2500);
+  try{
+   let response=await fetch(url,{method:'HEAD',signal:controller.signal,redirect:'error'});
+   if(response.status===405 || response.status===501){response=await fetch(url,{method:'GET',headers:{Range:'bytes=0-0'},signal:controller.signal,redirect:'error'});await response.body?.cancel();}
+   const ok=response.ok && /^image\//i.test(response.headers.get('content-type')||'');
+   if(ok)imageChecks.set(url,{ok:true,until:Date.now()+3600000});
+   else if(response.status===404 || response.status===410)imageChecks.set(url,{ok:false,until:Date.now()+30000});
+   else imageChecks.set(url,{ok:!!previous?.ok,until:Date.now()+3000});
+   return !!imageChecks.get(url)?.ok;
+  }catch(_){imageChecks.set(url,{ok:!!previous?.ok,until:Date.now()+3000});return !!previous?.ok;}
+  finally{clearTimeout(timer);imagePending.delete(url);if(imageChecks.size>512)imageChecks.delete(imageChecks.keys().next().value);}
+ })();imagePending.set(url,task);return task;
+}
 async function buildSafeResponse(text,choices=[],imageUrl=null) {
-  imageUrl=normalizeImageFilename(imageUrl);
-  let image=null;
-  if(typeof imageUrl==='string' && /^https?:\/\//i.test(imageUrl) && typeof fetch==='function') {
-    const cached=imageChecks.get(imageUrl);
-    if(cached && cached.until>Date.now())image=cached.ok?imageUrl:null;
-    else {
-      const controller=new AbortController();let timer;
-      try {
-        const response=await Promise.race([
-          fetch(imageUrl,{method:'HEAD',signal:controller.signal,redirect:'error'}),
-          new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(null);},500);})
-        ]);
-        const ok=!!(response && response.ok && /^image\//i.test(response.headers.get('content-type') || ''));
-        if(ok)image=imageUrl;
-        if(imageChecks.size>=256)imageChecks.delete(imageChecks.keys().next().value);
-        imageChecks.set(imageUrl,{ok,until:Date.now()+60000});
-      } catch (_) { imageChecks.set(imageUrl,{ok:false,until:Date.now()+15000}); }
-      finally {clearTimeout(timer);}
-    }
+ imageUrl=normalizeImageFilename(imageUrl);let image=null;
+ if(typeof imageUrl==='string' && /^https?:\/\//i.test(imageUrl) && typeof fetch==='function'){
+  const cached=imageChecks.get(imageUrl);
+  if(cached?.until>Date.now())image=cached.ok?imageUrl:null;
+  else if(cached?.ok){image=imageUrl;void probeImage(imageUrl);}
+  else{
+   let wait;try{if(await Promise.race([probeImage(imageUrl),new Promise(resolve=>{wait=setTimeout(()=>resolve(false),700);})]))image=imageUrl;}
+   finally{clearTimeout(wait);}
   }
-  return buildResponse(text,choices,image);
+ }
+ return buildResponse(text,choices,image);
 }
 
 const RESTART_WORDS = ['다시하기', '재시작', '시작', '게임시작', '시작하기'];
 
-app.post('/skill', async (req, res) => {
+async function handleSkill(req, res) {
   let stage = '카카오 요청 해석';
   const delayed = setTimeout(() => console.warn('[처리 지연] #' + req.traceId + ' 단계=' + stage + ' (3초 경과, 완료 여부를 확인하세요)'), 3000);
   const clearDelayed = () => clearTimeout(delayed);
@@ -79,12 +86,21 @@ app.post('/skill', async (req, res) => {
 
     // 요청 발신 UID를 기준으로 검사하며 명령에 적힌 대상 UID로 권한을 판정하지 않는다.
     if (requiresGameAdmin(utterance) && !isGameAdmin(userId)) return res.json(await buildSafeResponse('관리자만 사용할 수 있는 명령어입니다.', []));
+    const invalidInput=validateCommandInput(utterance);
+    if(invalidInput)return res.json(await buildSafeResponse(invalidInput,[]));
+    if(utterance==='/상자 일괄개봉'){
+      const job=await startBulkOpening(userId);
+      const balances=job.status==='done' && job.total? '\n\n'+resourceText((await getSession(userId)).profile):'';
+      return res.json(await buildSafeResponse(bulkOpeningText(job)+balances,[]));
+    }
+    const activeBulk=await getBulkOpening(userId);
+    if(activeBulk?.status==='running')return res.json(await buildSafeResponse(bulkOpeningText(activeBulk),[]));
     const adminRaidCommand=utterance === '/관리자 레이드';
     const adminJobCommand=/^\/관리자\s+전직\s+\S+$/.test(utterance);
     const adminSpeedCommand=/^\/관리자\s+배속\s+\d+$/.test(utterance);
-    const adminAttackCommand=/^\/관리자\s+공격력\s+\d+$/.test(utterance);
+    const adminAttackCommand=/^\/관리자\s+공격력(?:\s|$)/.test(utterance);
     // game.js 내부에서 처리하는 관리자 전용 명령은 재화 지급 파서가 가로채지 않도록 통과시킨다.
-    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !/^\/관리자\s+횟수$/.test(utterance)) {
+    if (/^\/관리자(?:\s|$)/.test(utterance) && !adminRaidCommand && !adminJobCommand && !adminSpeedCommand && !adminAttackCommand && !/^\/관리자\s+횟수$/.test(utterance)) {
       const premium = utterance.match(/^\/관리자\s+(\S+)\s+패스\s+활성화$/);
       if (premium) {
         stage = '관리자 유료 패스 활성화';
@@ -106,7 +122,8 @@ app.post('/skill', async (req, res) => {
     }
     if (utterance === '/랭킹') {
       stage = '공격력 랭킹 조회';
-      return res.json(await buildSafeResponse(formatRanking(await getPowerRanking()), []));
+      const rows=await getPowerRanking();
+      return res.json(await buildSafeResponse(formatRanking(rows)+(rows.indexUpdating?'\n\n⏳ 기존 유저 정보를 갱신 중입니다. 현재 저장된 순위이며 완료 후 반영됩니다.':''), []));
     }
 
     stage = 'MongoDB 조회';
@@ -128,7 +145,7 @@ app.post('/skill', async (req, res) => {
       const raid=await getSharedRaid();
       return res.json(await buildSafeResponse([buildRaidText(state.profile,{raid,attacked:false}),formatRaidReward(raid,userId)].filter(Boolean).join('\n\n'),[],RAID_IMAGE));
     }
-    const combatCommand=/^\/(파밍|사냥)(?:\s|$)/.test(utterance);
+    const combatCommand=/^\/(파밍|사냥)$/.test(utterance);
     if(combatCommand && state._combatReadyAt > Date.now()) return res.json(await buildSafeResponse('⏳ 파밍·사냥은 2초마다 가능합니다. '+((state._combatReadyAt-Date.now())/1000).toFixed(1)+'초 후 다시 입력하세요.',[]));
 
     stage = '게임 명령 처리';
@@ -193,6 +210,8 @@ app.post('/skill', async (req, res) => {
     stage = '카카오 응답 생성';
     return res.json(await buildSafeResponse(result.text, result.choices, getImageUrl(req, result.category, result.imageUrl)));
   } catch (err) {
+    if(err?.code==='BULK_RUNNING')return res.json(await buildSafeResponse('📦 상자 일괄개봉 진행 중입니다. /상자 일괄개봉으로 확인하세요.',[]));
+    if(err?.code==='DUPLICATE_REQUEST')return res.json(await buildSafeResponse('이미 처리 중이거나 완료된 요청입니다. 다시 소모하지 않았습니다.',[]));
     if (err && err.code === 'COOLDOWN') return res.json(await buildSafeResponse('⏳ 파밍·사냥은 2초마다 가능합니다. '+(Math.max(0,err.remainingMs)/1000).toFixed(1)+'초 후 다시 입력하세요.',[]));
     if (err && err.code === 'STATE_CONFLICT') return res.json(await buildSafeResponse('다른 명령이 먼저 반영되었습니다. 이번 명령을 다시 입력해 주세요.', []));
     console.error('[스킬 처리 실패] 단계=' + stage + '\n' + safeErrorDetails(err));
@@ -200,7 +219,21 @@ app.post('/skill', async (req, res) => {
     return res.json({ version: '2.0', template: { outputs: [
       { simpleText: { text: '오류가 발생했습니다. 잠시 후 다시 시도해주세요.' } }
     ] } });
-  }
+  } finally {clearDelayed();}
+}
+
+let missingRequestIdLogged=false;
+app.post('/skill',async(req,res)=>{
+ try{
+  const parsed=parseSkillRequest(req.body);
+  const token=req.get?.('X-Request-Id') || req.get?.('Idempotency-Key') || req.body?.userRequest?.callbackUrl;
+  if(!token && !missingRequestIdLogged){missingRequestIdLogged=true;console.warn('[중복 방지] 요청 식별자가 없는 요청은 정상 연속 명령과 구분할 수 없어 재전송 중복 방지를 적용하지 않습니다.');}
+  const capture={once:()=>{},json:value=>value};
+  const response=typeof parsed?.userId==='string' && parsed.userId.trim()?
+    await runRequestOnce(parsed.userId,typeof token==='string'?token:null,String(parsed.utterance||''),()=>handleSkill(req,capture)):
+    await handleSkill(req,capture);
+  return res.json(response);
+ }catch(err){console.error('[요청 처리 실패] '+safeErrorDetails(err));return res.json({version:'2.0',template:{outputs:[{simpleText:{text:'요청 처리에 실패했습니다. 잠시 후 다시 입력해 주세요.'}}]}});}
 });
 
 app.get('/', (req, res) => {
@@ -211,6 +244,11 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   if (!process.env.MONGODB_URI) console.error('[설정 확인] MONGODB_URI가 없습니다. 서버 환경변수에 MongoDB 접속 주소를 등록해야 게임 데이터를 조회·저장할 수 있습니다.');
   console.log('[서버 시작] 요청 진단 로그 활성화 /skill');
-  app.listen(PORT, () => console.log(`Skill server listening on port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`Skill server listening on port ${PORT}`);
+    startPlayerIndexMaintenance();
+    startBackgroundWorkers();
+    if(typeof fetch==='function')void probeImage(normalizeImageFilename(RAID_IMAGE));
+  });
 }
 module.exports = app;
