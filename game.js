@@ -1,12 +1,87 @@
+
+// Release contract: checked by server.js and db.js before accepting requests.
+const RELEASE_CONTRACT = '20261007-ops-v2';
+const RESOURCE_FIELDS = ['cash','gold','gem','keys','supplyItem'];
+function resourceInteger(value) {
+ if(!Number.isSafeInteger(value)||value<0)throw Object.assign(Error('재화 저장 범위를 초과했습니다. 이번 요청은 저장하지 않습니다.'),{code:'INVALID_RESOURCE'});
+ return value;
+}
+function validateResources(p){for(const key of RESOURCE_FIELDS)resourceInteger(p[key]??0);return p;}
+function guardResources(p){
+ validateResources(p);
+ for(const key of RESOURCE_FIELDS){let value=p[key]??0;Object.defineProperty(p,key,{enumerable:true,configurable:true,get(){return value},set(next){value=resourceInteger(next)}});}
+ return p;
+}
+function changeResources(p,delta){
+ const next={};for(const [k,v]of Object.entries(delta)){if(!RESOURCE_FIELDS.includes(k)||!Number.isSafeInteger(v))throw Error('올바르지 않은 재화 변경');next[k]=resourceInteger((p[k]??0)+v);}
+ Object.assign(p,next);return p;
+}
+function itemQuantity(item){return item?.category==='box'?resourceInteger(item.count??1):1;}
+function normalizeBoxInventory(p){
+ const items=[],boxes=new Map();
+ for(const item of p.inventory||[]){
+  if(item?.category!=='box'){items.push(item);continue;}
+  const count=itemQuantity(item);if(!count)continue;
+  const source=item.boxSource||'hunt',key=JSON.stringify([source,item.name]);
+  if(boxes.has(key))boxes.get(key).count=resourceInteger(boxes.get(key).count+count);
+  else {const row={...item,boxSource:source,count};boxes.set(key,row);items.push(row);}
+ }
+ p.inventory=items;return p;
+}
+function boxMatches(item,box){return item?.category==='box'&&item.name===box.name&&(item.boxSource||'hunt')===box.source;}
+function countBoxes(p,box=null){return (p.inventory||[]).reduce((n,x)=>n+(x?.category==='box'&&(!box||boxMatches(x,box))?itemQuantity(x):0),0);}
+function consumeBoxes(p,box,count){
+ let left=count;p.inventory=(p.inventory||[]).filter(item=>{if(!left||!boxMatches(item,box))return true;const have=itemQuantity(item),used=Math.min(have,left);left-=used;item.count=have-used;return item.count>0});
+ if(left)throw Error('상자 수량이 부족합니다.');
+}
+function addInventoryBox(p,item){p.inventory||=[];p.inventory.push({...item,count:itemQuantity(item)});normalizeBoxInventory(p);}
 function dailyLimitMessage(label,count,max) { return '⚠️ 오늘의 '+label+' 횟수를 모두 소모했습니다.\n일일 이용 횟수 : '+displayNumber(count)+' / '+displayNumber(max)+'회'; }
 // Reject trailing arguments before randomness, spending, attendance or cooldown changes.
-function validateCommandInput(utterance) {
- const input=String(utterance||'').trim().replace(/\s+/g,' '),parts=input.split(' '),root=parts[0],arg=parts.slice(1).join(' ');
- const rules={'/파밍':[''],'/사냥':[''],'/던전':[''],'/크리처':['','뽑기'],'/크리처뽑기':[''],'/제련':['','강화'],'/제련강화':['']};
- if(Object.hasOwn(rules,root)&&!rules[root].includes(arg))return '⚠️ 올바른 명령어를 입력해 주세요.\n사용법 : '+(root==='/크리처'?'/크리처 또는 /크리처 뽑기':root==='/제련'?'/제련 또는 /제련 강화':root)+'\n요청은 실행되지 않았습니다.';
- return '';
+function validateCommandInput(utterance, profile = null) {
+ const input=String(utterance||'').trim().replace(/\s+/g,' '),[root,...rest]=input.split(' '),arg=rest.join(' ');
+ if(!root.startsWith('/'))return '';
+ const positive=x=>/^[1-9]\d*$/.test(x)&&Number.isSafeInteger(Number(x));
+ const job=x=>Object.values(JOB_CATALOG).some(v=>v[0]===x);
+ const noArgs=['/오늘','/파밍','/사냥','/던전','/프로필','/스탯','/보조','/업적','/업적목록','/전리품','/인벤토리','/출석','/광고','/누적','/랭킹','/레이드','/가이드','/도움말','/메인','/id','/초기화','/4655','/5292','/9523','/7586','/크리처뽑기','/제련강화','/증폭강화','/공명강화','/각인변경','/패스보상'];
+ let valid=false;
+ if(noArgs.includes(root))valid=arg==='';
+ else if(['/제련','/증폭','/공명'].includes(root))valid=['','강화'].includes(arg);
+ else if(root==='/크리처')valid=['','뽑기'].includes(arg);
+ else if(root==='/패스')valid=['','보상'].includes(arg);
+ else if(['/강화','/보조강화'].includes(root))valid=!arg||(positive(arg)&&Number(arg)<=20);
+ else if(['/열쇠','/보급','/배속','/컬렉션'].includes(root))valid=!arg||positive(arg);
+ else if(root==='/상자')valid=!arg||['일괄개봉','재개','중단'].includes(arg)||(/^\d+ \d+$/.test(arg)&&rest.every(positive));
+ else if(['/칭호','/아바타'].includes(root))valid=!arg||(/^장착 [1-9]\d*$/.test(arg)&&positive(rest[1]));
+ else if(root==='/각인')valid=!arg||arg==='변경'||/^(해금|잠금|해제) [1-5]$/.test(arg);
+ else if(['/각인해금','/각인잠금','/각인해제'].includes(root))valid=/^[1-5]$/.test(arg);
+ else if(root==='/전직')valid=!arg||arg==='변경'||job(arg)||(/^변경 \S+$/.test(arg)&&job(rest[1]))||/^스킬 강화(?: (?:1|2|1차|2차))?$/.test(arg);
+ else if(root==='/전직변경')valid=!arg||job(arg);
+ else if(root==='/전직스킬강화')valid=/^(?:1|2|1차|2차)?$/.test(arg);
+ else if(root==='/금고')valid=!arg||['구매','레벨업','해금','출금','찾기'].includes(arg)||positive(arg);
+ else if(root==='/교환')valid=!arg||(/^[1-6] [1-9]\d*$/.test(arg)&&positive(rest[1]));
+ else if(['/암시장','/일일상점'].includes(root))valid=!arg||/^구매 [1-3]$/.test(arg);
+ else if(root==='/대결'){const cmd=parsePvpCommand(input);valid=!cmd.invalid&&Number.isSafeInteger(cmd.count)&&cmd.count>=1&&cmd.count<=10;}
+ else if(root==='/스킬'){
+  const m=arg.match(/^(1|2|1차|2차)(?: (.*))?$/);
+  if(!arg)valid=true;
+  else if(m){
+   const action=m[2]||'',code=profile?(m[1][0]==='1'?getBaseJobCode(profile):getSecondJobCode(profile)):null;
+   const allowed={berserker:/^(?:활성화|비활성화)?$/,swordmaster:/^(?:대검|광검|도)?$/,ranger:/^(?:설치|회수)?$/,assassin:/^(?:상인|광부|보석상|귀족)?$/,shadow:/^(?:구매 [1-3])?$/,necromancer:/^(?:교환 (?:현금|금괴|보석|비밀열쇠) [1-9]\d*)?$/,elementalist:/^(?:시작 (?:이지|하드) (?:현금|금괴|보석|비밀열쇠) [1-9]\d*|선택 (?:불|물|대지|바람|얼음|전기|빛|어둠)|정산|포기)?$/};
+   valid=code?(allowed[code]||/^$/).test(action):(!action||Object.values(allowed).some(r=>r.test(action)));
+   if(valid && /\d+$/.test(action))valid=positive(action.split(' ').pop());
+  }
+ }
+ else if(root==='/관리자'){
+  valid=!arg||arg==='점검'||/^(보상|작업) 실패(?: [1-9]\d*)?$/.test(arg)||/^보상 재시도 [1-9]\d* \S+$/.test(arg)||/^작업 재개 \S+$/.test(arg)||['레이드','횟수'].includes(arg)||(/^전직 \S+$/.test(arg)&&job(rest[1]))||(/^배속 [1-9]\d*$/.test(arg)&&positive(rest[1])&&Number(rest[1])<=1000)||(/^공격력 (?:해제|[1-9]\d*)$/.test(arg)&&(rest[1]==='해제'||positive(rest[1])&&Number(rest[1])<=1e12));
+  if(!valid&&rest.length>=3){const action=rest[1],value=rest.slice(2).join(' ');valid=Object.hasOwn(ADMIN_RESOURCES,action)?positive(value):action==='패스'?value==='활성화':action==='닉네임'?!!value&&Array.from(value).length<=60&&!/[\x00-\x1f\x7f]/.test(value):false;}
+ }
+ return valid?'':'⚠️ 올바른 명령어를 입력해 주세요.\n사용법은 /도움말 또는 해당 메뉴에서 확인하세요.\n요청은 실행되지 않았습니다.';
 }
+
 function normalizeEquippedCosmetics(p) {
+ const legacy=(Array.isArray(p.inventory)?p.inventory:[]).filter(x=>x?.category==='costume' && x.name==='2026 시즌1 코스튬');
+ if(legacy.length){p.ownedAvatars=[...new Set([...(Array.isArray(p.ownedAvatars)?p.ownedAvatars:[]),...legacy.map(x=>x.name)])];p.inventory=p.inventory.filter(x=>!legacy.includes(x));}
+
  for(const [owned,equipped] of [['ownedTitles','equippedTitle'],['ownedAvatars','equippedAvatar']]) {
   p[owned]=[...new Set((Array.isArray(p[owned])?p[owned]:[]).filter(x=>typeof x==='string'&&x.trim()))];
   const candidate=typeof p[equipped]==='string'?p[equipped]:'';
@@ -3381,7 +3456,34 @@ function addExp(profile, baseAmount, rewardMultiplier = getExpMultiplier(profile
   return { leveledUp: levelUpMessages.length > 0, msg: levelUpMessages.join('\n'), gained: finalAmount };
 }
 
+
+function unclaimedPassRewards(pass,premium){
+ const level=Number.isSafeInteger(pass.level)&&pass.level>0?pass.level:1;
+ const free=new Set(pass.freeClaimedRewards||pass.claimedRewards||[]),paid=new Set(pass.paidClaimedRewards||pass.claimedRewards||[]);
+ const claimed=premium?paid:free,base=passRewardAt(2,premium),totals={};
+ const valid=[...claimed].filter(n=>Number.isSafeInteger(n)&&n>=1&&n<=level);
+ const count=level-valid.length;
+ for(const key of Object.keys(base))totals[key]=resourceInteger(base[key]*count);
+ for(const n of [1,5,10,15,20])if(n<=level&&!claimed.has(n)){const reward=passRewardAt(n,premium);for(const k of Object.keys(totals))totals[k]+=reward[k]-base[k];}
+ if(premium)for(const n of free)if(Number.isSafeInteger(n)&&n>=1&&n<=level&&!paid.has(n)){const old=passRewardAt(n,false);for(const k of Object.keys(totals))totals[k]-=old[k];}
+ for(const k of Object.keys(totals))resourceInteger(totals[k]);
+ return {totals,count,avatar:premium&&level>=10&&!paid.has(10),title:premium&&level>=20&&!paid.has(20)};
+}
+function settlePreviousPass(p){
+ const old=p.seasonPass;if(!old||!/^\d{4}-(0[1-9]|1[0-2])$/.test(old.month)||old.month>=getKSTMonthString())return;
+ p.passSettlements||=[];if(p.passSettlements.some(x=>x.month===old.month))return;
+ const premium=old.premiumMonth===old.month,reward=unclaimedPassRewards(old,premium);
+ reward.totals.cash=applyAchievementCashBonus(reward.totals.cash,p);
+ changeResources(p,reward.totals);
+ const names=seasonPassCosmetics(old.month),items=[];p.ownedAvatars||=[];p.ownedTitles||=[];
+ if(reward.avatar&&!p.ownedAvatars.includes(names.avatar)){p.ownedAvatars.push(names.avatar);items.push(names.avatar);}
+ if(reward.title&&!p.ownedTitles.includes(names.title)){p.ownedTitles.push(names.title);items.push(names.title);}
+ p.passSettlements.push({month:old.month,...reward.totals,items,count:reward.count});p.passSettlements=p.passSettlements.slice(-12);
+}
+function passSettlementText(p){const r=p.passSettlements?.at(-1);return r?'📬 '+r.month+' 패스 미수령 자동 정산 : 현금 '+won(r.cash)+' / 금괴 '+displayNumber(r.gold)+'개 / 보석 '+displayNumber(r.gem)+'개 / 비밀열쇠 '+displayNumber(r.keys)+'개'+(r.items.length?'\n'+r.items.join(', '):''):'';}
+
 function checkAndResetSeasonPass(profile) {
+  settlePreviousPass(profile);
   const currentMonthStr = getKSTMonthString();
   const todayStr = getKSTDateString();
 
@@ -3491,12 +3593,18 @@ function passRewardAt(level, premium) {
   return reward;
 }
 
+function seasonPassCosmetics(month){
+ const match=String(month).match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+ if(!match)throw Error('시즌 월 형식이 올바르지 않습니다.');
+ const prefix=match[1]+'년 '+Number(match[2])+'월';
+ return {avatar:prefix+' 패스 코스튬',title:prefix+' 패스 정복자'};
+}
 function processPassCommand(profile) {
   const messages = claimDailyPassMissions(profile);
   const pass = profile.seasonPass;
   const premium = pass.premiumMonth === pass.month;
   const claimed = premium ? pass.paidClaimedRewards : pass.freeClaimedRewards;
-  const lines = [...messages,
+  const lines = [...messages,...(passSettlementText(profile)?[passSettlementText(profile),'']:[]),
     `🎫 [${pass.month} ${premium ? '유료' : '무료'} 시즌 패스]`,
     `• 현재 패스 레벨 : Lv.${displayNumber(pass.level)}`,
     `• 패스 경험치 : ${displayNumber(pass.exp)} / 100`,
@@ -3511,11 +3619,11 @@ function processPassCommand(profile) {
   ];
   for (const level of [1,5,10,15,20]) {
     const special = !premium ? '100,000원, 금괴 10개, 보석 1개, 비밀열쇠 1개' :
-      '1,000,000원, 금괴 100개, 보석 10개, ' + (level === 10 ? '2026 시즌1 코스튬' : level === 20 ? '2026 시즌1 패스 칭호' : '비밀열쇠 5개');
+      '1,000,000원, 금괴 100개, 보석 10개, ' + (level === 10 ? seasonPassCosmetics(pass.month).avatar : level === 20 ? seasonPassCosmetics(pass.month).title : '비밀열쇠 5개');
     lines.push(`• ${displayNumber(level)}레벨 보상 : ${special} ${claimed.includes(level) ? '(수령완료)' : ''}`);
   }
   lines.push('• 21레벨 이상 : 레벨마다 기본 보상 반복 획득', '', '💡 /패스 보상으로 수령 가능한 보상을 일괄 수령하세요.');
-  if (premium) lines.push('무료로 이미 수령한 레벨은 부족한 보상만 추가 지급됩니다.');
+  if (premium) {const pending=unclaimedPassRewards(pass,true);lines.push('무료로 이미 수령한 보상은 제외하고 차액만 지급합니다.','현재 미수령 차액 : 현금 '+won(pending.totals.cash)+' / 금괴 '+displayNumber(pending.totals.gold)+'개 / 보석 '+displayNumber(pending.totals.gem)+'개 / 비밀열쇠 '+displayNumber(pending.totals.keys)+'개','※ 현금 업적 보너스는 수령 시 별도 반영됩니다.');}
   return {text:lines.join('\n')};
 }
 
@@ -3533,12 +3641,13 @@ function processPassClaimRewards(profile) {
     const previous = premium && free.has(level) ? passRewardAt(level,false) : {cash:0,gold:0,gem:0,keys:0};
     for (const key of Object.keys(totals)) totals[key] += Math.max(0,reward[key]-previous[key]);
     if (premium && level === 10) {
-      const name = '2026 시즌1 코스튬';
-      profile.inventory.push({category:'costume',name,desc:'2026 시즌1 특별 패스 코스튬 아이템입니다.'});
+      const name = seasonPassCosmetics(pass.month).avatar;
+      profile.ownedAvatars ||= [];
+      if(!profile.ownedAvatars.includes(name))profile.ownedAvatars.push(name);
       items.push(name);
     }
     if (premium && level === 20) {
-      const name = '2026 시즌1 패스';
+      const name = seasonPassCosmetics(pass.month).title;
       if (!profile.ownedTitles.includes(name)) profile.ownedTitles.push(name);
       items.push('칭호: '+name);
     }
@@ -3625,6 +3734,7 @@ function createProfile(existing = {}) {
     : generateRandomNickname();
 
   let profile = {
+    passSettlements: Array.isArray(safeObj.passSettlements)?JSON.parse(JSON.stringify(safeObj.passSettlements)).slice(-12):[],
     firstEncounters: safeObj.firstEncounters && typeof safeObj.firstEncounters==='object'
       ? {farmSReached:safeObj.firstEncounters.farmSReached===true,huntUsed:safeObj.firstEncounters.huntUsed===true}
       : {farmSReached:safeObj.version!=null,huntUsed:safeObj.version!=null},
@@ -3714,7 +3824,8 @@ function createProfile(existing = {}) {
     }
   }
   renameLabels(profile.imprints);
-  return profile;
+  normalizeBoxInventory(profile);
+  return guardResources(profile);
 }
 
 function getVaultCapacity(vault) {
@@ -4445,7 +4556,7 @@ function addBoxToInventory(profile, boxKey) {
   const boxData = FARM_BOX_INFO[boxKey];
   if (!boxData) return null;
   if (!Array.isArray(profile.inventory)) profile.inventory = [];
-  profile.inventory.push({
+  addInventoryBox(profile,{
     category: 'box',
     boxSource: 'farm',
     name: boxData.name,
@@ -5172,7 +5283,7 @@ const RAID_TITLE = '거신을 쓰러뜨린 자';
 const RAID_AVATAR = '심연의 레이드 군주';
 function addRaidBox(profile) {
   if (!Array.isArray(profile.inventory)) profile.inventory=[];
-  profile.inventory.push({category:'box',boxSource:'raid',name:RAID_BOX_NAME,desc:'레이드 전용 칭호와 아바타를 각각 50% 확률로 획득합니다.'});
+  addInventoryBox(profile,{category:'box',boxSource:'raid',name:RAID_BOX_NAME,desc:'레이드 전용 칭호와 아바타를 각각 50% 확률로 획득합니다.'});
 }
 function openRaidBoxes(profile,count) {
   if (!Array.isArray(profile.ownedTitles))profile.ownedTitles=[];
@@ -5199,7 +5310,7 @@ function processBoxBatch(profile, limit = 100) {
   const catalog=getBoxCatalog();
   for(let i=0;i<catalog.length;i++) {
     const box=catalog[i];
-    const count=Math.min(limit,(profile.inventory||[]).filter(x=>x.category==='box' && x.name===box.name && (x.boxSource===box.source || (!x.boxSource && box.source==='hunt'))).length);
+    const count=Math.min(limit,countBoxes(profile,box));
     if(!count)continue;
     const before={cash:profile.cash||0,gold:profile.gold||0,gem:profile.gem||0};
     const titles=new Set(profile.ownedTitles||[]),avatars=new Set(profile.ownedAvatars||[]);
@@ -5218,7 +5329,7 @@ function processAllBoxes(profile) {
   for (let pass = 0; pass < catalog.length; pass++) {
     let opened = 0;
     catalog.forEach((box, index) => {
-      const count = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt'))).length;
+      const count = countBoxes(profile,box);
       if (!count) return;
       const before = [profile.cash || 0, profile.gold || 0, profile.gem || 0];
       const titles = new Set(profile.ownedTitles || []), avatars = new Set(profile.ownedAvatars || []);
@@ -5238,7 +5349,7 @@ function processAllBoxes(profile) {
     if (!opened) break;
   }
   if (!total) return { text: '개봉할 수 있는 상자가 없습니다.' };
-  const remaining = profile.inventory.filter(item => item.category === 'box').length;
+  const remaining = countBoxes(profile);
   lines.push('', '총 ' + total.toLocaleString() + '개 개봉 완료.', ...(remaining ? ['남은 상자 ' + remaining + '개는 보관했습니다. /상자 일괄개봉으로 이어서 개봉하세요. 미등록 상자는 개봉하지 않습니다.'] : []), '', resourceText(profile));
   return { text: lines.join('\n') };
 }
@@ -5257,7 +5368,7 @@ function processUpdatedBoxesCommand(profile, arg, bulkOpening = false) {
   if (parts.length === 0) {
     const lines = [`📦 [보유 상자 목록]`];
     catalog.forEach((box, index) => {
-      const count = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt'))).length;
+      const count = countBoxes(profile,box);
       lines.push(`${index + 1}. ${boxDisplayName(box)} : ${displayNumber(count)}개`);
     });
     lines.push(``, `💡 사용법: /상자 [번호] [개수] 또는 /상자 일괄개봉`);
@@ -5277,18 +5388,10 @@ function processUpdatedBoxesCommand(profile, arg, bulkOpening = false) {
 
   let openCount = parseInt(requestedCount, 10);
   if (!Number.isSafeInteger(openCount) || openCount < 1 || (!bulkOpening && openCount > MAX_ITEM_USE_PER_REQUEST)) return {text:'상자는 한 번에 1~1,000개까지 개봉할 수 있습니다.'};
-  const matchingBoxes = profile.inventory.filter(item => item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt')));
-  if (matchingBoxes.length === 0) return { text: `⚠️ 보유 중인 [${box.name}]가 없습니다.` };
-  openCount = Math.min(openCount, matchingBoxes.length);
-
-  let removed = 0;
-  profile.inventory = profile.inventory.filter(item => {
-    if (item.category === 'box' && item.name === box.name && (item.boxSource === box.source || (!item.boxSource && box.source === 'hunt')) && removed < openCount) {
-      removed++;
-      return false;
-    }
-    return true;
-  });
+  const available=countBoxes(profile,box);
+  if(!available)return {text:'⚠️ 보유 중인 ['+box.name+']가 없습니다.'};
+  openCount=Math.min(openCount,available);
+  consumeBoxes(profile,box,openCount);
 
   if(box.source === 'raid') return openRaidBoxes(profile,openCount);
 
@@ -5432,6 +5535,7 @@ function processUpgradeJobSkill(profile, context = {}, target = '') {
   if (!profile.job) return { text: `⚠️ 전직하지 않은 상태에서는 전직 스킬을 강화할 수 없습니다. /전직을 먼저 해주세요.` };
   const first=getBaseJobCode(profile), second=getSecondJobCode(profile);
   const t=String(target||'').trim();
+  if(!/^(?:1|2|1차|2차)?$/.test(t))return {text:'사용법 : /전직 스킬 강화 [1차 또는 2차]'};
   let jobCode = (/^(1|1차|일차|첫)/.test(t) ? first : /^(2|2차|이차|둘)/.test(t) ? second : (second || first));
   if (!jobCode) return {text:'강화할 전직 스킬이 없습니다.'};
   const currentLevel = getJobSkillLevelFor(profile,jobCode);
@@ -6214,9 +6318,9 @@ function processHunt(playerState, options = {}) {
     const collectionMessage = recordHuntCollection(playerState, monster);
     if (collectionMessage) droppedLootTexts.push(collectionMessage);
 
-    let boxDropChance = 0.00001; 
+    let boxDropChance = 0.001; 
     if (monster.grade.includes("+")) {
-      boxDropChance = 0.00005; 
+      boxDropChance = 0.005; 
     }
 
     if (Math.random() < boxDropChance) {
@@ -6224,7 +6328,7 @@ function processHunt(playerState, options = {}) {
       const boxData = HUNT_BOX_INFO[baseGradeKey];
       if (boxData) {
         if (!playerState.inventory) playerState.inventory = [];
-        playerState.inventory.push({
+        addInventoryBox(playerState,{
           category: 'box',
           boxSource: 'hunt',
           name: boxData.name,
@@ -6236,7 +6340,7 @@ function processHunt(playerState, options = {}) {
 
     // T1~T6 세트 전리품 드롭
     // 몬스터 등급에 따라 드롭 가능한 티어가 고정된다.
-    // 일반 등급(D/C/B/A/S/EX)은 처치 시 0.01%, +등급은 처치 시 0.1% 확률로 드롭한다.
+    // 일반 등급(D/C/B/A/S/EX)은 처치 시 0.1%, +등급은 처치 시 1% 확률로 드롭한다.
     const gearTierByGrade = {
       'D등급':'T1',  'D+등급':'T1',
       'C등급':'T2',  'C+등급':'T2',
@@ -6246,7 +6350,7 @@ function processHunt(playerState, options = {}) {
       'EX등급':'T6', 'EX+등급':'T6'
     };
     const targetTier = gearTierByGrade[monster.grade] || null;
-    const gearDropChance = targetTier ? (monster.grade.includes('+') ? 0.001 : 0.0001) : 0;
+    const gearDropChance = targetTier ? (monster.grade.includes('+') ? 0.01 : 0.001) : 0;
     if (targetTier && Math.random() < gearDropChance) {
       const gearJobs = ['warrior','archer','wizard','thief'];
       const chosenGearJob = gearJobs[rand(0, gearJobs.length - 1)];
@@ -6599,15 +6703,15 @@ function buildRaidTextRaw(profile, result) {
 
     lines.push('💵 현금 +'+result.cashEarned.toLocaleString()+'원','🧈 금괴 +'+result.goldEarned+'개','💎 보석 +'+result.gemEarned+'개','');
   }
-  if (result.discovered) lines.push('🔎 새로운 레이드를 최초 발견했습니다!','📦 레이드 상자 +1개','');
-  if (result.raidBoxAwarded === 'kill') lines.push('🏆 레이드 처치!','📦 레이드 상자 +1개','');
+  if (result.discovered) lines.push('🔎 새로운 레이드를 최초 발견했습니다!','📦 최초 발견 보상 : 레이드 상자 +1개','');
+  if (result.raidBoxAwarded === 'kill') lines.push('🏆 레이드 처치!','📦 처치 보상 : 레이드 상자 +1개','');
   if(raid.hp>0 && pct<5)lines.push('HP ???');
   else lines.push('HP:'+'█'.repeat(filled)+'░'.repeat(10-filled)+' ('+pct.toFixed(2)+'%)',raid.hp.toLocaleString()+' / '+raid.maxHp.toLocaleString());
   lines.push('', '🔎 최초 발견자 : '+(raid.discoveredNickname || '아직 없음'), '', '🏆 누적 피해량 TOP 3');
   const leaders=(raid.topContributors || raid.participants || []).slice().sort((a,b)=>b.damage-a.damage || String(a.userId).localeCompare(String(b.userId))).slice(0,3);
   if(!leaders.length)lines.push('아직 참여자가 없습니다.');
   leaders.forEach((p,i)=>lines.push((i+1)+'위 · '+(p.nickname || '이름 없는 유저')+' | 피해량 : '+Number(p.damage || 0).toLocaleString()));
-  lines.push('',raid.hp>0 ? '/파밍·/사냥 중 0.1% 확률로 조우합니다.' : '🏆 처치된 레이드입니다. 다음 발견을 기다립니다.');
+  lines.push('',raid.hp>0 ? '/파밍·/사냥 중 '+displayNumber(raidEncounterChance(profile)*100)+'% 확률로 조우합니다.' : '🏆 처치된 레이드입니다. 다음 발견을 기다립니다.');
   return lines.join('\n');
 }
 
@@ -6645,7 +6749,7 @@ function formatRaidRewardRaw(raid, userId) {
   if (!raid || raid.hp > 0) return '';
   const reward = (raid.rewards || []).find(r => r.userId === userId);
   if (!reward) return '참여 기록이 없어 지급받은 보상이 없습니다.';
-  return ['🎁 내 레이드 보상 ('+(raid.rewardPaid?'지급 완료':'순차 지급 중')+')',
+  return ['🎁 내 레이드 보상 ('+(raid.myRewardStatus==='paid'?'지급 완료':raid.myRewardStatus==='failed'?'지급 실패 · 재시도 중':raid.myRewardStatus==='held'?'관리자 확인 대기':raid.rewardPaid?'지급 완료':'순차 지급 중')+')',
     '기여도 : ' + (reward.damage / raid.maxHp * 100).toFixed(2) + '%',
     '💵 현금 +' + reward.cash.toLocaleString() + '원',
     '🧈 금괴 +' + reward.gold.toLocaleString() + '개',
@@ -6683,11 +6787,28 @@ function hasUnlimitedCounts(profile) {
   return !!(profile && profile.adminUnlimitedCounts === true && isGameAdmin(profile.userId));
 }
 function processTurn(state, utterance, context = {}) {
-  const invalid=validateCommandInput(utterance);
+  const invalid=validateCommandInput(utterance, state && state.profile);
   if(invalid)return {text:invalid,choices:[],state:state||{}};
   return formatDisplayResult(processTurnRaw(state,utterance,context));
 }
+
+function todayText(profile){
+ const p=createProfile(JSON.parse(JSON.stringify(profile)));checkAndResetFarmLimit(p);checkAndResetHuntLimit(p);checkAndResetSeasonPass(p);
+ const lines=['📋 오늘의 모험',''];
+ for(const [label,data,table]of [['파밍',p.farmData,FARM_QUEST_REWARDS],['사냥',p.huntData,HUNT_QUEST_REWARDS]]){
+  lines.push((label==='파밍'?'⚔️ ':'🏹 ')+label+' : '+displayNumber(data.count)+'/'+displayNumber(data.max)+'회');
+  const next=table.find(x=>x[0]>data.count&&x[0]<=data.max);lines.push(next?'└ 다음 퀘스트까지 '+displayNumber(next[0]-data.count)+'회':'└ 오늘 도달 가능한 퀘스트 횟수 달성');
+ }
+ const pass=p.seasonPass,pending=unclaimedPassRewards(pass,pass.premiumMonth===pass.month);
+ lines.push('','🎫 수령 가능한 패스 보상 : '+displayNumber(pending.count)+'단계','파밍 미션 : '+Math.min(p.farmData.count,500).toLocaleString()+'/500','사냥 미션 : '+Math.min(p.huntData.count,2000).toLocaleString()+'/2,000');
+ for(const code of getInheritedJobCodes(p)){const max=getSkillDailyMax(p,code);if(max>0)lines.push('⚡️ '+JOB_NAMES[code]+' : 남은 '+displayNumber(Math.max(0,max-getSkillUses(p,code)))+'회');}
+ const trap=p.jobState?.trap;if(trap){const h=Math.max(0,(Date.now()-trap.at)/3600000);lines.push('🪤 덫 : '+(h>=1?'회수 가능 · '+Math.floor(h)+'시간 경과':'회수까지 '+Math.ceil((1-h)*60)+'분'));}
+ const settlement=passSettlementText(p);if(settlement)lines.push('',settlement);
+ return lines.join('\n');
+}
+
 function processTurnRaw(state, utterance, context = {}) {
+  if(String(utterance).trim()==='/오늘'){const profile=createProfile(state?.profile||{});checkAndResetSeasonPass(profile);return {text:todayText(profile),choices:[],state:{...(state||{}),profile}};}
   if (requiresGameAdmin(utterance) && !isGameAdmin(context && context.userId)) {
     return { text: "관리자만 사용할 수 있는 명령어입니다.", choices: [], state: state || {} };
   }
@@ -6751,7 +6872,9 @@ function processTurnRaw(state, utterance, context = {}) {
   const userId = contextId || stateId || savedId;
   const turnState = state && typeof state === 'object' ? state : {};
   if (userId) turnState.profile = { ...(turnState.profile || {}), userId };
+  const previousSettled=turnState.profile?.passSettlements?.at(-1)?.month;
   const result = processTurnInternal(turnState, utterance, context);
+  if(result?.state?.profile?.passSettlements?.at(-1)?.month!==previousSettled){const note=passSettlementText(result.state.profile);if(note&&!result.text.includes(note))result.text+='\n\n'+note;}
   if(result)for(const field of ['imageUrl','image','thumbnail'])if(typeof result[field]==='string')result[field]=normalizeImageFilename(result[field]);
   if (result && result.state && result.state.profile) {
     const updated = result.state.profile;
@@ -6786,6 +6909,7 @@ function processTurnInternal(state, utterance, context = {}) {
   if (!state || typeof state !== 'object') state = {};
   
   let profile = createProfile(state.profile);
+  checkAndResetSeasonPass(profile);
   // Set today's research on the saved profile before any dashboard clones it.
   if(skillLevel(profile,'elementalist')>0)research(profile);
   let battle = state.battle;
@@ -6954,6 +7078,7 @@ function processTurnInternal(state, utterance, context = {}) {
       `• /랭킹 - 공격력 랭킹`,
       `• /id - 사용자 ID 확인`,
       `• /레이드 - 공동 레이드 체력 조회`,
+      `• /오늘 - 오늘의 횟수·퀘스트·패스·스킬 확인`,
       `• /광고 - 임시 광고 보상 받기`,
       `• /파밍 - 파밍 시작 (기존 전투 기능 대체)`,
       `• /컬렉션 [페이지] - 사냥 몬스터 수집 현황 및 영구 효과`,
@@ -7640,7 +7765,7 @@ function processTurnInternal(state, utterance, context = {}) {
 
 // Module Exports (Node.js/카카오 챗봇 백엔드 연동용)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { processBoxBatch, normalizeEquippedCosmetics, validateCommandInput, normalizeImageFilename,
+  module.exports = { RELEASE_CONTRACT, resourceInteger, validateResources, guardResources, changeResources, normalizeBoxInventory, countBoxes, todayText, processBoxBatch, normalizeEquippedCosmetics, validateCommandInput, normalizeImageFilename,
     checkAndResetSeasonPass, raidEncounterChance, parsePvpCommand, consumeSkillUse, getSecondJobCode,
     isGameAdmin, requiresGameAdmin, parseAdminGrant, ADMIN_RESOURCES, formatRanking, formatRaidReward,
     RAID_RULES_VERSION, resolveRaidAttack, formatRaidAttackEffects,
