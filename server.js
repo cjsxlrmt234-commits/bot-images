@@ -2,11 +2,12 @@
 const path = require('path');
 const express = require('express');
 const { validateCommandInput, normalizeImageFilename, parsePvpCommand, startGame, processTurn, createProfile, getSecondJobCode, isGameAdmin, requiresGameAdmin, parseAdminGrant, getRaidAttackPower, buildRaidText, formatRanking, formatRaidReward, parseAdminRename, resourceText, RAID_IMAGE } = require('./game');
-const { buildResponse, parseSkillRequest } = require('./kakao');
-const { adminFailureList, adminRetryReward, adminResumeBulk, getBulkProgress, recordRequestIdentity, requestIdentityReport, controlBulkOpening, runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
+const { buildResponse, buildResponsePages, parseSkillRequest } = require('./kakao');
+const { finishBulkOpeningNow, markBulkDelivered, saveResponsePages, getResponsePage, adminFailureList, adminRetryReward, adminResumeBulk, getBulkProgress, recordRequestIdentity, requestIdentityReport, controlBulkOpening, runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, getPowerRanking, getSharedRaid, renameUser, commitGameTurn, findPvpOpponent } = require('./db');
 
-const SERVER_RELEASE_CONTRACT='20261007-ops-v2';
+const SERVER_RELEASE_CONTRACT='20261012-fast-v4';
 if(require('./game').RELEASE_CONTRACT!==SERVER_RELEASE_CONTRACT||require('./db').RELEASE_CONTRACT!==SERVER_RELEASE_CONTRACT)throw Error('파일 버전이 일치하지 않습니다. game.js, db.js, server.js를 함께 교체하세요.');
+const responseContext=new (require('node:async_hooks').AsyncLocalStorage)();
 const app = express();
 app.set('trust proxy', true);
 // 본문이나 UID는 로그에 남기지 않는다. /skill 이외 경로도 수신 여부 확인.
@@ -14,7 +15,7 @@ let requestSequence = 0;
 app.use((req, res, next) => {
   req.traceId = ++requestSequence;
   const started = Date.now();
-  console.log('[요청 도착] #' + req.traceId + ' ' + req.method + ' ' + (req.path.startsWith('/skill')?'/skill/[인증 경로 숨김]':req.path));
+  console.log('[요청 도착] #' + req.traceId + ' ' + req.method + ' ' + (req.path.startsWith('/skill')?'/skill':req.path));
   res.on('finish', () => console.log('[응답 완료] #' + req.traceId + ' status=' + res.statusCode + ' elapsed=' + (Date.now()-started) + 'ms'));
   res.on('close', () => { if (!res.writableFinished) console.warn('[응답 전 연결 종료] #' + req.traceId); });
   next();
@@ -41,14 +42,19 @@ function safeErrorDetails(err) {
 async function buildSafeResponse(text,choices=[],imageUrl=null) {
  const normalized=normalizeImageFilename(imageUrl);
  const image=typeof normalized==='string' && /^https?:\/\/\S+$/i.test(normalized)?normalized:null;
- return buildResponse(text,choices,image);
+ const formatted=String(text).startsWith('🛠️ [관리자 재화 지급 완료]')?text:require('./game').formatDisplayText(text);
+ if(!buildResponsePages)return buildResponse(formatted,choices,image);
+ const id=require('node:crypto').randomBytes(6).toString('hex');
+ const pages=buildResponsePages(formatted,choices,image,id),uid=responseContext.getStore();
+ if(pages.length>1&&uid)await saveResponsePages(uid,id,pages);
+ return pages[0];
 }
 
 const RESTART_WORDS = ['다시하기', '재시작', '시작', '게임시작', '시작하기'];
 
 async function handleSkill(req, res) {
   let stage = '카카오 요청 해석';
-  let saved=false;
+  let saved=false;const stageStarted=Date.now();
   const delayed = setTimeout(() => console.warn('[처리 지연] #' + req.traceId + ' 단계=' + stage + ' (3초 경과, 완료 여부를 확인하세요)'), 3000);
   const clearDelayed = () => clearTimeout(delayed);
   res.once('finish', clearDelayed);
@@ -63,6 +69,8 @@ async function handleSkill(req, res) {
 
     // 요청 발신 UID를 기준으로 검사하며 명령에 적힌 대상 UID로 권한을 판정하지 않는다.
     if (requiresGameAdmin(utterance) && !isGameAdmin(userId)) return res.json(await buildSafeResponse('관리자만 사용할 수 있는 명령어입니다.', []));
+    const page=utterance.match(/^\/결과 ([a-f0-9]{12}) ([1-9]\d*)$/);
+    if(page)return res.json(await getResponsePage(userId,page[1],Number(page[2]))||buildResponse('⚠️ [실행 불가]\n결과가 만료되었거나 해당 페이지가 없습니다.',[]));
     const invalidInput=validateCommandInput(utterance);
     if(invalidInput)return res.json(await buildSafeResponse(invalidInput,[]));
     if(utterance==='/관리자 점검')return res.json(await buildSafeResponse(await requestIdentityReport(userId),[]));
@@ -73,14 +81,19 @@ async function handleSkill(req, res) {
     const resume=utterance.match(/^\/관리자 작업 재개 (\S+)$/);
     if(resume)return res.json(await buildSafeResponse(await adminResumeBulk(userId,resume[1]),[]));
     if(['/상자 일괄개봉','/상자 재개','/상자 중단'].includes(utterance)){
-      const job=utterance==='/상자 일괄개봉'?await startBulkOpening(userId):await controlBulkOpening(userId,utterance.split(' ')[1]);
+      let job=utterance==='/상자 일괄개봉'?await startBulkOpening(userId):await controlBulkOpening(userId,utterance.split(' ')[1]);
       if(!job)return res.json(await buildSafeResponse('진행 중인 일괄개봉 작업이 없습니다.',[]));
+      if(job.status==='running'&&utterance!=='/상자 중단')job=await finishBulkOpeningNow(userId)||job;
       const balances=job.status==='done' && job.total? '\n\n'+resourceText((await getSession(userId)).profile):'';
-      return res.json(await buildSafeResponse((job.status==='running'?await getBulkProgress(userId):bulkOpeningText(job))+balances,[]));
+      const response=await buildSafeResponse(bulkOpeningText(job)+balances,[]);
+      if(job.status==='done'&&job.createdAt)await markBulkDelivered(userId,job.createdAt);
+      return res.json(response);
     }
-    const activeBulk=await getBulkOpening(userId);
+    // Independent reads overlap; the transaction still verifies both state revision and bulk lock.
+    const hotCommand=/^\/(?:파밍|사냥|강화)(?: [1-9]\d*)?$/.test(utterance);
+    const [activeBulk,prefetchedState]=await Promise.all([getBulkOpening(userId),hotCommand?getSession(userId):Promise.resolve(null)]);
     const readOnly=new Set(['/프로필','/스탯','/보조','/누적','/전리품','/인벤토리','/가이드','/도움말','/오늘']);
-    if(activeBulk?.status==='running'&&readOnly.has(utterance)){const snapshot=await getSession(userId);const view=processTurn(JSON.parse(JSON.stringify(snapshot)),utterance,{userId,sharedRaidPassives:true});return res.json(await buildSafeResponse(view.text+'\n\n📦 일괄개봉 중 조회 화면입니다. 정산·변경 사항은 저장하지 않습니다.',view.choices,getImageUrl(req,view.category,view.imageUrl)));}
+    if(activeBulk?.status==='running'&&readOnly.has(utterance)){const snapshot=prefetchedState||await getSession(userId);const view=processTurn(JSON.parse(JSON.stringify(snapshot)),utterance,{userId,sharedRaidPassives:true});return res.json(await buildSafeResponse(view.text+'\n\n📦 일괄개봉 중 조회 화면입니다. 정산·변경 사항은 저장하지 않습니다.',view.choices,getImageUrl(req,view.category,view.imageUrl)));}
     if(activeBulk?.status==='running'&&!['/랭킹','/레이드'].includes(utterance))return res.json(await buildSafeResponse(await getBulkProgress(userId),[]));
     const adminRaidCommand=utterance === '/관리자 레이드';
     const adminJobCommand=/^\/관리자\s+전직\s+\S+$/.test(utterance);
@@ -105,7 +118,7 @@ async function handleSkill(req, res) {
       if (!grant) return res.json(await buildSafeResponse('사용법: /관리자 대상UID 재화 수량\n재화: 현금·금괴·보석·비밀열쇠·보급\n수량: 1 이상의 정수\n유료 패스: /관리자 대상UID 패스 활성화\n닉네임 변경: /관리자 대상UID 닉네임 새닉네임\n관리자 전용: /관리자 레이드 · /관리자 전직 직업명 · /관리자 배속 1~1000 · /관리자 공격력 수치', []));
       stage = '관리자 재화 지급';
       const paid = await grantAdminResource(userId, grant.targetId, grant.field, grant.amount);
-      return res.json(await buildSafeResponse(paid.found ? '✅ 지급 완료\n대상: ' + grant.targetId + '\n' + grant.label + ' +' + grant.amount.toLocaleString() + (grant.field === 'cash' ? '원' : '개') : '해당 UID의 게임 계정이 없습니다. UID를 확인해 주세요.', []));
+      return res.json(await buildSafeResponse(paid.found ? '🛠️ [관리자 재화 지급 완료]\n\n대상 : ' + (paid.nickname||grant.targetId) + '\n' + ({cash:'💵 ',gold:'🧈 ',gem:'💎 ',keys:'🔑 ',supplyItem:'📦 '}[grant.field]) + grant.label + ' : +' + grant.amount.toLocaleString() + (grant.field === 'cash' ? '원' : '개') : '해당 UID의 게임 계정이 없습니다. UID를 확인해 주세요.', []));
     }
     if (utterance === '/랭킹') {
       stage = '공격력 랭킹 조회';
@@ -114,11 +127,11 @@ async function handleSkill(req, res) {
     }
 
     stage = 'MongoDB 조회';
-    let state = await getSession(userId);
+    let state = prefetchedState || await getSession(userId);
     if (!state || typeof state !== 'object' || Array.isArray(state)) state = {};
     state.userId = userId;
     state.profile = { ...(state.profile || {}), userId };
-    console.log('[사용자 조회 완료] #' + req.traceId);
+    console.log('[사용자 조회 완료] #' + req.traceId+' elapsed='+(Date.now()-stageStarted)+'ms');
 
     if(adminRaidCommand) {
       const nextState={...state,profile:createProfile(state.profile)};
@@ -155,7 +168,7 @@ async function handleSkill(req, res) {
         stage = '대결 상대 조회';
         const command=parsePvpCommand(utterance);
         if(command.invalid||!Number.isSafeInteger(command.count)||command.count<1||command.count>10)return res.json(await buildSafeResponse('대결 횟수는 1~10 정수입니다. 숫자로 끝나는 닉네임은 /대결 "닉네임"으로 지정하세요.',[]));
-        if(command.explicit && getSecondJobCode(state.profile)!=='archmage')return res.json(await buildSafeResponse('횟수 지정은 아크메이지 전용입니다. /대결 또는 /대결 "닉네임"으로 1회씩 진행하세요.',[]));
+        if(command.explicit && getSecondJobCode(state.profile)!=='archmage')return res.json(await buildSafeResponse('현재 대결은 /대결 또는 /대결 "닉네임"으로 1회씩 진행하세요.',[]));
         pvpMatch = {...await findPvpOpponent(userId, command.nickname),requestedCount:command.count,explicitCount:command.explicit};
       }
       result = processTurn(state, utterance, { userId, sharedRaidPassives:true, pvpMatch });
@@ -194,7 +207,7 @@ async function handleSkill(req, res) {
       await saveSession(userId,nextState,expected);
     }
     if (displayedNickname && nextState.profile.nickname !== displayedNickname && typeof result.text === 'string') result.text = result.text.split(displayedNickname).join(nextState.profile.nickname);
-    saved=true;
+    saved=true;console.log('[저장 완료] #'+req.traceId+' elapsed='+(Date.now()-stageStarted)+'ms');
     stage = '카카오 응답 생성';
     return res.json(await buildSafeResponse(result.text, result.choices, getImageUrl(req, result.category, result.imageUrl)));
   } catch (err) {
@@ -218,12 +231,12 @@ app.post('/skill',async(req,res)=>{
   void recordRequestIdentity(!!token).catch(()=>console.warn('[요청 식별자] 진단 집계 실패'));
   if(!token && process.env.SKILL_REQUIRE_REQUEST_ID==='true'){res.status(503);return res.json({version:'2.0',template:{outputs:[{simpleText:{text:'요청 식별 정보를 확인할 수 없습니다. 운영자에게 문의해 주세요.'}}]}});}
   if(parsed?.userId){
-   if(inFlightUsers.has(parsed.userId))return res.json({version:'2.0',template:{outputs:[{simpleText:{text:'이전 명령을 처리 중입니다. 완료 후 다시 입력해 주세요.'}}]}});
+   if(inFlightUsers.has(parsed.userId))return res.json({version:'2.0',template:{outputs:[{simpleText:{text:'⏳ [처리 중]\n이전 명령을 처리하고 있습니다.'}}]}});
    lockedUser=parsed.userId;inFlightUsers.add(lockedUser);
   }
   const capture={once:()=>{},json:value=>value};
   const response=typeof parsed?.userId==='string' && parsed.userId.trim()?
-    await runRequestOnce(parsed.userId,typeof token==='string'?token:null,String(parsed.utterance||''),()=>handleSkill(req,capture)):
+    await runRequestOnce(parsed.userId,typeof token==='string'?token:null,String(parsed.utterance||''),()=>responseContext.run(parsed.userId,()=>handleSkill(req,capture))):
     await handleSkill(req,capture);
   return res.json(response);
  }catch(err){console.error('[요청 처리 실패] '+safeErrorDetails(err));const text=err.saved||err.requestApplied?'처리는 저장되었습니다. 재화·횟수는 다시 소모하지 않습니다. /프로필에서 확인해 주세요.':err.requestUnapplied||['INVALID_RESOURCE','STATE_CONFLICT'].includes(err.code)?'이번 요청은 저장되지 않았습니다. 재화·횟수는 차감되지 않았습니다. 다시 입력해 주세요.':'처리 결과를 확인하지 못했습니다. /프로필에서 먼저 확인해 주세요. 같은 명령을 반복하면 추가로 실행될 수 있습니다.';return res.json({version:'2.0',template:{outputs:[{simpleText:{text}}]}});}
