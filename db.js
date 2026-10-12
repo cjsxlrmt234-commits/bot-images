@@ -1,4 +1,4 @@
-const DB_RELEASE_CONTRACT='20261007-ops-v2';
+const DB_RELEASE_CONTRACT='20261012-fast-v4';
 // db.js — MongoDB 게임 상태 저장/조회
 // 서버 환경변수 MONGODB_URI에 MongoDB 접속 주소를 설정하세요.
 const { MongoClient } = require('mongodb');
@@ -48,9 +48,9 @@ function withUserId(state, userId) {
 
 async function getSession(userId) {
   validateUserId(userId);
-  await ensureUserNickname(userId);
   const col = await getCollection();
-  const doc = await col.findOne({ _id: userId });
+  let doc = await col.findOne({ _id: userId });
+  if(doc && doc.nicknameSchema!==1){await ensureUserNickname(userId);doc=await col.findOne({_id:userId});}
   // 신규 사용자도 ID를 전달합니다. 레벨·재화 등 기본값은 game.js가 생성합니다.
   // 반환값은 기존의 null 대신 ID가 포함된 상태 객체입니다.
   return { ...withUserId(doc ? doc.state : null, userId), _dbRevision: doc && Number.isSafeInteger(doc.revision) ? doc.revision : 0, _dbExists: !!doc, _combatReadyAt: doc && doc.combatReadyAt || 0 };
@@ -60,11 +60,12 @@ async function saveSession(userId, state, expected = { revision: state && state.
   validateUserId(userId);
   if (!state || !state.profile || !Number.isSafeInteger(expected.revision) || typeof expected.exists !== 'boolean') throw new Error('게임 저장 버전이 없습니다. 서버 파일을 함께 교체해 주세요.');
   const stored = withUserId(state, userId);
-  stored.profile.nickname = await reserveNickname(userId, stored.profile.nickname || createProfile({}).nickname);
   delete stored._dbRevision; delete stored._dbExists; delete stored._combatReadyAt;
   const conflict = () => { const err = new Error('다른 요청이 먼저 저장되었습니다. 다시 시도해 주세요.'); err.code = 'STATE_CONFLICT'; return err; };
   return businessTransaction(async(db,session)=>{
   const col=db.collection('sessions');
+  const current=await col.findOne({_id:userId},{session});
+  if(!current || current.nicknameSchema!==1 || current.state?.profile?.nickname!==stored.profile.nickname)stored.profile.nickname=await claimNickname(db,session,userId,stored.profile.nickname||createProfile({}).nickname);
   await assertNoBulkJob(db,session,userId);
   if (!expected.exists) {
     try { await col.insertOne({ _id: userId, state: stored, ...playerIndex(userId,stored), revision: 1, updatedAt: new Date() }, {session}); }
@@ -79,7 +80,7 @@ async function saveSession(userId, state, expected = { revision: state && state.
 }
 
 // 공격·처치·지급 계획을 원자적으로 확정하고 참여자 보상은 별도 작업으로 지급한다.
-const { RELEASE_CONTRACT, validateResources, guardResources, changeResources, normalizeBoxInventory, countBoxes, processBoxBatch, normalizeEquippedCosmetics, raidEncounterChance, consumeSkillUse, getSecondJobCode, checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
+const { RELEASE_CONTRACT, validateResources, guardResources, changeResources, normalizeBoxInventory, countBoxes, getBoxOpeningPlan, processBoxBatch, normalizeEquippedCosmetics, raidEncounterChance, consumeSkillUse, getSecondJobCode, checkAndResetSeasonPass, createProfile, getRaidAttackPower, getCurrentEnhanceLevel, getWeaponInfo, resolveRaidAttack, addRaidBox, isGameAdmin, ADMIN_RESOURCES } = require('./game');
 if(RELEASE_CONTRACT!==DB_RELEASE_CONTRACT)throw Error('game.js와 db.js 버전이 다릅니다. 함께 교체하세요.');
 const RANK_FORMULA_VERSION=require('crypto').createHash('sha256').update(require('fs').readFileSync(require('path').join(__dirname,'game.js'))).digest('hex');
 const RAID_ID = 'world-boss-rewards-v1';
@@ -117,7 +118,7 @@ async function grantAdminResource(actorId, targetId, field, amount) {
     addResources(state.profile, { [field]: amount });
     await users.updateOne({ _id: targetId }, { $set: { state, ...playerIndex(targetId,state), updatedAt: new Date() }, $inc: { revision: 1 } }, { session });
     await db.collection('admin_grants').insertOne({ actorId, targetId, field, amount, createdAt: new Date() }, { session });
-    return { found: true, balance: state.profile[field] };
+    return { found: true, balance: state.profile[field], nickname: state.profile.nickname };
   });
 }
 async function activatePremiumPass(actorId, targetId) {
@@ -194,14 +195,14 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
   if (!nextState || !nextState.profile || !expected || !Number.isSafeInteger(expected.revision) || typeof expected.exists !== 'boolean') throw new Error('게임 저장 정보가 없습니다.');
   const prepared=withUserId(nextState,userId);
   delete prepared._dbRevision;delete prepared._dbExists;delete prepared._combatReadyAt;
-  prepared.profile.nickname=await reserveNickname(userId,prepared.profile.nickname || createProfile({}).nickname);
   const combat=options.combatPerformed === true && ['farm','hunt'].includes(options.source);
   const adminRaid=options.adminRaid === true, adminJob=options.adminJob === true;
   if((adminRaid || adminJob) && !isGameAdmin(userId))throw new Error('관리자만 사용할 수 있습니다.');
   const skillRaid=options.skillRaid===true;
   if(skillRaid && getSecondJobCode(prepared.profile)!=='dualblade')throw Error('듀얼블레이드 전용 스킬입니다.');
-  const raidAction=combat || adminRaid || skillRaid;
   const rolls=Array.from({length:8},()=>Math.random());
+  // Use the same encounter roll before accessing shared raid storage.
+  const raidAction=adminRaid || skillRaid || (combat && rolls[0]<raidEncounterChance(prepared.profile));
   if(raidAction) await ensureRaid(await database());
   return businessTransaction(async(db,session)=>{
     const users=db.collection('sessions');
@@ -214,6 +215,7 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
     if(!!current!==expected.exists || (current && (current.revision || 0)!==expected.revision)) {
       const err=new Error('다른 명령이 먼저 저장되었습니다.');err.code='STATE_CONFLICT';throw err;
     }
+    if(!current || current.nicknameSchema!==1 || current.state?.profile?.nickname!==prepared.profile.nickname)prepared.profile.nickname=await claimNickname(db,session,userId,prepared.profile.nickname||createProfile({}).nickname);
     const stored=JSON.parse(JSON.stringify(prepared));
     const update={state:stored,...playerIndex(userId,stored),revision:expected.revision+1,updatedAt:new Date()};
     if(combat)update.combatReadyAt=isGameAdmin(userId)?0:now+2000;
@@ -271,9 +273,8 @@ async function commitGameTurn(userId, nextState, expected, options = {}) {
       }
     }
     if(adminRaid || adminJob)await db.collection('admin_grants').insertOne({actorId:userId,targetId:userId,action:adminRaid?'forceRaid':'forceJob',job:stored.profile.job,createdAt:new Date()},{session});
-    const final=await users.findOne({_id:userId},{session});
     if(raidResult){const planId=RAID_ID+':'+(raidResult.raid.generation||1);raidResult.raid.topContributors=await db.collection('raid_contributions').find({planId},{session}).sort({damage:-1,userId:1}).limit(3).toArray();if(raidResult.raid.hp===0){const mine=await db.collection('raid_reward_rows').findOne({planId,userId},{session});raidResult.raid.rewards=mine?[mine]:[];const receipt=await db.collection('raid_reward_receipts').findOne({_id:planId+':'+userId},{session});raidResult.raid.myRewardStatus=receipt?.status||'';}}
-    return {state:final.state,raidResult};
+    return {state:stored,raidResult};
   });
 }
 async function renameUser(actorId,targetId,requestedName) {
@@ -325,7 +326,7 @@ async function findPvpOpponent(userId, requestedNickname = '') {
   if(!selected)selected=await users.find({indexedPlayer:true,_id:{$ne:userId},matchKey:{$lt:pivot}}).sort({matchKey:1,_id:1}).limit(1).next();
   return selected?{version:1,opponent:createProfile(selected.state.profile)}:{version:1,reason:'no_players'};
 }
-module.exports = { RELEASE_CONTRACT:DB_RELEASE_CONTRACT, requestFailureReply, flushRequestIdentity, adminFailureList, adminRetryReward, adminResumeBulk, getBulkProgress, recordRequestIdentity, requestIdentityReport, controlBulkOpening, runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
+module.exports = { finishBulkOpeningNow, markBulkDelivered, saveResponsePages, getResponsePage, RELEASE_CONTRACT:DB_RELEASE_CONTRACT, requestFailureReply, flushRequestIdentity, adminFailureList, adminRetryReward, adminResumeBulk, getBulkProgress, recordRequestIdentity, requestIdentityReport, controlBulkOpening, runRequestOnce, startBackgroundWorkers, getBulkOpening, startBulkOpening, bulkOpeningText, startPlayerIndexMaintenance, activatePremiumPass, getSession, saveSession, grantAdminResource, renameUser, getPowerRanking, getSharedRaid, commitGameTurn, findPvpOpponent };
 
 // Names are claimed in MongoDB by a unique _id. Claims are never released, so a
 // concurrent reset/save cannot let a second account take the same nickname.
@@ -459,9 +460,8 @@ async function requestFailureReply(userId,err){
 async function businessTransaction(callback){
  return transaction(async(db,session)=>{
    const ctx=requestContext.getStore(),receipts=db.collection('request_receipts');
-   if(ctx){const receipt=await receipts.findOne({_id:ctx.id},{session});if(!receipt||receipt.owner!==ctx.owner||receipt.status!=='running')throw Object.assign(new Error('이미 처리되었거나 만료된 요청입니다.'),{code:'DUPLICATE_REQUEST'});}
+   if(ctx){const claimed=await receipts.updateOne({_id:ctx.id,owner:ctx.owner,status:'running'},{$set:{status:'applied',appliedAt:new Date()}},{session});if(claimed.matchedCount!==1)throw Object.assign(new Error('이미 처리되었거나 만료된 요청입니다.'),{code:'DUPLICATE_REQUEST'});}
    const value=await callback(db,session);
-   if(ctx)await receipts.updateOne({_id:ctx.id,owner:ctx.owner,status:'running'},{$set:{status:'applied',appliedAt:new Date()}},{session});
    return value;
  });
 }
@@ -484,39 +484,48 @@ async function ensureUserNickname(userId){
 async function getBulkOpening(userId){return (await database()).collection('bulk_open_jobs').findOne({_id:userId});}
 function bulkOpeningText(job){
  if(!job)return '';
- if(job.status==='running')return '📦 상자 일괄개봉 진행 중\n'+Number(job.total||0).toLocaleString()+'개 개봉 완료\n/상자 일괄개봉으로 진행 상황을 확인하세요.';
- if(job.status==='done' && !job.total)return '개봉할 수 있는 상자가 없습니다.';
- if(job.status==='error')return '⚠️ 상자 개봉을 일시 중단했습니다. 완료된 보상은 보존됩니다.\n/상자 재개 또는 /상자 중단을 입력하세요.';
- return [job.status==='cancelled'?'📦 [상자 일괄개봉 중단]':'📦 [상자 일괄개봉]',...(job.results||[]).flatMap(x=>['',x.name+' : '+x.count.toLocaleString()+'개',...(x.cash?['💵 현금 +'+x.cash.toLocaleString()+'원']:[]),...(x.gold?['🧈 금괴 +'+x.gold.toLocaleString()+'개']:[]),...(x.gem?['💎 보석 +'+x.gem.toLocaleString()+'개']:[]),...(x.titles?.length?['🏆 칭호 : '+x.titles.join(', ')]:[]),...(x.avatars?.length?['🎭 아바타 : '+x.avatars.join(', ')]:[])]),'','총 '+job.total.toLocaleString()+'개 개봉 완료.'+(job.status==='cancelled'?' 남은 상자는 보관했습니다.':''),...(job.unregistered?['미등록 상자는 보관했습니다.']:[])].join('\n');
+ if(job.status==='done'&&!job.total)return '📦 [상자 개봉 완료]\n개봉할 수 있는 상자가 없습니다.';
+ const title=job.status==='running'?'📦 [상자 개봉 진행 중]':job.status==='error'?'📦 [상자 개봉 일시 중단]':job.status==='cancelled'?'📦 [상자 개봉 중단]':'📦 [상자 개봉 완료]';
+ return [title,...(job.status==='error'?['완료된 보상은 보존되었습니다.','/상자 재개 또는 /상자 중단을 입력하세요.']:[]),
+ ...(job.results||[]).flatMap(x=>['',x.name+' : '+x.count.toLocaleString()+'개','','💰 획득 재화',
+ ...(x.cash?['💵 현금 +'+x.cash.toLocaleString()+'원']:[]),...(x.gold?['🧈 금괴 +'+x.gold.toLocaleString()+'개']:[]),...(x.gem?['💎 보석 +'+x.gem.toLocaleString()+'개']:[]),
+ ...(x.boxes||[]).map(box=>'📦 '+box.name+' +'+box.count.toLocaleString()+'개'),
+ ...(x.titles?.length?['🏆 칭호 : '+[...new Set(x.titles)].join(', ')]:[]),...(x.avatars?.length?['🎭 아바타 : '+[...new Set(x.avatars)].join(', ')]:[])]),'',
+ '총 '+Number(job.total||0).toLocaleString()+'개 개봉 완료.',
+ ...(job.status==='running'?['남은 상자는 자동으로 계속 개봉합니다. /상자 일괄개봉으로 결과를 확인할 수 있습니다.']:[]),
+ ...(job.results?.some(x=>x.boxes?.length)?['새로 획득한 상자는 보관되며, 다음 개봉 시 열립니다.']:[]),
+ ...(job.unregistered?['미등록 상자는 보관했습니다.']:[])].join('\n');
 }
 async function startBulkOpening(userId){
  await ensureUserNickname(userId);
  return businessTransaction(async(db,session)=>{
   const jobs=db.collection('bulk_open_jobs'),existing=await jobs.findOne({_id:userId},{session});
   if(existing?.status==='running')return existing;
-  if(existing?.status==='done' && !existing.delivered){await jobs.updateOne({_id:userId},{$set:{delivered:true}},{session});return existing;}
   const doc=await db.collection('sessions').findOne({_id:userId},{session});
   if(!doc?.state?.profile)return {status:'done',total:0,results:[]};
   if(existing?.status==='error')return existing;
   // Writing the user revision also serializes job creation with in-flight turns.
   await db.collection('sessions').updateOne({_id:userId},{$inc:{revision:1}},{session});
-  const job={_id:userId,status:'running',total:0,results:[],failures:0,createdAt:new Date(),nextAttemptAt:new Date(0)};
+  const job={_id:userId,status:'running',total:0,results:[],plan:getBoxOpeningPlan(doc.state.profile),failures:0,createdAt:new Date(),nextAttemptAt:new Date(0)};
   await jobs.replaceOne({_id:userId},job,{upsert:true,session});return job;
  });
 }
-async function processBulkOpeningBatch(userId){
+async function processBulkOpeningBatch(userId, inline=false){
  return transaction(async(db,session)=>{
   const jobs=db.collection('bulk_open_jobs'),job=await jobs.findOne({_id:userId,status:'running'},{session});if(!job)return;
   const users=db.collection('sessions'),doc=await users.findOne({_id:userId},{session});if(!doc?.state?.profile)throw Error('계정을 찾을 수 없습니다.');
   const state=withUserId(doc.state,userId);state.profile=createProfile(state.profile);
-  const batch=processBoxBatch(state.profile,100);
-  if(!batch){job.status='done';job.unregistered=state.profile.inventory.some(x=>x.category==='box');}
-  else{
-    job.total+=batch.count;
+  if(!Array.isArray(job.plan))job.plan=getBoxOpeningPlan(state.profile);
+  let changed=false;
+  do {
+    const batch=processBoxBatch(state.profile,inline?1000:100,job.plan);
+    if(!batch){job.status='done';job.unregistered=state.profile.inventory.some(x=>x.category==='box')&&!getBoxOpeningPlan(state.profile).length;break;}
+    changed=true;job.total+=batch.count;
     const row=job.results.find(x=>x.name===batch.name);
-    if(row){for(const k of ['count','cash','gold','gem'])row[k]+=batch[k];row.titles.push(...batch.titles);row.avatars.push(...batch.avatars);}else job.results.push(batch);
-    await users.updateOne({_id:userId},{$set:{state,...playerIndex(userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
-  }
+    if(row){for(const k of ['count','cash','gold','gem'])row[k]+=batch[k];row.titles.push(...batch.titles);row.avatars.push(...batch.avatars);row.boxes=row.boxes||[];for(const box of batch.boxes){const old=row.boxes.find(x=>x.name===box.name);if(old)old.count+=box.count;else row.boxes.push(box);}}else job.results.push(batch);
+      if(!job.plan.some(x=>x.remaining>0)){job.status='done';break;}
+  }while(inline);
+  if(changed)await users.updateOne({_id:userId},{$set:{state,...playerIndex(userId,state),updatedAt:new Date()},$inc:{revision:1}},{session});
   job.failures=0;job.nextAttemptAt=new Date(0);job.updatedAt=new Date();job.lastBatchAt=new Date();
   await jobs.replaceOne({_id:userId},job,{session});return job;
  });
@@ -591,6 +600,7 @@ async function processRaidPayout(plan){
 let maintenanceTimer=null,maintenanceBusy=false,backgroundIndexes=null,lastArchiveAt=0;
 async function ensureBackgroundIndexes(db){
  if(!backgroundIndexes)backgroundIndexes=Promise.all([
+  db.collection('response_pages').createIndex({expiresAt:1},{expireAfterSeconds:0}),
   db.collection('request_receipts').createIndex({expiresAt:1},{expireAfterSeconds:0,name:'dated_request_expiry_v1'}),
   db.collection('raid_contributions').createIndex({planId:1,damage:-1,userId:1},{name:'raid_top_v1'}),
   db.collection('raid_reward_rows').createIndex({planId:1,userId:1},{unique:true,name:'raid_reward_user_v1'}),
@@ -701,7 +711,7 @@ async function getBulkProgress(userId){
  const doc=await (await getCollection()).findOne({_id:userId},{projection:{'state.profile.inventory':1}});
  const remaining=countBoxes(doc?.state?.profile||{});
  const waiting=await (await database()).collection('bulk_open_jobs').countDocuments({status:'running'});
- return bulkOpeningText(job)+'\n남은 보유 상자 : '+remaining.toLocaleString()+'개\n진행·대기 작업 : '+waiting.toLocaleString()+'건\n※ 추가 상자가 생기면 남은 수량이 늘 수 있습니다. 순서대로 번갈아 처리합니다.';
+ return bulkOpeningText(job)+'\n남은 보유 상자 : '+remaining.toLocaleString()+'개\n진행·대기 작업 : '+waiting.toLocaleString()+'건\n※ 이번 개봉은 시작 시 보유한 상자만 대상입니다. 새로 획득한 상자는 다음에 개봉합니다.';
 }
 
 const pendingIdentity=new Map();let identityFlushing=false,identityTimer=null;
@@ -720,4 +730,19 @@ async function requestIdentityReport(actor){
  requireOperator(actor);await flushRequestIdentity();const db=await database();
  const rows=await db.collection('request_identity_stats').find({}).sort({_id:-1}).limit(7).toArray();
  return ['🛠️ 요청 식별자 점검',...rows.map(x=>x._id+' : 있음 '+(x.withId||0).toLocaleString()+'회 / 없음 '+(x.withoutId||0).toLocaleString()+'회'),'식별자가 있어도 재전송마다 바뀌면 재전송을 구분할 수 없습니다.','서버 인증 : 미사용 · '+(process.env.SKILL_REQUIRE_REQUEST_ID==='true'?'식별자 필수':'식별자 없는 요청 허용')].join('\n');
+}
+
+async function finishBulkOpeningNow(userId){
+ const result=await processBulkOpeningBatch(userId,true);
+ return result||getBulkOpening(userId);
+}
+async function markBulkDelivered(userId,createdAt){
+ await (await database()).collection('bulk_open_jobs').updateOne({_id:userId,status:'done',createdAt},{$set:{delivered:true}});
+}
+async function saveResponsePages(userId,id,pages){
+ await (await database()).collection('response_pages').replaceOne({_id:userId+':'+id},{_id:userId+':'+id,pages,expiresAt:new Date(Date.now()+86400000)},{upsert:true});
+}
+async function getResponsePage(userId,id,page){
+ const row=await (await database()).collection('response_pages').findOne({_id:userId+':'+id});
+ return row&&row.expiresAt>new Date()?row.pages[page-1]||null:null;
 }
